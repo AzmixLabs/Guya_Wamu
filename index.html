@@ -830,6 +830,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   body.placing .leaflet-container{cursor:crosshair}
   body.placing .leaflet-overlay-pane{pointer-events:none}
   body.placing .leaflet-marker-pane{pointer-events:none}
+    .sbar{position:absolute;left:50%;bottom:calc(16px + var(--safe-b));transform:translateX(-50%);z-index:1100;display:none;align-items:center;gap:8px;padding:8px 8px 8px 14px;background:linear-gradient(180deg,rgba(20,32,42,.98),rgba(11,22,30,.98));border:1px solid #4fd17a;border-radius:16px;box-shadow:0 18px 44px -14px rgba(0,0,0,.85);max-width:calc(100vw - 24px)}
+  body.slopemode .sbar{display:flex}
+  .sbar .tot{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:13px;color:#9be3b4;font-variant-numeric:tabular-nums}
+  .sbar .totlbl{font-family:"IBM Plex Mono",monospace;font-size:8.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-dim);display:block;margin-bottom:1px}
+  .sbar .div{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
+  .sbar button{border:1px solid var(--line);background:transparent;color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11px;min-height:44px;min-width:54px;padding:0 12px;border-radius:11px;cursor:pointer}
+  .sbar button.primary{background:#4fd17a;color:#04230f;border-color:#4fd17a;font-weight:700}
+  .slhint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1100;display:none;background:rgba(8,30,18,.94);border:1px solid #4fd17a;color:#9be3b4;font-family:"IBM Plex Mono",monospace;font-size:11px;padding:7px 14px;border-radius:20px;white-space:nowrap;pointer-events:none}
+  body.slopemode .slhint{display:block}
+  body.slopemode .leaflet-overlay-pane{pointer-events:none}
+  body.slopemode .leaflet-marker-pane{pointer-events:none}
+  body.slopemode path.leaflet-interactive{pointer-events:none!important}
+  body.slopemode .leaflet-container{cursor:crosshair}
+  .sllabel span{display:inline-block;transform:translate(-50%,-50%);font-family:"IBM Plex Mono",monospace;font-size:9px;font-weight:600;white-space:nowrap;color:#eef4f7;background:rgba(8,18,26,.8);border:1px solid #2c4555;border-radius:5px;padding:1px 5px}
   @media (max-width:600px){.panel{width:calc(100vw - 24px)}.leaflet-control-zoom{margin-top:64px!important}}
   @media (pointer:coarse){:root{--tap:44px}}
 </style>
@@ -838,6 +852,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <div id="map"></div>
 <div class="mhint" id="mhint">Tap the map to drop points</div>
 <div class="plhint" id="plhint">Tap the map to drop a spot</div>
+<div class="slhint" id="slhint">Tap near a depth point to chain it</div>
+<div class="sbar" id="sbar"><div><span class="totlbl">Slope</span><span class="tot" id="sl-readout">0 pts</span></div><div class="div"></div><button id="sl-undo">Undo</button><button id="sl-clear">Clear</button><button class="primary" id="sl-save">Save</button></div>
 <div class="mbar" id="mbar">
   <div><span class="totlbl">Total</span><span class="tot" id="mtot">0&nbsp;m</span></div>
   <div class="div"></div>
@@ -877,6 +893,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="dp-list"></div>
+      <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
+        <div class="dp-actions"><button class="dp-btn" id="sl-btn">+ Slope line (gradient)</button></div>
+        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
+        <div class="dp-list" id="sl-list"></div>
+      </div>
     </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
@@ -1098,11 +1119,79 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
   openSheet('Log catch \u2014 '+(s.name||'Spot'),body,()=>{const o={id:'c'+Date.now()+Math.floor(Math.random()*999),
     date:val('c-date'),time:val('c-time'),species:val('c-species'),len:val('c-len'),bait:val('c-bait'),
     kept:document.getElementById('c-kept').value,note:val('c-note')};
-    s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();
+    s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();    const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});}
+map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;root.querySelectorAll('.sp-pa').forEach(b=>b.onclick=()=>{
+  const id=b.dataset.id,act=b.dataset.act;
+  if(act==='del'){if(confirm('Delete this spot and its catches?')){spots=spots.filter(x=>x.id!==id);saveSpots();renderSpots();map.closePopup();}}
+  else if(act==='edit'){map.closePopup();openSpotSheet(spots.find(x=>x.id===id));}
+  else if(act==='catch'){openCatchSheet(id);}});});
+document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
+document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
+document.getElementById('sp-toggle').onchange=e=>{spotOn=e.target.checked;spotOn?spotLayer.addTo(map):map.removeLayer(spotLayer);};
+map.on('click',e=>{if(placingSpot){placingSpot=false;document.body.classList.remove('placing');openSpotSheet({lat:e.latlng.lat,lng:e.latlng.lng});}});
+renderSpots();
+
+/* ---------- SLOPE LINES (depth gradient from your soundings) ---------- */
+const TSTORE='woongarra_transects_v1';
+function loadTx(){try{return JSON.parse(localStorage.getItem(TSTORE))||[];}catch(e){return[];}}
+function saveTx(){try{localStorage.setItem(TSTORE,JSON.stringify(transects));}catch(e){}}
+let transects=loadTx(),slopeMode=false,slopeChain=[],txOn=true;
+const txLayer=L.layerGroup().addTo(map),slopeDraw=L.layerGroup().addTo(map);
+function slopeColor(s){return s>=0.15?'#ff5b47':(s>=0.05?'#ffb02e':'#4fd17a');}
+function slopeLabel(z1,z2,dist){const dz=Math.abs(z2-z1),s=dist>0?dz/dist:0,ratio=s>0?('1:'+Math.round(1/s)):'flat';
+  return '\u0394'+dz.toFixed(1)+' m / '+Math.round(dist)+' m \u00b7 '+ratio;}
+function drawSegments(group,verts,labels){
+  for(let i=1;i<verts.length;i++){const a=verts[i-1],b=verts[i],dist=map.distance([a.lat,a.lng],[b.lat,b.lng]);
+    const s=dist>0?Math.abs(b.depth-a.depth)/dist:0;
+    L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:slopeColor(s),weight:5,opacity:.95}).addTo(group);
+    if(labels)L.marker([(a.lat+b.lat)/2,(a.lng+b.lng)/2],{interactive:false,pane:'labels',icon:L.divIcon({className:'sllabel',iconSize:[0,0],html:'<span>'+slopeLabel(a.depth,b.depth,dist)+'</span>'})}).addTo(group);}
+  verts.forEach(v=>L.circleMarker([v.lat,v.lng],{radius:4,color:'#fff',weight:2,fillColor:'#0c1a24',fillOpacity:1,interactive:false}).addTo(group));}
+function redrawChain(){slopeDraw.clearLayers();drawSegments(slopeDraw,slopeChain,true);
+  let len=0;for(let i=1;i<slopeChain.length;i++)len+=map.distance([slopeChain[i-1].lat,slopeChain[i-1].lng],[slopeChain[i].lat,slopeChain[i].lng]);
+  const drop=slopeChain.length?Math.abs(slopeChain[slopeChain.length-1].depth-slopeChain[0].depth):0;
+  document.getElementById('sl-readout').textContent=slopeChain.length+' pts \u00b7 '+Math.round(len)+' m \u00b7 \u0394'+drop.toFixed(1)+' m';}
+function nearestDepthPoint(latlng){const cp=map.latLngToContainerPoint(latlng);let best=null,bd=1e9;
+  points.forEach(p=>{if(p.depth===''||p.depth==null)return;const pp=map.latLngToContainerPoint([p.lat,p.lng]),d=cp.distanceTo(pp);if(d<bd){bd=d;best=p;}});
+  return (best&&bd<=44)?best:null;}
+function enterSlope(){if(typeof measuring!=='undefined'&&measuring)exitMeasure();placingSpot=false;document.body.classList.remove('placing');
+  slopeMode=true;slopeChain=[];redrawChain();map.closePopup();document.body.classList.add('slopemode');
+  document.getElementById('sl-btn').classList.add('on');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);}
+function exitSlope(){slopeMode=false;document.body.classList.remove('slopemode');document.getElementById('sl-btn').classList.remove('on');slopeDraw.clearLayers();}
+map.on('click',e=>{if(!slopeMode)return;const p=nearestDepthPoint(e.latlng);if(p)slopeChain.push({lat:p.lat,lng:p.lng,depth:parseFloat(p.depth)}),redrawChain();});
+function profileSVG(verts){const W=240,H=120,pad=26;let cum=[0];
+  for(let i=1;i<verts.length;i++)cum.push(cum[i-1]+map.distance([verts[i-1].lat,verts[i-1].lng],[verts[i].lat,verts[i].lng]));
+  const maxX=cum[cum.length-1]||1,maxD=Math.max.apply(null,verts.map(v=>v.depth))||1;
+  const X=x=>pad+(W-2*pad)*(x/maxX),Y=d=>pad+(H-2*pad)*(d/(maxD*1.15));
+  const pts=verts.map((v,i)=>X(cum[i]).toFixed(1)+','+Y(v.depth).toFixed(1)).join(' ');
+  const dots=verts.map((v,i)=>'<circle cx="'+X(cum[i]).toFixed(1)+'" cy="'+Y(v.depth).toFixed(1)+'" r="3" fill="#5ad0ff"/><text x="'+X(cum[i]).toFixed(1)+'" y="'+(Y(v.depth)-6).toFixed(1)+'" fill="#bfe6ff" font-size="9" text-anchor="middle">'+v.depth+'m</text>').join('');
+  return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="background:#0a1822;border:1px solid #1d3543;border-radius:8px;margin:2px 0 8px">'
+    +'<polyline points="'+pts+'" fill="none" stroke="#5ad0ff" stroke-width="2"/>'+dots
+    +'<text x="'+(W/2)+'" y="'+(H-7)+'" fill="#8aa3b0" font-size="8.5" text-anchor="middle">distance \u2192 '+Math.round(maxX)+' m   depth \u2193</text></svg>';}
+function txPopup(t){return '<div class="pop"><h2>'+(t.name||'Slope line')+'</h2>'+profileSVG(t.verts)
+  +'<div class="warn">From your own soundings \u2014 the gradient between measured points, not surveyed bathymetry.</div>'
+  +'<button class="del" data-txdel="'+t.id+'">Delete slope line</button></div>';}
+function renderTx(){txLayer.clearLayers();const list=document.getElementById('sl-list');if(list)list.innerHTML='';
+  transects.forEach(t=>{const g=L.featureGroup().addTo(txLayer);drawSegments(g,t.verts,true);
+    g.bindPopup(txPopup(t),{maxWidth:280,minWidth:250});
+    if(list){let len=0;for(let i=1;i<t.verts.length;i++)len+=map.distance([t.verts[i-1].lat,t.verts[i-1].lng],[t.verts[i].lat,t.verts[i].lng]);
+      const row=document.createElement('div');row.className='dp-item';
+      row.innerHTML='<span class="d" style="color:#9be3b4">'+t.verts.length+'\u2022</span><span class="n">'+(t.name||'Slope line')+'</span><span class="z" style="color:#8aa3b0;border-color:#8aa3b0">'+Math.round(len)+'m</span><button class="x" data-id="'+t.id+'">\u2715</button>';
+      row.querySelector('.x').onclick=()=>{transects=transects.filter(x=>x.id!==t.id);saveTx();renderTx();};
+      row.querySelector('.n').onclick=()=>{map.fitBounds(g.getBounds().pad(0.4));g.openPopup();};
+      list.appendChild(row);}});
+  const c=document.getElementById('sl-count');if(c)c.textContent=transects.length;}
+map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;const d=root.querySelector('[data-txdel]');
+  if(d)d.onclick=()=>{transects=transects.filter(x=>x.id!==d.dataset.txdel);saveTx();renderTx();map.closePopup();};});
+document.getElementById('sl-btn').onclick=()=>{slopeMode?exitSlope():enterSlope();};
+document.getElementById('sl-undo').onclick=()=>{slopeChain.pop();redrawChain();};
+document.getElementById('sl-clear').onclick=()=>{slopeChain=[];redrawChain();};
+document.getElementById('sl-save').onclick=()=>{if(slopeChain.length<2)return;transects.push({id:'t'+Date.now()+Math.floor(Math.random()*999),name:'Slope '+(transects.length+1),verts:slopeChain.slice()});saveTx();renderTx();exitSlope();};
+document.getElementById('sl-toggle').onchange=e=>{txOn=e.target.checked;txOn?txLayer.addTo(map):map.removeLayer(txLayer);};
+renderTx();
 
 /* ---------- BACKUP: export / import JSON ---------- */
 function exportBackup(){
-  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points};
+  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1118,23 +1207,15 @@ function importBackup(file){
       d.spots.forEach(s=>{if(s&&s.id){if(!by[s.id])ns++;by[s.id]=s;}});spots=Object.values(by);saveSpots();renderSpots();}
     if(Array.isArray(d.depthPoints)){const by={};points.forEach(p=>by[p.id]=p);
       d.depthPoints.forEach(p=>{if(p&&p.id){if(!by[p.id])np++;by[p.id]=p;}});points=Object.values(by);savePts();renderDepths();}
+    if(Array.isArray(d.transects)){const by={};transects.forEach(t=>by[t.id]=t);d.transects.forEach(t=>{if(t&&t.id)by[t.id]=t;});transects=Object.values(by);saveTx();renderTx();}
+    const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
+    if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     alert('Imported '+ns+' new spot(s) and '+np+' new depth point(s). Matching IDs were updated.');
   }catch(e){alert('Could not read that backup file \u2014 is it a Woongarra export?');}};
   r.readAsText(file);
 }
 document.getElementById('bk-export').onclick=exportBackup;
 document.getElementById('bk-import').onchange=ev=>{const f=ev.target.files[0];if(f)importBackup(f);ev.target.value='';};
-    const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});}
-map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;root.querySelectorAll('.sp-pa').forEach(b=>b.onclick=()=>{
-  const id=b.dataset.id,act=b.dataset.act;
-  if(act==='del'){if(confirm('Delete this spot and its catches?')){spots=spots.filter(x=>x.id!==id);saveSpots();renderSpots();map.closePopup();}}
-  else if(act==='edit'){map.closePopup();openSpotSheet(spots.find(x=>x.id===id));}
-  else if(act==='catch'){openCatchSheet(id);}});});
-document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
-document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
-document.getElementById('sp-toggle').onchange=e=>{spotOn=e.target.checked;spotOn?spotLayer.addTo(map):map.removeLayer(spotLayer);};
-map.on('click',e=>{if(placingSpot){placingSpot=false;document.body.classList.remove('placing');openSpotSheet({lat:e.latlng.lat,lng:e.latlng.lng});}});
-renderSpots();
 
 /* ---------- MEASURE: exclusive mode ---------- */
 let measuring=false,mPts=[],mLayer=L.layerGroup().addTo(map);
