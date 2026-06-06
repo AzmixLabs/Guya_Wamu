@@ -877,6 +877,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sp-rate-val{font-size:11px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
   .dp-item .rate{color:#ffd54a;font-size:11px;margin-left:auto;padding-left:6px;white-space:nowrap}
   .dp-item .rate:empty{display:none}
+  .dp-clear{width:100%;margin-top:8px;background:transparent;border:1px solid rgba(231,76,60,.35);color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.5px;min-height:34px;border-radius:8px;cursor:pointer}
+  .dp-clear:active{background:rgba(231,76,60,.12)}
+  .ct-tip{background:#10202c;border:1px solid var(--line);color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11px;border-radius:6px;padding:2px 6px}
+  .panel-body > .blk > .lbl{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+  .panel-body > .blk > .lbl::after{content:"\2212";font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink-dim)}
+  .panel-body > .blk.collapsed > .lbl::after{content:"+"}
+  .panel-body > .blk.collapsed > :not(.lbl){display:none!important}
 </style>
 </head>
 <body>
@@ -924,6 +931,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="dp-list"></div>
+      <button class="dp-clear" id="dp-clear">Clear all depth points</button>
       <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
         <div class="dp-actions"><button class="dp-btn" id="sl-btn">+ Slope line (gradient)</button></div>
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
@@ -931,6 +939,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data.</div>
       </div>
+    </div>
+    <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
+      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
+      <div class="dp-list" id="ct-list"></div>
+      <button class="dp-clear" id="ct-clear">Clear all contours</button>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
     </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
@@ -1120,6 +1135,7 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
   if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
   h+='<div class="warn">Your own mark. Drag the pin to reposition onto your platform \u2014 the zone re-checks on drop. Verify the zone officially before fishing.</div>';
+  h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
   return h;}
 function renderSpots(){spotLayer.clearLayers();const list=document.getElementById('sp-list');list.innerHTML='';
@@ -1184,6 +1200,7 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)r
     if(act==='del'){if(confirm('Delete this spot and its catches?')){spots=spots.filter(x=>x.id!==id);saveSpots();renderSpots();map.closePopup();}}
     else if(act==='edit'){map.closePopup();openSpotSheet(spots.find(x=>x.id===id));}
     else if(act==='catch'){openCatchSheet(id);}
+    else if(act==='nav'){const s=spots.find(x=>x.id===id);if(s){const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);const url=iOS?('https://maps.apple.com/?daddr='+s.lat+','+s.lng+'&dirflg=d'):('https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'&travelmode=driving');window.open(url,'_blank');}}
   });});
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
 document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
@@ -1411,6 +1428,57 @@ const BURNETT_TIDES_2026={"2026-01-01":[["00:04",0.66,"L"],["06:40",3.26,"H"],["
   render();
 })();
 
+
+/* ---------- DEPTH CONTOURS (Navionics routes -> depth lines) ---------- */
+const CSTORE='woongarra_contours_v1';
+function loadCt(){try{return JSON.parse(localStorage.getItem(CSTORE))||[];}catch(e){return[];}}
+function saveCt(){try{localStorage.setItem(CSTORE,JSON.stringify(contours));}catch(e){}}
+let contours=loadCt(),ctOn=true;
+const ctLayer=L.layerGroup().addTo(map);
+function ctColor(d){if(d===''||d==null)return '#9fb3bf';d=Math.abs(+d);return d<2?'#7fe3ff':d<4?'#46b6ff':d<6?'#3f86e6':d<9?'#3f5ad0':'#5a3fd0';}
+function ctPopup(c){return '<div class="pop"><h2>Depth contour</h2><div class="kv">Name: '+(c.name?c.name.replace(/[<>]/g,''):'\u2014')+'<br>Depth: '+((c.depth!==''&&c.depth!=null)?c.depth+' m':'<span style="color:var(--measure)">not set</span>')+'<br>Points: '+c.pts.length+'</div><div class="sp-pop-actions"><button class="sp-pa primary" data-ctset="'+c.id+'">Set depth</button><button class="sp-pa sp-del" data-ctdel="'+c.id+'">Delete</button></div></div>';}
+function renderContours(){ctLayer.clearLayers();const list=document.getElementById('ct-list');if(list)list.innerHTML='';
+  contours.forEach(c=>{const col=ctColor(c.depth);const pl=L.polyline(c.pts,{color:col,weight:3,opacity:.92,lineJoin:'round'}).addTo(ctLayer);pl._ctId=c.id;
+    pl.bindTooltip((c.depth!==''&&c.depth!=null)?(c.depth+' m'):(c.name||'contour'),{sticky:true,direction:'top',className:'ct-tip'});
+    pl.bindPopup(ctPopup(c),{maxWidth:260});
+    if(list){const row=document.createElement('div');row.className='dp-item';
+      row.innerHTML='<span class="d" style="color:'+col+'">'+((c.depth!==''&&c.depth!=null)?c.depth+'m':'\u2014')+'</span><span class="n">'+((c.name||'contour').replace(/[<>]/g,''))+'</span><span class="z" style="color:'+col+';border-color:'+col+'">'+c.pts.length+'pt</span><button class="x" data-id="'+c.id+'">\u2715</button>';
+      row.querySelector('.x').onclick=()=>{contours=contours.filter(x=>x.id!==c.id);saveCt();renderContours();};
+      row.querySelector('.n').onclick=()=>{map.fitBounds(pl.getBounds().pad(0.25));pl.openPopup();};
+      list.appendChild(row);}
+  });
+  const cc=document.getElementById('ct-count');if(cc)cc.textContent=contours.length;}
+map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;
+  const sb=root.querySelector('[data-ctset]');if(sb&&!sb._w){sb._w=1;sb.onclick=()=>{const c=contours.find(x=>x.id===sb.dataset.ctset);if(!c)return;const v=prompt('Depth in metres for this contour line:',(c.depth===''||c.depth==null)?'':c.depth);if(v===null)return;const num=parseFloat(v);c.depth=(String(v).trim()===''||isNaN(num))?'':Math.abs(num);saveCt();renderContours();map.closePopup();};}
+  const db=root.querySelector('[data-ctdel]');if(db&&!db._w){db._w=1;db.onclick=()=>{contours=contours.filter(x=>x.id!==db.dataset.ctdel);saveCt();renderContours();map.closePopup();};}
+});
+(function(){const gp=document.getElementById('ct-gpx');if(gp)gp.onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const xml=new DOMParser().parseFromString(rd.result,'application/xml');
+    const groups=[...xml.getElementsByTagName('rte'),...xml.getElementsByTagName('trk')];let n=0;
+    for(const g of groups){const nm=((g.getElementsByTagName('name')[0]||{}).textContent||'').trim();
+      const pe=[...g.getElementsByTagName('rtept'),...g.getElementsByTagName('trkpt')];const pts=[];
+      for(const p of pe){const la=parseFloat(p.getAttribute('lat')),lo=parseFloat(p.getAttribute('lon'));if(!isNaN(la)&&!isNaN(lo))pts.push([la,lo]);}
+      if(pts.length<2)continue;var depth='';if(/^\s*\d+(?:\.\d+)?\s*m?\s*$/i.test(nm))depth=Math.abs(parseFloat(nm));
+      contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999)+'_'+n,name:nm,depth:depth,pts:pts});n++;}
+    saveCt();renderContours();
+    if(n){var all=[];contours.forEach(function(c){c.pts.forEach(function(p){all.push(p);});});try{map.fitBounds(L.latLngBounds(all).pad(0.15));}catch(e){}}
+    alert(n?('Imported '+n+' contour line'+(n>1?'s':'')+'. Tap any line on the map to set its depth.'):'No routes or tracks found in that GPX.');
+  }catch(e){alert('Could not read that GPX file.');}};
+  rd.readAsText(f);ev.target.value='';};
+  const tg=document.getElementById('ct-toggle');if(tg)tg.onchange=e=>{ctOn=e.target.checked;ctOn?ctLayer.addTo(map):map.removeLayer(ctLayer);};
+  const cl=document.getElementById('ct-clear');if(cl)cl.onclick=()=>{if(contours.length&&confirm('Remove all '+contours.length+' contour lines?')){contours=[];saveCt();renderContours();}};
+})();
+renderContours();
+
+/* ---------- Clear all depth points ---------- */
+(function(){const b=document.getElementById('dp-clear');if(b)b.onclick=()=>{if(points.length&&confirm('Remove all '+points.length+' depth points?')){points=[];savePts();renderDepths();buildShade();}};})();
+
+/* ---------- Collapsible panel sections ---------- */
+(function(){const KEY='woongarra_collapsed_v1';let st;try{st=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){st={};}
+  document.querySelectorAll('.panel-body > .blk').forEach(function(blk){const lbl=blk.querySelector(':scope > .lbl');if(!lbl)return;
+    const k=lbl.textContent.trim();if(st[k])blk.classList.add('collapsed');
+    lbl.addEventListener('click',function(){blk.classList.toggle('collapsed');st[k]=blk.classList.contains('collapsed');try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}});
+  });})();
 </script>
 </body>
 </html>
