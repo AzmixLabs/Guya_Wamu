@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Woongarra">
 <meta name="theme-color" content="#0c161e">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1038,14 +1038,16 @@ document.getElementById('dp-save').onclick=()=>{const err=document.getElementByI
   map.setView([c[0],c[1]],17);};
 document.getElementById('dp-toggle').onchange=e=>{e.target.checked?depthLayer.addTo(map):map.removeLayer(depthLayer);};
 
-/* GPX import: <wpt lat lon><name/><desc/>; depth pulled from a number+m in name/desc */
+/* GPX import: markers <wpt>, route points <rtept>, track points <trkpt>. Depth from "<n>m" or a bare number in the name/desc. */
 document.getElementById('dp-gpx').onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const xml=new DOMParser().parseFromString(rd.result,'application/xml');const wpts=xml.getElementsByTagName('wpt');let n=0;
-    for(const w of wpts){const lat=parseFloat(w.getAttribute('lat')),lng=parseFloat(w.getAttribute('lon'));if(isNaN(lat)||isNaN(lng))continue;
-      const nm=(w.getElementsByTagName('name')[0]||{}).textContent||'';const ds=(w.getElementsByTagName('desc')[0]||{}).textContent||'';
-      const dm=(nm+' '+ds).match(/(-?\d+(?:\.\d+)?)\s*m\b/i);
-      addPt({lat,lng,depth:dm?Math.abs(parseFloat(dm[1])):'',label:nm.trim()});n++;}
-    document.getElementById('dp-err').textContent=n?`Imported ${n} point${n>1?'s':''}.`:'No waypoints found in that file.';
+  rd.onload=()=>{try{const xml=new DOMParser().parseFromString(rd.result,'application/xml');
+    const nodes=[...xml.getElementsByTagName('wpt'),...xml.getElementsByTagName('rtept'),...xml.getElementsByTagName('trkpt')];let n=0;
+    for(const w of nodes){const lat=parseFloat(w.getAttribute('lat')),lng=parseFloat(w.getAttribute('lon'));if(isNaN(lat)||isNaN(lng))continue;
+      const nm=((w.getElementsByTagName('name')[0]||{}).textContent||'').trim();const ds=((w.getElementsByTagName('desc')[0]||{}).textContent||'').trim();
+      let depth='';const dm=(nm+' '+ds).match(/(-?\d+(?:\.\d+)?)\s*m\b/i);
+      if(dm)depth=Math.abs(parseFloat(dm[1]));else if(/^-?\d+(?:\.\d+)?$/.test(nm))depth=Math.abs(parseFloat(nm));
+      addPt({lat,lng,depth,label:nm});n++;}
+    document.getElementById('dp-err').textContent=n?`Imported ${n} point${n>1?'s':''}.`:'No points found in that file.';
     if(n)map.setView([points[points.length-1].lat,points[points.length-1].lng],15);
   }catch(e){document.getElementById('dp-err').textContent='Could not read that GPX file.';}};
   rd.readAsText(f);ev.target.value='';};
