@@ -1075,12 +1075,15 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   const n=(s.catches||[]).length;
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
   if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
-  h+='<div class="warn">Your own mark. Verify the zone officially before fishing.</div>';
+  h+='<div class="warn">Your own mark. Drag the pin to reposition onto your platform \u2014 the zone re-checks on drop. Verify the zone officially before fishing.</div>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
   return h;}
 function renderSpots(){spotLayer.clearLayers();const list=document.getElementById('sp-list');list.innerHTML='';
-  spots.forEach(s=>{const z=zoneAt(s.lat,s.lng);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z)}).addTo(spotLayer);
+  spots.forEach(s=>{const z=zoneAt(s.lat,s.lng);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z),draggable:true,autoPan:true}).addTo(spotLayer);
     mk._spotId=s.id;mk.bindPopup(spotPopup(s,z),{maxWidth:290,minWidth:250});
+    mk.on('dragend',function(){const ll=mk.getLatLng();s.lat=+ll.lat.toFixed(6);s.lng=+ll.lng.toFixed(6);saveSpots();
+      const nz=zoneAt(s.lat,s.lng);renderSpots();spotLayer.eachLayer(l=>{if(l._spotId===s.id)l.openPopup();});
+      if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);});
     const st=z?(STYLES[z.zt]||{}):{};const n=(s.catches||[]).length;const row=document.createElement('div');row.className='dp-item';
     row.innerHTML='<span class="d" style="color:'+(st.stroke||'#9fb3bf')+'">'+n+'\ud83c\udfa3</span><span class="n">'+esc(s.name||'Spot')+'</span>'
       +(z?'<span class="z" style="color:'+st.stroke+';border-color:'+st.stroke+'">'+z.zt+'</span>':'<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">\u2014</span>')
