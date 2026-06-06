@@ -818,6 +818,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .spotpin .sp-dot{position:relative;width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.6)}
   .spotpin .sp-dot .cnt{position:absolute;top:-7px;right:-10px;min-width:15px;height:15px;border-radius:8px;background:#0c1a24;border:1px solid #fff;color:#fff;font-family:"IBM Plex Mono",monospace;font-size:9px;line-height:14px;text-align:center;padding:0 2px}
   .spotpin .sp-name{margin-top:3px;font-family:"Sora",sans-serif;font-weight:600;font-size:11px;color:#fff;text-shadow:0 0 3px #000,0 0 4px #000;white-space:nowrap}
+  body.pins-unlocked .spotpin .sp-dot{cursor:move;box-shadow:0 0 0 3px rgba(255,214,10,.9),0 2px 7px rgba(0,0,0,.6)}
+  body.pins-unlocked .leaflet-marker-draggable,body.pins-unlocked .spotpin .sp{cursor:move}
   .pop .catchlist{margin:0 0 9px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .pop .catchrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:#c4d4dc;padding:5px 8px;border-bottom:1px solid var(--line)}
   .pop .catchrow:last-child{border-bottom:0}
@@ -904,6 +906,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
+      <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="dp-list" id="sp-list"></div>
     </div>
     <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
@@ -1060,7 +1063,7 @@ function fld(label,inner){return '<label class="fld"><span>'+label+'</span>'+inn
 const SSTORE='woongarra_spots_v1';
 function loadSpots(){try{return JSON.parse(localStorage.getItem(SSTORE))||[];}catch(e){return [];}}
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
-let spots=loadSpots(),spotOn=true,placingSpot=false;
+let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
 const spotLayer=L.layerGroup().addTo(map);
 function biggest(s){return (s.catches||[]).reduce((m,c)=>Math.max(m,parseFloat(c.len)||0),0);}
 function spotIcon(s,z){const col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const n=(s.catches||[]).length;
@@ -1079,7 +1082,7 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
   return h;}
 function renderSpots(){spotLayer.clearLayers();const list=document.getElementById('sp-list');list.innerHTML='';
-  spots.forEach(s=>{const z=zoneAt(s.lat,s.lng);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z),draggable:true,autoPan:true}).addTo(spotLayer);
+  spots.forEach(s=>{const z=zoneAt(s.lat,s.lng);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z),draggable:spotsUnlocked,autoPan:true}).addTo(spotLayer);
     mk._spotId=s.id;mk.bindPopup(spotPopup(s,z),{maxWidth:290,minWidth:250});
     mk.on('dragend',function(){const ll=mk.getLatLng();s.lat=+ll.lat.toFixed(6);s.lng=+ll.lng.toFixed(6);saveSpots();
       const nz=zoneAt(s.lat,s.lng);renderSpots();spotLayer.eachLayer(l=>{if(l._spotId===s.id)l.openPopup();});
@@ -1133,6 +1136,7 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;root.quer
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
 document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
 document.getElementById('sp-toggle').onchange=e=>{spotOn=e.target.checked;spotOn?spotLayer.addTo(map):map.removeLayer(spotLayer);};
+document.getElementById('sp-lock').onchange=e=>{spotsUnlocked=e.target.checked;document.body.classList.toggle('pins-unlocked',spotsUnlocked);e.target.parentNode.querySelector('span').textContent=spotsUnlocked?'🔒 Lock pins (drag to move)':'🔓 Unlock pins to drag';renderSpots();};
 map.on('click',e=>{if(placingSpot){placingSpot=false;document.body.classList.remove('placing');openSpotSheet({lat:e.latlng.lat,lng:e.latlng.lng});}});
 renderSpots();
 
