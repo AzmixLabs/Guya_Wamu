@@ -884,6 +884,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .panel-body > .blk > .lbl::after{content:"\2212";font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink-dim)}
   .panel-body > .blk.collapsed > .lbl::after{content:"+"}
   .panel-body > .blk.collapsed > :not(.lbl){display:none!important}
+  body.drawing .leaflet-container{cursor:crosshair;touch-action:none!important}
+  .dp-btn.on{background:var(--accent);color:#04181a;border-color:var(--accent);font-weight:600}
+  .dlhint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1100;display:none;background:rgba(8,30,34,.94);border:1px solid var(--measure);color:var(--measure);font-family:"IBM Plex Mono",monospace;font-size:11px;padding:7px 14px;border-radius:20px;white-space:nowrap;pointer-events:none}
+  body.drawing .dlhint{display:block}
 </style>
 </head>
 <body>
@@ -891,6 +895,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <div class="mhint" id="mhint">Tap the map to drop points</div>
 <div class="plhint" id="plhint">Tap the map to drop a spot</div>
 <div class="slhint" id="slhint">Tap near a depth point to chain it</div>
+<div class="dlhint" id="dlhint">Drag to draw a contour — release to finish</div>
 <div class="sbar" id="sbar"><div><span class="totlbl">Slope</span><span class="tot" id="sl-readout">0 pts</span></div><div class="div"></div><button id="sl-undo">Undo</button><button id="sl-clear">Clear</button><button class="primary" id="sl-save">Save</button></div>
 <div class="mbar" id="mbar">
   <div><span class="totlbl">Total</span><span class="tot" id="mtot">0&nbsp;m</span></div>
@@ -941,7 +946,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
     </div>
     <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
-      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
+      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden><button class="dp-btn" id="ct-draw">✏️ Draw</button></div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="ct-list"></div>
       <button class="dp-clear" id="ct-clear">Clear all contours</button>
@@ -1305,7 +1310,7 @@ document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
 
 /* ---------- BACKUP: export / import JSON ---------- */
 function exportBackup(){
-  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects};
+  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1322,6 +1327,7 @@ function importBackup(file){
     if(Array.isArray(d.depthPoints)){const by={};points.forEach(p=>by[p.id]=p);
       d.depthPoints.forEach(p=>{if(p&&p.id){if(!by[p.id])np++;by[p.id]=p;}});points=Object.values(by);savePts();renderDepths();}
     if(Array.isArray(d.transects)){const by={};transects.forEach(t=>by[t.id]=t);d.transects.forEach(t=>{if(t&&t.id)by[t.id]=t;});transects=Object.values(by);saveTx();renderTx();}
+    if(Array.isArray(d.contours)){const by={};contours.forEach(c=>by[c.id]=c);d.contours.forEach(c=>{if(c&&c.id)by[c.id]=c;});contours=Object.values(by);saveCt();renderContours();}
     const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
     if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     buildShade();
@@ -1479,6 +1485,23 @@ renderContours();
     const k=lbl.textContent.trim();if(st[k])blk.classList.add('collapsed');
     lbl.addEventListener('click',function(){blk.classList.toggle('collapsed');st[k]=blk.classList.contains('collapsed');try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}});
   });})();
+
+/* ---------- Freehand contour drawing ---------- */
+(function(){
+  const btn=document.getElementById('ct-draw');if(!btn)return;
+  const el=map.getContainer();let drawing=false,path=[],line=null,lastPt=null;
+  function setMode(on){drawing=on;
+    if(on){map.dragging.disable();map.doubleClickZoom.disable();if(map.tap)map.tap.disable();document.body.classList.add('drawing');btn.classList.add('on');btn.textContent='\u2713 Done';}
+    else{map.dragging.enable();map.doubleClickZoom.enable();if(map.tap)try{map.tap.enable();}catch(e){}document.body.classList.remove('drawing');btn.classList.remove('on');btn.textContent='\u270f\ufe0f Draw';}}
+  btn.onclick=function(){setMode(!drawing);};
+  el.addEventListener('pointerdown',function(e){if(!drawing)return;e.preventDefault();const ll=map.mouseEventToLatLng(e);path=[ll];lastPt=map.mouseEventToContainerPoint(e);line=L.polyline(path,{color:'#ffd54a',weight:3,dashArray:'5 5'}).addTo(map);try{el.setPointerCapture(e.pointerId);}catch(_){}} ,{passive:false});
+  el.addEventListener('pointermove',function(e){if(!drawing||!line)return;e.preventDefault();const cp=map.mouseEventToContainerPoint(e);if(lastPt&&cp.distanceTo(lastPt)<4)return;lastPt=cp;path.push(map.mouseEventToLatLng(e));line.setLatLngs(path);},{passive:false});
+  function finish(e){if(!drawing||!line)return;if(e)e.preventDefault();map.removeLayer(line);const pts=path.map(function(p){return [+p.lat.toFixed(6),+p.lng.toFixed(6)];});line=null;path=[];lastPt=null;setMode(false);
+    if(pts.length>=2){const v=prompt('Depth in metres for this contour (leave blank to set later):','');const num=parseFloat(v);const depth=(v===null||String(v).trim()===''||isNaN(num))?'':Math.abs(num);
+      contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999),name:'freehand',depth:depth,pts:pts});saveCt();renderContours();}}
+  el.addEventListener('pointerup',finish,{passive:false});
+  el.addEventListener('pointercancel',function(){if(line){map.removeLayer(line);}line=null;path=[];lastPt=null;setMode(false);});
+})();
 </script>
 </body>
 </html>
