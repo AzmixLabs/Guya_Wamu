@@ -957,7 +957,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.06</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.07</div>
       <div class="dp-list" id="sp-list"></div>
     </div>
     <div class="blk"><div class="lbl">Best bite times</div>
@@ -968,7 +968,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="bb-out" id="bb-out"></div>
     </div>
     <div class="blk"><div class="lbl">Conditions (live)</div>
-      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Refresh (needs signal)</button></div>
+      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Coast</button><button class="dp-btn" id="wx-here">📍 My location</button></div>
       <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
     </div>
     <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
@@ -1062,6 +1062,7 @@ function loadPts(){try{return JSON.parse(localStorage.getItem(STORE))||[];}catch
 function savePts(){try{localStorage.setItem(STORE,JSON.stringify(points));}catch(e){}}
 let points=loadPts();
 const depthLayer=L.layerGroup().addTo(map);
+const depthRenderer=L.canvas({padding:0.5});
 function depthIcon(p,z){const notake=z&&z.notake;const txt=(p.depth!==''&&p.depth!=null)?p.depth+' m':'•';
   return L.divIcon({className:'depthpin',html:`<span class="dp-tag${notake?' notake':''}">${txt}</span>`,iconSize:[0,0]});}
 function depthPopup(p,z){let h=`<div class="pop"><h2>${p.label||'Depth point'}</h2>`;
@@ -1071,16 +1072,21 @@ function depthPopup(p,z){let h=`<div class="pop"><h2>${p.label||'Depth point'}</
   else h+=`<div class="kv">Outside the mapped zones.</div>`;
   h+=`<div class="warn">Your own Navionics reading. Verify zone &amp; rules officially before fishing.</div><button class="del" data-id="${p.id}">Delete point</button></div>`;return h;}
 function renderDepths(){depthLayer.clearLayers();const list=document.getElementById('dp-list');list.innerHTML='';
-  points.forEach(p=>{const z=zoneAt(p.lat,p.lng);
-    const mk=L.marker([p.lat,p.lng],{icon:depthIcon(p,z)}).addTo(depthLayer);
+  const LIMIT=120;let shown=0;
+  points.forEach(p=>{const z=zoneAt(p.lat,p.lng);const hasD=(p.depth!==''&&p.depth!=null);
+    const mk=L.circleMarker([p.lat,p.lng],{renderer:depthRenderer,radius:5,weight:1.5,color:(z&&z.notake)?'#ff5d5d':'#0b3a59',fillColor:ctColor(p.depth),fillOpacity:.92}).addTo(depthLayer);
+    mk.bindTooltip(hasD?(p.depth+' m'):'•',{direction:'top',className:'ct-tip'});
     mk.bindPopup(depthPopup(p,z),{maxWidth:280,minWidth:230});
-    const row=document.createElement('div');row.className='dp-item';const s=z?(STYLES[z.zt]||{}):{};
-    row.innerHTML=`<span class="d">${(p.depth!==''&&p.depth!=null)?p.depth+'m':'—'}</span><span class="n">${p.label||toDDM(p.lat,true)+' '+toDDM(p.lng,false)}</span>`
-      +(z?`<span class="z" style="color:${s.stroke};border-color:${s.stroke}">${z.zt}</span>`:`<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">—</span>`)
-      +`<button class="x" data-id="${p.id}">✕</button>`;
-    row.querySelector('.x').onclick=()=>{removePt(p.id);};
-    row.querySelector('.n').onclick=()=>{map.setView([p.lat,p.lng],17);mk.openPopup();};
-    list.appendChild(row);});
+    if(shown<LIMIT){shown++;
+      const row=document.createElement('div');row.className='dp-item';const s=z?(STYLES[z.zt]||{}):{};
+      row.innerHTML=`<span class="d">${hasD?p.depth+'m':'—'}</span><span class="n">${p.label||toDDM(p.lat,true)+' '+toDDM(p.lng,false)}</span>`
+        +(z?`<span class="z" style="color:${s.stroke};border-color:${s.stroke}">${z.zt}</span>`:`<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">—</span>`)
+        +`<button class="x" data-id="${p.id}">✕</button>`;
+      row.querySelector('.x').onclick=()=>{removePt(p.id);};
+      row.querySelector('.n').onclick=()=>{map.setView([p.lat,p.lng],17);mk.openPopup();};
+      list.appendChild(row);}
+  });
+  if(points.length>LIMIT){const more=document.createElement('div');more.className='dp-item';more.style.opacity='.7';more.innerHTML='<span class="n">…and '+(points.length-LIMIT)+' more (list capped for speed — all still show on the map)</span>';list.appendChild(more);}
   document.getElementById('dp-count').textContent=points.length;}
 function addPt(o){o.id='p'+Date.now()+Math.floor(Math.random()*999);points.push(o);savePts();renderDepths();buildShade();}
 function removePt(id){points=points.filter(p=>p.id!==id);savePts();renderDepths();map.closePopup();buildShade();}
@@ -1521,10 +1527,11 @@ renderContours();
 /* ---------- Live conditions (Open-Meteo, on demand) ---------- */
 (function(){
   const btn=document.getElementById('wx-refresh');const out=document.getElementById('wx-out');if(!btn||!out)return;
-  const lat=-24.847,lng=152.482;
+  const hereBtn=document.getElementById('wx-here');
+  const COAST=[-24.847,152.482];
   function compass(d){if(d==null||isNaN(d))return '';return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round((d%360)/22.5)%16];}
   const r0=v=>(v==null||isNaN(v))?'\u2013':Math.round(v);
-  async function load(){
+  async function load(lat,lng,label){
     out.innerHTML='<span class="bb-dim">Loading\u2026</span>';
     try{
       const fU='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,precipitation_probability_max&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=4';
@@ -1532,7 +1539,7 @@ renderContours();
       const fR=await fetch(fU);if(!fR.ok)throw new Error('wx');const f=await fR.json();
       let m=null;try{const mR=await fetch(mU);if(mR.ok)m=await mR.json();}catch(e){}
       const cu=f.current||{},d=f.daily||{};
-      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">NOW</span><span class="bb-scoretx">coast</span></div>';
+      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">NOW</span><span class="bb-scoretx">'+(label||'coast')+'</span></div>';
       h+='<div class="bb-line"><span class="bb-k">Wind</span><span class="bb-v">'+r0(cu.wind_speed_10m)+' kn '+compass(cu.wind_direction_10m)+' \u00b7 gust '+r0(cu.wind_gusts_10m)+'</span></div>';
       h+='<div class="bb-line"><span class="bb-k">Rain now</span><span class="bb-v">'+(cu.precipitation!=null?cu.precipitation+' mm':'\u2013')+'</span></div>';
       if(m&&m.current){h+='<div class="bb-line"><span class="bb-k">Swell / wave</span><span class="bb-v">'+(m.current.swell_wave_height!=null?m.current.swell_wave_height+' m':'\u2013')+' / '+(m.current.wave_height!=null?m.current.wave_height+' m':'\u2013')+'</span></div>';}
@@ -1544,7 +1551,13 @@ renderContours();
       out.innerHTML=h;
     }catch(e){out.innerHTML='<span class="bb-dim">Couldn\u2019t reach the weather service \u2014 check your connection and tap refresh again.</span>';}
   }
-  btn.onclick=load;
+  btn.onclick=()=>load(COAST[0],COAST[1],'coast');
+  if(hereBtn)hereBtn.onclick=()=>{if(!navigator.geolocation){out.innerHTML='<span class="bb-dim">This device can\u2019t share its location.</span>';return;}
+    out.innerHTML='<span class="bb-dim">Getting your location\u2026</span>';
+    navigator.geolocation.getCurrentPosition(
+      pos=>load(pos.coords.latitude,pos.coords.longitude,'your location'),
+      err=>{out.innerHTML='<span class="bb-dim">Location unavailable ('+(err.message||'denied')+') \u2014 using the coast button instead works fine.</span>';},
+      {enableHighAccuracy:true,timeout:10000,maximumAge:60000});};
 })();
 </script>
 </body>
