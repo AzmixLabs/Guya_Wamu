@@ -946,7 +946,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
     </div>
     <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
-      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden><button class="dp-btn" id="ct-draw">✏️ Draw</button></div>
+      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="ct-list"></div>
       <button class="dp-clear" id="ct-clear">Clear all contours</button>
@@ -965,6 +966,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <select id="bb-spot" class="bb-in"><option value="">Coast-wide</option></select>
       </div>
       <div class="bb-out" id="bb-out"></div>
+    </div>
+    <div class="blk"><div class="lbl">Conditions (live)</div>
+      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Refresh (needs signal)</button></div>
+      <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
     </div>
     <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
     <div class="blk"><div class="lbl">Zone legend (2024 plan)</div><div class="legend" id="legend"></div></div>
@@ -1286,6 +1291,7 @@ function buildShade(){
   if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
   if(!shadeOn)return;
   const pts=points.filter(p=>p.depth!==''&&p.depth!=null).map(p=>({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)}));
+  if(typeof contours!=='undefined'){contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth);const step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){pts.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});}});}
   if(pts.length<3)return;
   let minLa=Math.min.apply(null,pts.map(p=>p.lat)),maxLa=Math.max.apply(null,pts.map(p=>p.lat)),
       minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
@@ -1305,7 +1311,8 @@ function buildShade(){
   shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:0.9,interactive:false,pane:'shadePane'}).addTo(map);
 }
 document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
-  if(shadeOn&&points.filter(p=>p.depth!==''&&p.depth!=null).length<3){alert('Add at least 3 depth soundings for shading.');}
+  const nPt=points.filter(p=>p.depth!==''&&p.depth!=null).length+((typeof contours!=='undefined')?contours.filter(c=>c.depth!==''&&c.depth!=null).reduce((a,c)=>a+Math.max(1,Math.floor(c.pts.length/12)),0):0);
+  if(shadeOn&&nPt<3){alert('Add at least 3 depth soundings (or labelled contours) for shading.');}
   buildShade();};
 
 /* ---------- BACKUP: export / import JSON ---------- */
@@ -1407,6 +1414,9 @@ const BURNETT_TIDES_2026={"2026-01-01":[["00:04",0.66,"L"],["06:40",3.26,"H"],["
     wins.sort((x,y)=>x.a-y.a);
     const sn=springNeap(ev.illum.phase);
     let sc=2;if(sn[0]==='s')sc+=1;if(wins.some(w=>w.k==='major'&&w.light))sc+=1.5;if(wins.some(w=>w.k==='minor'&&w.light))sc+=0.5;
+    const frac=ev.illum.fraction;let moonNote='';
+    if(frac<0.25){sc+=0.5;moonNote='Dark nights around the new moon \u2014 fish haven\u2019t gorged under moonlight, so expect a hard feed at first light on the big spring run-in.';}
+    else if(frac>0.85){moonNote='Bright full-moon nights can push the feed into the dark and flatten the daytime bite \u2014 fish dawn/dusk, or try after dark.';}
     sc=Math.max(1,Math.min(5,Math.round(sc)));const stars='★'.repeat(sc)+'☆'.repeat(5-sc);
     const winHtml=wins.map(w=>`<div class="bb-win ${w.k==='major'?'major':''}"><span class="t">${fmt(w.a)}–${fmt(w.b)}</span> · ${w.l}${w.light?' <span class="lite">☀ low light</span>':''}</div>`).join('')||'<span class="bb-dim">No solunar windows.</span>';
     let tideHtml=tide?tide.map(([t,h,ty])=>`<span class="bb-tide ${ty}"><span class="ar">${ty==='H'?'▲':'▼'}</span>${t}<span class="bb-dim"> ${h.toFixed(2)}m</span></span>`).join(''):'<span class="bb-dim">No tide data (2026 only).</span>';
@@ -1417,7 +1427,7 @@ const BURNETT_TIDES_2026={"2026-01-01":[["00:04",0.66,"L"],["06:40",3.26,"H"],["
     $('bb-out').innerHTML=
       `<div class="bb-score"><span class="bb-stars">${stars}</span><span class="bb-scoretx">${sn}</span></div>`+
       `<div class="bb-sec"><div class="bb-h">Bite windows</div>${winHtml}`+
-      `<div class="bb-note">Yellow = major (moon overhead/underfoot, ~2 hrs). Teal = minor (moonrise/set, ~1 hr). ☀ overlaps first/last light — usually the pick.</div></div>`+
+      `<div class="bb-note">Yellow = major (moon overhead/underfoot, ~2 hrs). Teal = minor (moonrise/set, ~1 hr). ☀ overlaps first/last light — usually the pick.</div>`+(moonNote?`<div class="bb-note" style="color:var(--measure)">${moonNote}</div>`:'')+`</div>`+
       `<div class="bb-sec"><div class="bb-h">Sun &amp; moon</div>`+
       `<div class="bb-line"><span class="bb-k">Sunrise / sunset</span><span class="bb-v">${fmt(ev.sunrise)} · ${fmt(ev.sunset)}</span></div>`+
       `<div class="bb-line"><span class="bb-k">Moonrise / set</span><span class="bb-v">${fmt(ev.moonrise)} · ${fmt(ev.moonset)}</span></div>`+
@@ -1444,18 +1454,22 @@ const ctLayer=L.layerGroup().addTo(map);
 function ctColor(d){if(d===''||d==null)return '#9fb3bf';d=Math.abs(+d);return d<2?'#7fe3ff':d<4?'#46b6ff':d<6?'#3f86e6':d<9?'#3f5ad0':'#5a3fd0';}
 function ctPopup(c){return '<div class="pop"><h2>Depth contour</h2><div class="kv">Name: '+(c.name?c.name.replace(/[<>]/g,''):'\u2014')+'<br>Depth: '+((c.depth!==''&&c.depth!=null)?c.depth+' m':'<span style="color:var(--measure)">not set</span>')+'<br>Points: '+c.pts.length+'</div><div class="sp-pop-actions"><button class="sp-pa primary" data-ctset="'+c.id+'">Set depth</button><button class="sp-pa sp-del" data-ctdel="'+c.id+'">Delete</button></div></div>';}
 function renderContours(){ctLayer.clearLayers();const list=document.getElementById('ct-list');if(list)list.innerHTML='';
-  contours.forEach(c=>{const col=ctColor(c.depth);const pl=L.polyline(c.pts,{color:col,weight:3,opacity:.92,lineJoin:'round'}).addTo(ctLayer);pl._ctId=c.id;
+  contours.forEach(c=>{const col=ctColor(c.depth);const pl=L.polyline(c.pts,{color:col,weight:4,opacity:.92,lineJoin:'round'}).addTo(ctLayer);pl._ctId=c.id;
     pl.bindTooltip((c.depth!==''&&c.depth!=null)?(c.depth+' m'):(c.name||'contour'),{sticky:true,direction:'top',className:'ct-tip'});
     pl.bindPopup(ctPopup(c),{maxWidth:260});
+    const hit=L.polyline(c.pts,{color:'#000',opacity:0,weight:20,lineJoin:'round'}).addTo(ctLayer);hit.bindPopup(ctPopup(c),{maxWidth:260});
     if(list){const row=document.createElement('div');row.className='dp-item';
       row.innerHTML='<span class="d" style="color:'+col+'">'+((c.depth!==''&&c.depth!=null)?c.depth+'m':'\u2014')+'</span><span class="n">'+((c.name||'contour').replace(/[<>]/g,''))+'</span><span class="z" style="color:'+col+';border-color:'+col+'">'+c.pts.length+'pt</span><button class="x" data-id="'+c.id+'">\u2715</button>';
       row.querySelector('.x').onclick=()=>{contours=contours.filter(x=>x.id!==c.id);saveCt();renderContours();};
       row.querySelector('.n').onclick=()=>{map.fitBounds(pl.getBounds().pad(0.25));pl.openPopup();};
       list.appendChild(row);}
   });
-  const cc=document.getElementById('ct-count');if(cc)cc.textContent=contours.length;}
+  const cc=document.getElementById('ct-count');if(cc)cc.textContent=contours.length;if(typeof buildShade==='function')buildShade();}
+function setContourDepth(id){const c=contours.find(x=>x.id===id);if(!c)return;
+  openSheet('Contour depth', fld('Depth (m)','<input id="cd-depth" class="fin" inputmode="decimal" value="'+((c.depth!==''&&c.depth!=null)?c.depth:'')+'">')+fld('Name (optional)','<input id="cd-name" class="fin" value="'+esc(c.name||'')+'">'),
+    function(){const v=val('cd-depth');const num=parseFloat(v);c.depth=(v===''||isNaN(num))?'':Math.abs(num);const nm=val('cd-name');c.name=nm;saveCt();renderContours();});}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;
-  const sb=root.querySelector('[data-ctset]');if(sb&&!sb._w){sb._w=1;sb.onclick=()=>{const c=contours.find(x=>x.id===sb.dataset.ctset);if(!c)return;const v=prompt('Depth in metres for this contour line:',(c.depth===''||c.depth==null)?'':c.depth);if(v===null)return;const num=parseFloat(v);c.depth=(String(v).trim()===''||isNaN(num))?'':Math.abs(num);saveCt();renderContours();map.closePopup();};}
+  const sb=root.querySelector('[data-ctset]');if(sb&&!sb._w){sb._w=1;sb.onclick=()=>{const id=sb.dataset.ctset;map.closePopup();setContourDepth(id);};}
   const db=root.querySelector('[data-ctdel]');if(db&&!db._w){db._w=1;db.onclick=()=>{contours=contours.filter(x=>x.id!==db.dataset.ctdel);saveCt();renderContours();map.closePopup();};}
 });
 (function(){const gp=document.getElementById('ct-gpx');if(gp)gp.onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
@@ -1489,18 +1503,48 @@ renderContours();
 /* ---------- Freehand contour drawing ---------- */
 (function(){
   const btn=document.getElementById('ct-draw');if(!btn)return;
+  const depthIn=document.getElementById('ct-draw-depth');const undoBtn=document.getElementById('ct-undo');
   const el=map.getContainer();let drawing=false,path=[],line=null,lastPt=null;
   function setMode(on){drawing=on;
-    if(on){map.dragging.disable();map.doubleClickZoom.disable();if(map.tap)map.tap.disable();document.body.classList.add('drawing');btn.classList.add('on');btn.textContent='\u2713 Done';}
+    if(on){map.dragging.disable();map.doubleClickZoom.disable();if(map.tap)try{map.tap.disable();}catch(e){}document.body.classList.add('drawing');btn.classList.add('on');btn.textContent='\u2713 Done';}
     else{map.dragging.enable();map.doubleClickZoom.enable();if(map.tap)try{map.tap.enable();}catch(e){}document.body.classList.remove('drawing');btn.classList.remove('on');btn.textContent='\u270f\ufe0f Draw';}}
   btn.onclick=function(){setMode(!drawing);};
-  el.addEventListener('pointerdown',function(e){if(!drawing)return;e.preventDefault();const ll=map.mouseEventToLatLng(e);path=[ll];lastPt=map.mouseEventToContainerPoint(e);line=L.polyline(path,{color:'#ffd54a',weight:3,dashArray:'5 5'}).addTo(map);try{el.setPointerCapture(e.pointerId);}catch(_){}} ,{passive:false});
-  el.addEventListener('pointermove',function(e){if(!drawing||!line)return;e.preventDefault();const cp=map.mouseEventToContainerPoint(e);if(lastPt&&cp.distanceTo(lastPt)<4)return;lastPt=cp;path.push(map.mouseEventToLatLng(e));line.setLatLngs(path);},{passive:false});
-  function finish(e){if(!drawing||!line)return;if(e)e.preventDefault();map.removeLayer(line);const pts=path.map(function(p){return [+p.lat.toFixed(6),+p.lng.toFixed(6)];});line=null;path=[];lastPt=null;setMode(false);
-    if(pts.length>=2){const v=prompt('Depth in metres for this contour (leave blank to set later):','');const num=parseFloat(v);const depth=(v===null||String(v).trim()===''||isNaN(num))?'':Math.abs(num);
-      contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999),name:'freehand',depth:depth,pts:pts});saveCt();renderContours();}}
+  if(undoBtn)undoBtn.onclick=function(){if(contours.length){contours.pop();saveCt();renderContours();}};
+  el.addEventListener('pointerdown',function(e){if(!drawing)return;e.preventDefault();const ll=map.mouseEventToLatLng(e);path=[ll];lastPt=map.mouseEventToContainerPoint(e);line=L.polyline(path,{color:'#ffd54a',weight:4,opacity:.95}).addTo(map);try{el.setPointerCapture(e.pointerId);}catch(_){}} ,{passive:false});
+  el.addEventListener('pointermove',function(e){if(!drawing||!line)return;e.preventDefault();const cp=map.mouseEventToContainerPoint(e);if(lastPt&&cp.distanceTo(lastPt)<3)return;lastPt=cp;path.push(map.mouseEventToLatLng(e));line.setLatLngs(path);},{passive:false});
+  function finish(e){if(!drawing||!line)return;if(e)e.preventDefault();map.removeLayer(line);const pts=path.map(function(p){return [+p.lat.toFixed(6),+p.lng.toFixed(6)];});line=null;path=[];lastPt=null;
+    if(pts.length>=2){const dv=depthIn?parseFloat(depthIn.value):NaN;const depth=isNaN(dv)?'':Math.abs(dv);contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999),name:'freehand',depth:depth,pts:pts});saveCt();renderContours();}}
   el.addEventListener('pointerup',finish,{passive:false});
-  el.addEventListener('pointercancel',function(){if(line){map.removeLayer(line);}line=null;path=[];lastPt=null;setMode(false);});
+  el.addEventListener('pointercancel',function(){if(line){map.removeLayer(line);}line=null;path=[];lastPt=null;});
+})();
+
+/* ---------- Live conditions (Open-Meteo, on demand) ---------- */
+(function(){
+  const btn=document.getElementById('wx-refresh');const out=document.getElementById('wx-out');if(!btn||!out)return;
+  const lat=-24.847,lng=152.482;
+  function compass(d){if(d==null||isNaN(d))return '';return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round((d%360)/22.5)%16];}
+  const r0=v=>(v==null||isNaN(v))?'\u2013':Math.round(v);
+  async function load(){
+    out.innerHTML='<span class="bb-dim">Loading\u2026</span>';
+    try{
+      const fU='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,precipitation_probability_max&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=4';
+      const mU='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lng+'&current=wave_height,swell_wave_height,swell_wave_period&daily=swell_wave_height_max&timezone=Australia%2FBrisbane&forecast_days=4';
+      const fR=await fetch(fU);if(!fR.ok)throw new Error('wx');const f=await fR.json();
+      let m=null;try{const mR=await fetch(mU);if(mR.ok)m=await mR.json();}catch(e){}
+      const cu=f.current||{},d=f.daily||{};
+      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">NOW</span><span class="bb-scoretx">coast</span></div>';
+      h+='<div class="bb-line"><span class="bb-k">Wind</span><span class="bb-v">'+r0(cu.wind_speed_10m)+' kn '+compass(cu.wind_direction_10m)+' \u00b7 gust '+r0(cu.wind_gusts_10m)+'</span></div>';
+      h+='<div class="bb-line"><span class="bb-k">Rain now</span><span class="bb-v">'+(cu.precipitation!=null?cu.precipitation+' mm':'\u2013')+'</span></div>';
+      if(m&&m.current){h+='<div class="bb-line"><span class="bb-k">Swell / wave</span><span class="bb-v">'+(m.current.swell_wave_height!=null?m.current.swell_wave_height+' m':'\u2013')+' / '+(m.current.wave_height!=null?m.current.wave_height+' m':'\u2013')+'</span></div>';}
+      h+='<div class="bb-sec"><div class="bb-h">Next days</div>';
+      if(d.time){for(let i=0;i<d.time.length;i++){const day=new Date(d.time[i]+'T12:00').toLocaleDateString('en-AU',{weekday:'short'});
+        const sw=(m&&m.daily&&m.daily.swell_wave_height_max)?(' \u00b7 swell '+m.daily.swell_wave_height_max[i]+'m'):'';
+        h+='<div class="bb-line"><span class="bb-k">'+day+'</span><span class="bb-v">'+r0(d.wind_speed_10m_max[i])+'\u2013'+r0(d.wind_gusts_10m_max[i])+' kn '+compass(d.wind_direction_10m_dominant[i])+' \u00b7 '+(d.precipitation_probability_max[i]||0)+'% rain'+sw+'</span></div>';}}
+      h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 pulled '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})+'. Forecast aid \u2014 check official marine warnings before heading out.</div>';
+      out.innerHTML=h;
+    }catch(e){out.innerHTML='<span class="bb-dim">Couldn\u2019t reach the weather service \u2014 check your connection and tap refresh again.</span>';}
+  }
+  btn.onclick=load;
 })();
 </script>
 </body>
