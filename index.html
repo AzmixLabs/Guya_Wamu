@@ -13,7 +13,7 @@
 <meta http-equiv="Expires" content="0">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
-<title>Woongarra Coast — Zones + Depths</title>
+<title>Woongarra Fishing Map</title>
 <style>/* required styles */
 
 .leaflet-pane,
@@ -506,6 +506,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	font-size: 13px;
 	font-size: 1.08333em;
 	min-height: 1px;
+	max-height: 62vh;
+	overflow-y: auto;
+	overflow-x: hidden;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 	}
 .leaflet-popup-content p {
 	margin: 17px 0;
@@ -852,6 +857,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   @media (max-width:600px){.panel{width:calc(100vw - 24px)}.leaflet-control-zoom{margin-top:64px!important}}
   @media (pointer:coarse){:root{--tap:44px}}
   .bb-row{display:flex;gap:7px;margin-bottom:9px}
+  .bb-in{color-scheme:dark}
+  input[type=date].bb-in,select.bb-in{background:#13242f;color:#dbe9f2;border:1px solid #2c4a5d;border-radius:7px;padding:6px 8px;font-family:"Sora",sans-serif;font-size:11.5px}
+  input[type=date].bb-in::-webkit-calendar-picker-indicator{filter:invert(.85);opacity:.9;cursor:pointer}
+  .fin[type=date]{color-scheme:dark}
+  .dlegend{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:9.5px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
+  .dlegend .bar{flex:1;height:9px;border-radius:5px;background:linear-gradient(90deg,#8fe9ff,#46b6ff,#3f86e6,#3f5ad0,#5a3fd0)}
+  .panel-body > .blk.collapsed > label.keep{display:flex!important}
   .bb-in{flex:1;min-width:0;background:#0e1c26;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12.5px;padding:8px 9px;min-height:var(--tap)}
   .bb-out{font-size:12px;line-height:1.5}
   .bb-score{display:flex;align-items:center;gap:9px;margin-bottom:4px}
@@ -934,7 +946,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="dp-err" id="dp-err"></div>
         <button class="dp-save" id="dp-save">Add to map</button>
       </div>
-      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
+      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="dp-list"></div>
       <button class="dp-clear" id="dp-clear">Clear all depth points</button>
       <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
@@ -942,20 +954,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
         <div class="dp-list" id="sl-list"></div>
         <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
-        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data.</div>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
+        <div class="dlegend"><span>0 m</span><span class="bar"></span><span>8 m</span></div>
       </div>
     </div>
     <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
       <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
       <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
-      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
+      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="ct-list"></div>
       <button class="dp-clear" id="ct-clear">Clear all contours</button>
       <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
     </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
-      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
+      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.07</div>
       <div class="dp-list" id="sp-list"></div>
@@ -968,7 +981,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="bb-out" id="bb-out"></div>
     </div>
     <div class="blk"><div class="lbl">Conditions (live)</div>
-      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Coast</button><button class="dp-btn" id="wx-here">📍 My location</button></div>
+      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Bargara</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
       <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
     </div>
     <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
@@ -1089,7 +1102,7 @@ function renderDepths(){depthLayer.clearLayers();const list=document.getElementB
   if(points.length>LIMIT){const more=document.createElement('div');more.className='dp-item';more.style.opacity='.7';more.innerHTML='<span class="n">…and '+(points.length-LIMIT)+' more (list capped for speed — all still show on the map)</span>';list.appendChild(more);}
   document.getElementById('dp-count').textContent=points.length;}
 function addPt(o){o.id='p'+Date.now()+Math.floor(Math.random()*999);points.push(o);savePts();renderDepths();buildShade();}
-function removePt(id){points=points.filter(p=>p.id!==id);savePts();renderDepths();map.closePopup();buildShade();}
+function removePt(id){if(!confirm('Delete this depth point?'))return;points=points.filter(p=>p.id!==id);savePts();renderDepths();map.closePopup();buildShade();}
 map.on('popupopen',e=>{const d=e.popup._contentNode&&e.popup._contentNode.querySelector('.del');if(d)d.onclick=()=>removePt(d.dataset.id);});
 
 document.getElementById('dp-add-toggle').onclick=()=>document.getElementById('dp-form').classList.toggle('open');
@@ -1251,7 +1264,9 @@ function enterSlope(){if(typeof measuring!=='undefined'&&measuring)exitMeasure()
   slopeMode=true;slopeChain=[];redrawChain();map.closePopup();document.body.classList.add('slopemode');
   document.getElementById('sl-btn').classList.add('on');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);}
 function exitSlope(){slopeMode=false;document.body.classList.remove('slopemode');document.getElementById('sl-btn').classList.remove('on');slopeDraw.clearLayers();}
-map.on('click',e=>{if(!slopeMode)return;const p=nearestDepthPoint(e.latlng);if(p)slopeChain.push({lat:p.lat,lng:p.lng,depth:parseFloat(p.depth)}),redrawChain();});
+map.on('click',e=>{if(!slopeMode)return;const p=nearestDepthPoint(e.latlng);
+  if(p){slopeChain.push({lat:p.lat,lng:p.lng,depth:parseFloat(p.depth)});redrawChain();return;}
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(r&&r.near<=120){slopeChain.push({lat:e.latlng.lat,lng:e.latlng.lng,depth:+r.d.toFixed(1)});redrawChain();}});
 function profileSVG(verts){const W=240,H=120,pad=26;let cum=[0];
   for(let i=1;i<verts.length;i++)cum.push(cum[i-1]+map.distance([verts[i-1].lat,verts[i-1].lng],[verts[i].lat,verts[i].lng]));
   const maxX=cum[cum.length-1]||1,maxD=Math.max.apply(null,verts.map(v=>v.depth))||1;
@@ -1270,12 +1285,12 @@ function renderTx(){txLayer.clearLayers();const list=document.getElementById('sl
     if(list){let len=0;for(let i=1;i<t.verts.length;i++)len+=map.distance([t.verts[i-1].lat,t.verts[i-1].lng],[t.verts[i].lat,t.verts[i].lng]);
       const row=document.createElement('div');row.className='dp-item';
       row.innerHTML='<span class="d" style="color:#9be3b4">'+t.verts.length+'\u2022</span><span class="n">'+(t.name||'Slope line')+'</span><span class="z" style="color:#8aa3b0;border-color:#8aa3b0">'+Math.round(len)+'m</span><button class="x" data-id="'+t.id+'">\u2715</button>';
-      row.querySelector('.x').onclick=()=>{transects=transects.filter(x=>x.id!==t.id);saveTx();renderTx();};
+      row.querySelector('.x').onclick=()=>{if(!confirm('Delete this slope line?'))return;transects=transects.filter(x=>x.id!==t.id);saveTx();renderTx();};
       row.querySelector('.n').onclick=()=>{map.fitBounds(g.getBounds().pad(0.4));g.openPopup();};
       list.appendChild(row);}});
   const c=document.getElementById('sl-count');if(c)c.textContent=transects.length;}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;const d=root.querySelector('[data-txdel]');
-  if(d)d.onclick=()=>{transects=transects.filter(x=>x.id!==d.dataset.txdel);saveTx();renderTx();map.closePopup();};});
+  if(d)d.onclick=()=>{if(!confirm('Delete this slope line?'))return;transects=transects.filter(x=>x.id!==d.dataset.txdel);saveTx();renderTx();map.closePopup();};});
 document.getElementById('sl-btn').onclick=()=>{slopeMode?exitSlope():enterSlope();};
 document.getElementById('sl-undo').onclick=()=>{slopeChain.pop();redrawChain();};
 document.getElementById('sl-clear').onclick=()=>{slopeChain=[];redrawChain();};
@@ -1312,14 +1327,26 @@ function buildShade(){
       for(let k=0;k<pts.length;k++){const dy=(la-pts[k].lat)*mLat,dx=(lo-pts[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
         if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*pts[k].d;den+=w;}
       const depth=den?num/den:0,a=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0)),c=depthColor(depth),idx=(y*W+x)*4;
-      da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*165);}}
+      da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*215);}}
   ctx.putImageData(im,0,0);
-  shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:0.9,interactive:false,pane:'shadePane'}).addTo(map);
+  shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:0.96,interactive:false,pane:'shadePane'}).addTo(map);
 }
 document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
   const nPt=points.filter(p=>p.depth!==''&&p.depth!=null).length+((typeof contours!=='undefined')?contours.filter(c=>c.depth!==''&&c.depth!=null).reduce((a,c)=>a+Math.max(1,Math.floor(c.pts.length/12)),0):0);
   if(shadeOn&&nPt<3){alert('Add at least 3 depth soundings (or labelled contours) for shading.');}
   buildShade();};
+/* ---- interpolated depth anywhere (depth points + contour vertices), shared by slope tool & tap-to-read ---- */
+function depthSamples(){const s=[];
+  points.forEach(p=>{if(p.depth!==''&&p.depth!=null)s.push({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)});});
+  if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
+  return s;}
+function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
+  const mLat=111320,mLng=111320*Math.cos(lat*Math.PI/180);let num=0,den=0,near=1e9;
+  for(let k=0;k<s.length;k++){const dy=(lat-s[k].lat)*mLat,dx=(lng-s[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*s[k].d;den+=w;}
+  return den?{d:num/den,near:near}:null;}
+map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>120)return;
+  L.popup({maxWidth:150,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b></div></div>').openOn(map);});
 
 /* ---------- BACKUP: export / import JSON ---------- */
 function exportBackup(){
@@ -1457,13 +1484,23 @@ function loadCt(){try{return JSON.parse(localStorage.getItem(CSTORE))||[];}catch
 function saveCt(){try{localStorage.setItem(CSTORE,JSON.stringify(contours));}catch(e){}}
 let contours=loadCt(),ctOn=true;
 const ctLayer=L.layerGroup().addTo(map);
-function ctColor(d){if(d===''||d==null)return '#9fb3bf';d=Math.abs(+d);return d<2?'#7fe3ff':d<4?'#46b6ff':d<6?'#3f86e6':d<9?'#3f5ad0':'#5a3fd0';}
+const ctRenderer=L.canvas({padding:0.5});
+function ctColor(d){if(d===''||d==null)return '#9fb3bf';let v=Math.max(0,Math.min(8,Math.abs(+d)));
+  const stops=[[0,[150,235,255]],[1.5,[64,184,255]],[3,[60,130,232]],[5,[64,86,210]],[8,[122,60,205]]];let c;
+  for(let i=1;i<stops.length;i++){if(v<=stops[i][0]){const a=stops[i-1],b=stops[i],t=(v-a[0])/((b[0]-a[0])||1);
+    c=[a[1][0]+(b[1][0]-a[1][0])*t,a[1][1]+(b[1][1]-a[1][1])*t,a[1][2]+(b[1][2]-a[1][2])*t];break;}}
+  if(!c)c=stops[stops.length-1][1].slice();
+  const f=(Math.round(v/0.5)%2===0)?1.13:0.88; /* alternate brightness so neighbouring lines separate */
+  return 'rgb('+c.map(x=>Math.max(0,Math.min(255,Math.round(x*f)))).join(',')+')';}
+function smoothPts(pts,iter){if(!pts||pts.length<3)return pts;let p=pts;for(let k=0;k<(iter||2);k++){const out=[p[0]];
+  for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];out.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25]);out.push([a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75]);}
+  out.push(p[p.length-1]);p=out;}return p;}
 function ctPopup(c){return '<div class="pop"><h2>Depth contour</h2><div class="kv">Name: '+(c.name?c.name.replace(/[<>]/g,''):'\u2014')+'<br>Depth: '+((c.depth!==''&&c.depth!=null)?c.depth+' m':'<span style="color:var(--measure)">not set</span>')+'<br>Points: '+c.pts.length+'</div><div class="sp-pop-actions"><button class="sp-pa primary" data-ctset="'+c.id+'">Set depth</button><button class="sp-pa sp-del" data-ctdel="'+c.id+'">Delete</button></div></div>';}
 function renderContours(){ctLayer.clearLayers();const list=document.getElementById('ct-list');if(list)list.innerHTML='';
-  contours.forEach(c=>{const col=ctColor(c.depth);const pl=L.polyline(c.pts,{color:col,weight:4,opacity:.92,lineJoin:'round'}).addTo(ctLayer);pl._ctId=c.id;
+  contours.forEach(c=>{const col=ctColor(c.depth);const sp=smoothPts(c.pts,2);const pl=L.polyline(sp,{renderer:ctRenderer,color:col,weight:4.5,opacity:.95,lineJoin:'round',lineCap:'round'}).addTo(ctLayer);pl._ctId=c.id;
     pl.bindTooltip((c.depth!==''&&c.depth!=null)?(c.depth+' m'):(c.name||'contour'),{sticky:true,direction:'top',className:'ct-tip'});
     pl.bindPopup(ctPopup(c),{maxWidth:260});
-    const hit=L.polyline(c.pts,{color:'#000',opacity:0,weight:20,lineJoin:'round'}).addTo(ctLayer);hit.bindPopup(ctPopup(c),{maxWidth:260});
+    const hit=L.polyline(sp,{renderer:ctRenderer,color:'#000',opacity:0,weight:20,lineJoin:'round'}).addTo(ctLayer);hit.bindPopup(ctPopup(c),{maxWidth:260});
     if(list){const row=document.createElement('div');row.className='dp-item';
       row.innerHTML='<span class="d" style="color:'+col+'">'+((c.depth!==''&&c.depth!=null)?c.depth+'m':'\u2014')+'</span><span class="n">'+((c.name||'contour').replace(/[<>]/g,''))+'</span><span class="z" style="color:'+col+';border-color:'+col+'">'+c.pts.length+'pt</span><button class="x" data-id="'+c.id+'">\u2715</button>';
       row.querySelector('.x').onclick=()=>{contours=contours.filter(x=>x.id!==c.id);saveCt();renderContours();};
@@ -1476,7 +1513,7 @@ function setContourDepth(id){const c=contours.find(x=>x.id===id);if(!c)return;
     function(){const v=val('cd-depth');const num=parseFloat(v);c.depth=(v===''||isNaN(num))?'':Math.abs(num);const nm=val('cd-name');c.name=nm;saveCt();renderContours();});}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;
   const sb=root.querySelector('[data-ctset]');if(sb&&!sb._w){sb._w=1;sb.onclick=()=>{const id=sb.dataset.ctset;map.closePopup();setContourDepth(id);};}
-  const db=root.querySelector('[data-ctdel]');if(db&&!db._w){db._w=1;db.onclick=()=>{contours=contours.filter(x=>x.id!==db.dataset.ctdel);saveCt();renderContours();map.closePopup();};}
+  const db=root.querySelector('[data-ctdel]');if(db&&!db._w){db._w=1;db.onclick=()=>{if(!confirm('Delete this contour line?'))return;contours=contours.filter(x=>x.id!==db.dataset.ctdel);saveCt();renderContours();map.closePopup();};}
 });
 (function(){const gp=document.getElementById('ct-gpx');if(gp)gp.onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=()=>{try{const xml=new DOMParser().parseFromString(rd.result,'application/xml');
@@ -1528,18 +1565,32 @@ renderContours();
 (function(){
   const btn=document.getElementById('wx-refresh');const out=document.getElementById('wx-out');if(!btn||!out)return;
   const hereBtn=document.getElementById('wx-here');
-  const COAST=[-24.847,152.482];
+  const BARGARA=[-24.847,152.482];
   function compass(d){if(d==null||isNaN(d))return '';return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round((d%360)/22.5)%16];}
   const r0=v=>(v==null||isNaN(v))?'\u2013':Math.round(v);
+  const hhmm=dt=>dt.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+  function tideNow(){try{const T=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026:null;if(!T)return null;
+    const now=new Date(),pad=n=>('0'+n).slice(-2),evs=[];
+    for(let off=-1;off<=1;off++){const dt=new Date(now);dt.setDate(now.getDate()+off);const key=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate());const arr=T[key];if(!arr)continue;
+      arr.forEach(e=>{const hm=e[0].split(':');const d=new Date(dt);d.setHours(+hm[0],+hm[1],0,0);evs.push({t:d,h:e[1],type:e[2]});});}
+    evs.sort((a,b)=>a.t-b.t);let prev=null,next=null;
+    for(let i=0;i<evs.length;i++){if(evs[i].t<=now)prev=evs[i];if(evs[i].t>now){next=evs[i];break;}}
+    if(!prev||!next)return null;
+    const frac=(now-prev.t)/(next.t-prev.t),h=prev.h+(next.h-prev.h)*(1-Math.cos(Math.PI*frac))/2;
+    return {h:h,rising:next.h>prev.h,next:next};}catch(e){return null;}}
+  function tideLine(){const tn=tideNow();if(!tn)return '';
+    return '<div class="bb-line"><span class="bb-k">Tide now</span><span class="bb-v">'+tn.h.toFixed(2)+' m '+(tn.rising?'rising \u2191':'falling \u2193')+' \u00b7 next '+tn.next.type+' '+hhmm(tn.next.t)+' ('+tn.next.h+' m)</span></div>';}
   async function load(lat,lng,label){
-    out.innerHTML='<span class="bb-dim">Loading\u2026</span>';
+    const tide=tideLine();
+    out.innerHTML=(tide||'')+'<span class="bb-dim">Loading live wind, rain &amp; swell\u2026</span>';
     try{
       const fU='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,precipitation_probability_max&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=4';
       const mU='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lng+'&current=wave_height,swell_wave_height,swell_wave_period&daily=swell_wave_height_max&timezone=Australia%2FBrisbane&forecast_days=4';
       const fR=await fetch(fU);if(!fR.ok)throw new Error('wx');const f=await fR.json();
       let m=null;try{const mR=await fetch(mU);if(mR.ok)m=await mR.json();}catch(e){}
       const cu=f.current||{},d=f.daily||{};
-      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">NOW</span><span class="bb-scoretx">'+(label||'coast')+'</span></div>';
+      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">'+(label||'Bargara')+'</span><span class="bb-scoretx">updated '+hhmm(new Date())+'</span></div>';
+      h+=tide;
       h+='<div class="bb-line"><span class="bb-k">Wind</span><span class="bb-v">'+r0(cu.wind_speed_10m)+' kn '+compass(cu.wind_direction_10m)+' \u00b7 gust '+r0(cu.wind_gusts_10m)+'</span></div>';
       h+='<div class="bb-line"><span class="bb-k">Rain now</span><span class="bb-v">'+(cu.precipitation!=null?cu.precipitation+' mm':'\u2013')+'</span></div>';
       if(m&&m.current){h+='<div class="bb-line"><span class="bb-k">Swell / wave</span><span class="bb-v">'+(m.current.swell_wave_height!=null?m.current.swell_wave_height+' m':'\u2013')+' / '+(m.current.wave_height!=null?m.current.wave_height+' m':'\u2013')+'</span></div>';}
@@ -1547,17 +1598,13 @@ renderContours();
       if(d.time){for(let i=0;i<d.time.length;i++){const day=new Date(d.time[i]+'T12:00').toLocaleDateString('en-AU',{weekday:'short'});
         const sw=(m&&m.daily&&m.daily.swell_wave_height_max)?(' \u00b7 swell '+m.daily.swell_wave_height_max[i]+'m'):'';
         h+='<div class="bb-line"><span class="bb-k">'+day+'</span><span class="bb-v">'+r0(d.wind_speed_10m_max[i])+'\u2013'+r0(d.wind_gusts_10m_max[i])+' kn '+compass(d.wind_direction_10m_dominant[i])+' \u00b7 '+(d.precipitation_probability_max[i]||0)+'% rain'+sw+'</span></div>';}}
-      h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 pulled '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})+'. Forecast aid \u2014 check official marine warnings before heading out.</div>';
+      h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 tide from the embedded Burnett Heads table. Forecast aid \u2014 check official marine warnings before heading out.</div>';
       out.innerHTML=h;
-    }catch(e){out.innerHTML='<span class="bb-dim">Couldn\u2019t reach the weather service \u2014 check your connection and tap refresh again.</span>';}
+    }catch(e){out.innerHTML=(tide||'')+'<span class="bb-dim">No signal for live wind/swell \u2014 the tide above is offline. Tap again when you\u2019re back online.</span>';}
   }
-  btn.onclick=()=>load(COAST[0],COAST[1],'coast');
-  if(hereBtn)hereBtn.onclick=()=>{if(!navigator.geolocation){out.innerHTML='<span class="bb-dim">This device can\u2019t share its location.</span>';return;}
-    out.innerHTML='<span class="bb-dim">Getting your location\u2026</span>';
-    navigator.geolocation.getCurrentPosition(
-      pos=>load(pos.coords.latitude,pos.coords.longitude,'your location'),
-      err=>{out.innerHTML='<span class="bb-dim">Location unavailable ('+(err.message||'denied')+') \u2014 using the coast button instead works fine.</span>';},
-      {enableHighAccuracy:true,timeout:10000,maximumAge:60000});};
+  btn.onclick=()=>load(BARGARA[0],BARGARA[1],'Bargara');
+  if(hereBtn)hereBtn.onclick=()=>{const c=map.getCenter();load(c.lat,c.lng,'this view');};
+  const t0=tideLine();if(t0)out.innerHTML=t0+'<span class="bb-dim">Tap Bargara or This view for live wind, rain &amp; swell.</span>';
 })();
 </script>
 </body>
