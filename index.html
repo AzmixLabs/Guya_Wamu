@@ -1730,10 +1730,15 @@ renderContours();
 
 /* ---------- Collapsible panel sections ---------- */
 (function(){const KEY='woongarra_collapsed_v1';let st;try{st=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){st={};}
+  /* Sections that stay OPEN by default; everything else starts collapsed until you open it once. */
+  const KEEP_OPEN={'Base map':1,'Fishing spots & catches':1,'Best bite times':1,'Conditions (live)':1};let changed=false;
   document.querySelectorAll('.panel-body > .blk').forEach(function(blk){const lbl=blk.querySelector(':scope > .lbl');if(!lbl)return;
-    const k=lbl.textContent.trim();if(st[k])blk.classList.add('collapsed');
+    const k=lbl.textContent.trim();
+    if(st[k]==null&&!KEEP_OPEN[k]){st[k]=true;changed=true;}
+    if(st[k])blk.classList.add('collapsed');
     lbl.addEventListener('click',function(){blk.classList.toggle('collapsed');st[k]=blk.classList.contains('collapsed');try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}});
-  });})();
+  });
+  if(changed)try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}})();
 
 /* ---------- Freehand contour drawing ---------- */
 (function(){
@@ -1774,10 +1779,10 @@ renderContours();
     return '<div class="bb-line"><span class="bb-k">Tide now</span><span class="bb-v">'+tn.h.toFixed(2)+' m '+(tn.rising?'rising \u2191':'falling \u2193')+' \u00b7 next '+tn.next.type+' '+hhmm(tn.next.t)+' ('+tn.next.h+' m)</span></div>';}
   async function load(lat,lng,label){
     const tide=tideLine();
-    out.innerHTML=(tide||'')+'<span class="bb-dim">Loading live wind, rain &amp; swell\u2026</span>';
+    out.innerHTML=(tide||'')+'<span class="bb-dim">Loading live wind, rain, swell &amp; water temp\u2026</span>';
     try{
       const fU='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lng+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,precipitation_probability_max&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=4';
-      const mU='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lng+'&current=wave_height,swell_wave_height,swell_wave_period&daily=swell_wave_height_max&timezone=Australia%2FBrisbane&forecast_days=4';
+      const mU='https://marine-api.open-meteo.com/v1/marine?latitude='+lat+'&longitude='+lng+'&current=wave_height,swell_wave_height,swell_wave_period,sea_surface_temperature&hourly=sea_surface_temperature&daily=swell_wave_height_max&timezone=Australia%2FBrisbane&forecast_days=4';
       const fR=await fetch(fU);if(!fR.ok)throw new Error('wx');const f=await fR.json();
       let m=null;try{const mR=await fetch(mU);if(mR.ok)m=await mR.json();}catch(e){}
       const cu=f.current||{},d=f.daily||{};
@@ -1785,11 +1790,14 @@ renderContours();
       h+=tide;
       h+='<div class="bb-line"><span class="bb-k">Wind</span><span class="bb-v">'+r0(cu.wind_speed_10m)+' kn '+compass(cu.wind_direction_10m)+' \u00b7 gust '+r0(cu.wind_gusts_10m)+'</span></div>';
       h+='<div class="bb-line"><span class="bb-k">Rain now</span><span class="bb-v">'+(cu.precipitation!=null?cu.precipitation+' mm':'\u2013')+'</span></div>';
-      if(m&&m.current){h+='<div class="bb-line"><span class="bb-k">Swell / wave</span><span class="bb-v">'+(m.current.swell_wave_height!=null?m.current.swell_wave_height+' m':'\u2013')+' / '+(m.current.wave_height!=null?m.current.wave_height+' m':'\u2013')+'</span></div>';}
+      if(m&&m.current){h+='<div class="bb-line"><span class="bb-k">Swell / wave</span><span class="bb-v">'+(m.current.swell_wave_height!=null?m.current.swell_wave_height+' m':'\u2013')+' / '+(m.current.wave_height!=null?m.current.wave_height+' m':'\u2013')+'</span></div>';
+        if(typeof m.current.sea_surface_temperature==='number')h+='<div class="bb-line"><span class="bb-k">Water temp</span><span class="bb-v">'+m.current.sea_surface_temperature.toFixed(1)+' \u00b0C</span></div>';}
+      function sstAt(i){try{const hh=m&&m.hourly;if(!hh||!hh.time||!hh.sea_surface_temperature)return null;const idx=hh.time.indexOf(d.time[i]+'T12:00');const v=idx>=0?hh.sea_surface_temperature[idx]:null;return (typeof v==='number')?v:null;}catch(e){return null;}}
       h+='<div class="bb-sec"><div class="bb-h">Next days</div>';
       if(d.time){for(let i=0;i<d.time.length;i++){const day=new Date(d.time[i]+'T12:00').toLocaleDateString('en-AU',{weekday:'short'});
         const sw=(m&&m.daily&&m.daily.swell_wave_height_max)?(' \u00b7 swell '+m.daily.swell_wave_height_max[i]+'m'):'';
-        h+='<div class="bb-line"><span class="bb-k">'+day+'</span><span class="bb-v">'+r0(d.wind_speed_10m_max[i])+'\u2013'+r0(d.wind_gusts_10m_max[i])+' kn '+compass(d.wind_direction_10m_dominant[i])+' \u00b7 '+(d.precipitation_probability_max[i]||0)+'% rain'+sw+'</span></div>';}}
+        const sst=sstAt(i);const wt=(sst!=null)?(' \u00b7 water '+sst.toFixed(1)+'\u00b0'):'';
+        h+='<div class="bb-line"><span class="bb-k">'+day+'</span><span class="bb-v">'+r0(d.wind_speed_10m_max[i])+'\u2013'+r0(d.wind_gusts_10m_max[i])+' kn '+compass(d.wind_direction_10m_dominant[i])+' \u00b7 '+(d.precipitation_probability_max[i]||0)+'% rain'+sw+wt+'</span></div>';}}
       h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 tide from the embedded Burnett Heads table. Forecast aid \u2014 check official marine warnings before heading out.</div>';
       out.innerHTML=h;
     }catch(e){out.innerHTML=(tide||'')+'<span class="bb-dim">No signal for live wind/swell \u2014 the tide above is offline. Tap again when you\u2019re back online.</span>';}
