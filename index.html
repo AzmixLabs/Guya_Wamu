@@ -861,8 +861,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   input[type=date].bb-in,select.bb-in{background:#13242f;color:#dbe9f2;border:1px solid #2c4a5d;border-radius:7px;padding:6px 8px;font-family:"Sora",sans-serif;font-size:11.5px}
   input[type=date].bb-in::-webkit-calendar-picker-indicator{filter:invert(.85);opacity:.9;cursor:pointer}
   .fin[type=date]{color-scheme:dark}
-  .dlegend{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:9.5px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
-  .dlegend .bar{flex:1;height:9px;border-radius:5px;background:linear-gradient(90deg,#8fe9ff,#46b6ff,#3f86e6,#3f5ad0,#5a3fd0)}
+  .dlegend{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:9.5px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
+  .dlegend .bar{flex:1;height:9px;border-radius:5px}
+  .dlegend .bar-shade{background:linear-gradient(90deg,#a6f0ce,#3ca8c4,#1c4e92,#102862)}
+  .dlegend .bar-ct{background:linear-gradient(90deg,#ffe478,#ffb03c,#ff7832,#e6463c,#be285f)}
   .panel-body > .blk.collapsed > label.keep{display:flex!important}
   .bb-in{flex:1;min-width:0;background:#0e1c26;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12.5px;padding:8px 9px;min-height:var(--tap)}
   .bb-out{font-size:12px;line-height:1.5}
@@ -889,6 +891,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sp-rate-val{font-size:11px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
   .dp-item .rate{color:#ffd54a;font-size:11px;margin-left:auto;padding-left:6px;white-space:nowrap}
   .dp-item .rate:empty{display:none}
+  .dp-item .e{border:0;background:transparent;color:var(--ink-dim);font-size:12px;cursor:pointer;padding:0 1px;flex:none}
+  .dp-item .e:active{color:var(--depth)}
+  .wind-b{font-size:10px;margin-left:2px;flex:none}.wind-b.bad{color:#ff5252}.wind-b.warn{color:#ffb300}
+  .windrow{margin-top:8px;padding:7px 9px;border-radius:8px;font-size:11px;line-height:1.4}
+  .windrow.bad{background:rgba(255,82,82,.14);border:1px solid rgba(255,82,82,.5);color:#ffb3aa}
+  .windrow.warn{background:rgba(255,179,0,.12);border:1px solid rgba(255,179,0,.45);color:#ffd98a}
+  .windrow.ok{background:rgba(80,220,140,.1);border:1px solid rgba(80,220,140,.4);color:#a7e8c0}
+  .sp-tools{display:flex;gap:6px;margin-top:9px}
+  .sp-filter{flex:1;min-width:0;background:#0c1a24;border:1px solid var(--line);border-radius:8px;color:#d6e4ea;font-size:11px;padding:6px 8px;font-family:inherit}
+  .sp-filter::placeholder{color:#5b7280}
+  .sp-sort{background:#0c1a24;border:1px solid var(--line);border-radius:8px;color:#9fd0ff;font-size:10.5px;padding:6px 6px;font-family:"IBM Plex Mono",monospace}
+  .bb-tidesvg{width:100%;height:auto;display:block;background:#0b1822;border:1px solid var(--line);border-radius:8px}
+  .bb-tidekey{display:flex;gap:12px;justify-content:center;font-size:9px;color:#8aa3b0;margin-top:4px}
+  .lnk{background:none;border:0;color:var(--depth);text-decoration:underline;cursor:pointer;font-size:inherit;padding:0;font-family:inherit}
   .dp-clear{width:100%;margin-top:8px;background:transparent;border:1px solid rgba(231,76,60,.35);color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.5px;min-height:34px;border-radius:8px;cursor:pointer}
   .dp-clear:active{background:rgba(231,76,60,.12)}
   .ct-tip{background:#10202c;border:1px solid var(--line);color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11px;border-radius:6px;padding:2px 6px}
@@ -955,7 +971,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="dp-list" id="sl-list"></div>
         <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
-        <div class="dlegend"><span>0 m</span><span class="bar"></span><span>8 m</span></div>
+        <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>8 m</span></div>
+        <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
       </div>
     </div>
     <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
@@ -970,8 +987,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.07</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.10</div>
+      <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
+      <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
+      <div class="sp-tools"><input id="sp-filter" class="sp-filter" placeholder="Filter spots…" autocapitalize="off" autocorrect="off"><select id="sp-sort" class="sp-sort"><option value="name">A–Z</option><option value="rating">★ rating</option><option value="catches">most catches</option><option value="zone">zone</option><option value="depth">depth</option></select></div>
       <div class="dp-list" id="sp-list"></div>
+    </div>
+    <div class="blk"><div class="lbl">Walk tracker (GPS · opt-in)</div>
+      <div class="dp-actions"><button class="dp-btn" id="wk-rec">● Record walk</button><button class="dp-btn" id="wk-save">Save</button></div>
+      <div id="wk-readout" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Off. Tap Record to trace your path on foot — your phone will ask to use your location (choose <b>While Using</b>). Nothing is stored until you tap Save.</div>
+      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="wk-toggle" checked><span>Show saved walks <span id="wk-count" class="dp-count">0</span></span></label>
+      <div class="dp-list" id="wk-list"></div>
     </div>
     <div class="blk"><div class="lbl">Best bite times</div>
       <div class="bb-row">
@@ -983,6 +1009,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="blk"><div class="lbl">Conditions (live)</div>
       <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Bargara</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
       <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
+    </div>
+    <div class="blk"><div class="lbl">Offline maps (beta)</div>
+      <div class="dp-actions"><button class="dp-btn" id="ofl-save">💾 Save this view</button></div>
+      <div id="ofl-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Switch the base layer to <b>Esri Sat</b>, zoom to the area you want, then Save. Tiles for the current view (plus 2 zoom levels closer) are stored on this device so the map still draws with no signal. Imagery only — zones, spots &amp; tides already work offline.</div>
     </div>
     <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
     <div class="blk"><div class="lbl">Zone legend (2024 plan)</div><div class="legend" id="legend"></div></div>
@@ -1022,7 +1052,26 @@ map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('lab
 const labels=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',{subdomains:'abcd',pane:'labels',maxZoom:21,maxNativeZoom:20,attribution:'Labels © OpenStreetMap, © CARTO'});
 labels.addTo(map);
 const qld=L.tileLayer('https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:20,attribution:'Aerial imagery © State of Queensland (Dept of Resources)'});
-const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'});
+/* ---------- OFFLINE TILE CACHE (IndexedDB, no service worker) ---------- */
+const TILE_DB='woongarra_tiles_v1';
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(TILE_DB,1);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('tiles'))db.createObjectStore('tiles');};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function idbGet(key){return idbOpen().then(db=>new Promise((res,rej)=>{const t=db.transaction('tiles','readonly').objectStore('tiles').get(key);t.onsuccess=()=>res(t.result||null);t.onerror=()=>rej(t.error);})).catch(()=>null);}
+function idbPut(key,blob){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readwrite').objectStore('tiles').put(blob,key);t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
+function idbCount(){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readonly').objectStore('tiles').count();t.onsuccess=()=>res(t.result||0);t.onerror=()=>res(0);})).catch(()=>0);}
+function idbClear(){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readwrite').objectStore('tiles').clear();t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
+const CachedTiles=L.TileLayer.extend({
+  createTile:function(coords,done){const img=document.createElement('img');img.setAttribute('role','presentation');img.alt='';img.crossOrigin='';
+    const key='esri:'+coords.z+'/'+coords.x+'/'+coords.y;const url=this.getTileUrl(coords);
+    L.DomEvent.on(img,'load',L.Util.bind(this._tileOnLoad,this,done,img));
+    L.DomEvent.on(img,'error',L.Util.bind(this._tileOnError,this,done,img));
+    idbGet(key).then(blob=>{if(blob){img.src=URL.createObjectURL(blob);}
+      else{img.src=url;if(navigator.onLine)fetch(url,{mode:'cors'}).then(r=>r.ok?r.blob():null).then(b=>{if(b)idbPut(key,b);}).catch(()=>{});}
+    }).catch(()=>{img.src=url;});
+    return img;}
+});
+const sat=new CachedTiles('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,crossOrigin:true,attribution:'Imagery © Esri, Maxar, Earthstar Geographics · cached offline'});
 const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap contributors'});
 qld.addTo(map);let currentBase=qld;const BASES={qld,sat,osm};
 function setBase(w){const n=BASES[w];if(!n||n===currentBase)return;map.removeLayer(currentBase);n.addTo(map);n.bringToBack();currentBase=n;}
@@ -1147,10 +1196,29 @@ const SSTORE='woongarra_spots_v1';
 function loadSpots(){try{return JSON.parse(localStorage.getItem(SSTORE))||[];}catch(e){return [];}}
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
 let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
+let liveWindDir=null,liveWindKn=null;
+const COMPASS_PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const COMPASS_DEG={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+function compassOf(d){if(d==null||isNaN(d))return '';return COMPASS_PTS[Math.round((((d%360)+360)%360)/22.5)%16];}
+function dangerDirs(s){const set={};const add=t=>{t=(t||'').toUpperCase().trim();if(COMPASS_DEG[t]!=null)set[COMPASS_DEG[t]]=1;};
+  if(s.windWarn&&s.windWarn.trim()){s.windWarn.split(/[^A-Za-z]+/).forEach(add);return Object.keys(set).map(Number);}
+  const note=(s.notes||'');
+  if(/unsafe|onshore|exposed|avoid|blown|wash|swept|dangerous|don'?t fish/i.test(note)){
+    const C='N|NNE|NE|ENE|E|ESE|SE|SSE|S|SSW|SW|WSW|W|WNW|NW|NNW',re=new RegExp('\\b((?:'+C+')(?:\\s*[\\/,&]\\s*(?:'+C+'))+)\\b','gi'),par=new RegExp('\\(\\s*('+C+')\\s*\\)','gi');let m;
+    while((m=re.exec(note)))m[1].split(/[^A-Za-z]+/).forEach(add);
+    while((m=par.exec(note)))add(m[1]);}
+  return Object.keys(set).map(Number);}
+function angDist(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function windStatus(s){if(liveWindDir==null)return null;const dd=dangerDirs(s);if(!dd.length)return null;
+  let min=999;dd.forEach(d=>{min=Math.min(min,angDist(liveWindDir,d));});const kn=liveWindKn||0;
+  if(min<=34){if(kn>=15)return{lvl:'bad',min:min};if(kn>=8)return{lvl:'warn',min:min};return{lvl:'ok',min:min};}
+  if(min<=67){if(kn>=20)return{lvl:'warn',min:min};return{lvl:'ok',min:min};}
+  return{lvl:'ok',min:min};}
+function windColor(lvl){return lvl==='bad'?'#ff5252':lvl==='warn'?'#ffb300':null;}
 const spotLayer=L.layerGroup().addTo(map);
 function biggest(s){return (s.catches||[]).reduce((m,c)=>Math.max(m,parseFloat(c.len)||0),0);}
 function starSpan(i,r,id){const pct=r>=i?100:(r>=i-0.5?50:0);return '<span class="st" data-act="rate" data-id="'+id+'" data-val="'+i+'"><span class="bk">\u2605</span><span class="fr" style="width:'+pct+'%">\u2605</span></span>';}
-function spotIcon(s,z){const col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const n=(s.catches||[]).length;
+function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
   return L.divIcon({className:'spotpin',iconSize:[0,0],html:'<span class="sp"><span class="sp-dot" style="background:'+col+'">'+(n?'<span class="cnt">'+n+'</span>':'')+'</span><span class="sp-name">'+esc(s.name||'Spot')+'</span></span>'});}
 function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   if(z){const st=STYLES[z.zt]||{};h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
@@ -1160,6 +1228,9 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   if(s.tide)kv.push('Best tide: '+s.tide);if(s.depth!==''&&s.depth!=null)kv.push('Depth: '+s.depth+' m');
   if(kv.length)h+='<div class="kv">'+kv.join('<br>')+'</div>';
   if(s.notes)h+='<div class="rules">'+s.notes+'</div>';
+  if(liveWindDir!=null){const dd=dangerDirs(s);if(dd.length){const ws=windStatus(s);
+    const lab=ws.lvl==='bad'?'\u26a0 ONSHORE \u2014 unsafe in this wind':ws.lvl==='warn'?'\u26a0 Wind turning onshore \u2014 take care':'\u2713 Wind OK for this spot right now';
+    h+='<div class="windrow '+ws.lvl+'">'+lab+'<br><span class="bb-dim">wind now '+compassOf(liveWindDir)+' '+(liveWindKn!=null?Math.round(liveWindKn)+' kn':'')+' \u00b7 unsafe dirs: '+dd.map(compassOf).join(', ')+'</span></div>';}}
   const n=(s.catches||[]).length;
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
   if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
@@ -1167,19 +1238,35 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
   return h;}
+function spotSorter(k,zoneOf){
+  const az=(a,b)=>(a.name||'').localeCompare(b.name||'');
+  if(k==='rating')return (a,b)=>(+b.rating||0)-(+a.rating||0)||az(a,b);
+  if(k==='catches')return (a,b)=>((b.catches||[]).length)-((a.catches||[]).length)||az(a,b);
+  if(k==='zone')return (a,b)=>((zoneOf(a)||{}).zt||'~').localeCompare((zoneOf(b)||{}).zt||'~')||az(a,b);
+  if(k==='depth')return (a,b)=>((a.depth===''||a.depth==null)?1e9:+a.depth)-((b.depth===''||b.depth==null)?1e9:+b.depth)||az(a,b);
+  return az;}
 function renderSpots(){spotLayer.clearLayers();const list=document.getElementById('sp-list');list.innerHTML='';
-  spots.forEach(s=>{const z=zoneAt(s.lat,s.lng);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z),draggable:spotsUnlocked,autoPan:true}).addTo(spotLayer);
-    mk._spotId=s.id;mk.bindPopup(spotPopup(s,z),{maxWidth:290,minWidth:250});
+  const zc={},zoneOf=s=>{if(!(s.id in zc))zc[s.id]=zoneAt(s.lat,s.lng);return zc[s.id];};
+  const mkById={};
+  spots.forEach(s=>{const z=zoneOf(s);const mk=L.marker([s.lat,s.lng],{icon:spotIcon(s,z),draggable:spotsUnlocked,autoPan:true}).addTo(spotLayer);
+    mk._spotId=s.id;mkById[s.id]=mk;mk.bindPopup(spotPopup(s,z),{maxWidth:290,minWidth:250});
     mk.on('dragend',function(){const ll=mk.getLatLng();s.lat=+ll.lat.toFixed(6);s.lng=+ll.lng.toFixed(6);saveSpots();
       const nz=zoneAt(s.lat,s.lng);renderSpots();spotLayer.eachLayer(l=>{if(l._spotId===s.id)l.openPopup();});
-      if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);});
-    const st=z?(STYLES[z.zt]||{}):{};const n=(s.catches||[]).length;const row=document.createElement('div');row.className='dp-item';row.dataset.spot=s.id;
+      if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);});});
+  const q=((document.getElementById('sp-filter')||{}).value||'').toLowerCase().trim();
+  const sortKey=((document.getElementById('sp-sort')||{}).value)||'name';
+  let arr=spots.slice();
+  if(q)arr=arr.filter(s=>((s.name||'')+' '+(s.species||'')+' '+(s.structure||'')+' '+(s.notes||'')+' '+(s.tide||'')).toLowerCase().indexOf(q)>=0);
+  arr.sort(spotSorter(sortKey,zoneOf));
+  arr.forEach(s=>{const z=zoneOf(s);const st=z?(STYLES[z.zt]||{}):{};const n=(s.catches||[]).length;
+    const ws=windStatus(s);const wb=(ws&&ws.lvl!=='ok')?'<span class="wind-b '+ws.lvl+'">\u26a0</span>':'';
+    const row=document.createElement('div');row.className='dp-item';row.dataset.spot=s.id;
     row.innerHTML='<span class="d" style="color:'+(st.stroke||'#9fb3bf')+'">'+n+'\ud83c\udfa3</span><span class="n">'+esc(s.name||'Spot')+'</span>'
-      +'<span class="rate">'+(s.rating?'\u2605'+s.rating:'')+'</span>'
+      +'<span class="rate">'+(s.rating?'\u2605'+s.rating:'')+'</span>'+wb
       +(z?'<span class="z" style="color:'+st.stroke+';border-color:'+st.stroke+'">'+z.zt+'</span>':'<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">\u2014</span>')
       +'<button class="x" data-id="'+s.id+'">\u2715</button>';
     row.querySelector('.x').onclick=()=>{if(confirm('Delete this spot and its '+n+' catch record(s)?')){spots=spots.filter(x=>x.id!==s.id);saveSpots();renderSpots();}};
-    row.querySelector('.n').onclick=()=>{map.setView([s.lat,s.lng],16);mk.openPopup();};
+    row.querySelector('.n').onclick=()=>{const mk=mkById[s.id];map.setView([s.lat,s.lng],16);if(mk)mk.openPopup();};
     list.appendChild(row);});
   document.getElementById('sp-count').textContent=spots.length;}
 function openSpotSheet(s){s=s||{};
@@ -1194,11 +1281,13 @@ function openSpotSheet(s){s=s||{};
     +fld('Rating','<select id="f-rating" class="fin"><option value="">\u2014</option>'+[1,1.5,2,2.5,3,3.5,4,4.5,5].map(r=>'<option '+(+s.rating===r?'selected':'')+'>'+r+'</option>').join('')+'</select>')
     +fld('Depth (m)','<input id="f-depth" class="fin" inputmode="decimal" value="'+((s.depth!=null&&s.depth!=='')?s.depth:'')+'">')
     +fld('Notes','<textarea id="f-notes" class="fin" rows="2">'+(s.notes||'')+'</textarea>')
+    +fld('Unsafe wind dirs','<input id="f-wind" class="fin" autocapitalize="characters" placeholder="e.g. E, SE, NE \u2014 onshore/dangerous" value="'+esc(s.windWarn||'')+'">')
+    +'<div style="font-size:9.5px;color:#5b7280;margin:-4px 0 8px;line-height:1.35">Leave blank to auto-detect from the notes (it reads patterns like \u201cunsafe in E/SE/NE\u201d). Used by the Wind check.</div>'
     +'<div class="sheet-err" id="f-err"></div>';
   openSheet(s.id?'Edit spot':'New spot',body,()=>{const c=parseCoord(val('f-coord'));
     if(!c){document.getElementById('f-err').textContent='Need a valid coordinate \u2014 or tap the map.';return false;}
     const o={id:s.id||('s'+Date.now()+Math.floor(Math.random()*999)),lat:c[0],lng:c[1],name:val('f-name'),species:val('f-species'),
-      structure:val('f-structure'),tide:val('f-tide'),depth:val('f-depth')===''?'':parseFloat(val('f-depth')),rating:val('f-rating')===''?'':parseFloat(val('f-rating')),notes:val('f-notes'),catches:s.catches||[]};
+      structure:val('f-structure'),tide:val('f-tide'),depth:val('f-depth')===''?'':parseFloat(val('f-depth')),rating:val('f-rating')===''?'':parseFloat(val('f-rating')),notes:val('f-notes'),windWarn:val('f-wind'),catches:s.catches||[]};
     if(s.id)spots=spots.map(x=>x.id===s.id?o:x);else spots.push(o);
     saveSpots();renderSpots();map.setView([o.lat,o.lng],16);});
   const pb=document.getElementById('f-place');if(pb)pb.onclick=()=>{closeSheet();placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};}
@@ -1233,6 +1322,20 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)r
   });});
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
 document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
+(function(){const f=document.getElementById('sp-filter');if(f)f.oninput=renderSpots;const so=document.getElementById('sp-sort');if(so)so.onchange=renderSpots;})();
+(function(){const wb=document.getElementById('sp-wind'),o=document.getElementById('sp-wind-out');if(!wb||!o)return;
+  wb.onclick=async()=>{o.innerHTML='Checking live wind at Bargara\u2026';
+    try{const u='https://api.open-meteo.com/v1/forecast?latitude=-24.847&longitude=152.482&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=Australia%2FBrisbane';
+      const r=await fetch(u);if(!r.ok)throw 0;const j=await r.json();const c=j.current||{};
+      liveWindDir=c.wind_direction_10m;liveWindKn=c.wind_speed_10m;renderSpots();
+      const flagged=spots.map(s=>({s:s,w:windStatus(s)})).filter(x=>x.w&&x.w.lvl!=='ok').sort((a,b)=>(a.w.lvl==='bad'?0:1)-(b.w.lvl==='bad'?0:1));
+      let h='Wind now <b>'+Math.round(liveWindKn)+' kn '+compassOf(liveWindDir)+'</b> (gust '+Math.round(c.wind_gusts_10m||0)+' kn). ';
+      if(!flagged.length)h+='No mapped spots read as onshore in this wind \u2014 still check the swell and your own eyes.';
+      else h+='<span style="color:#ff7a6b">'+flagged.length+' spot'+(flagged.length>1?'s':'')+' onshore/exposed:</span><br>'+flagged.map(x=>'<span style="color:'+(x.w.lvl==='bad'?'#ff7a6b':'#ffc04d')+'">'+(x.w.lvl==='bad'?'\u26a0':'\u25b3')+' '+esc(x.s.name||'spot')+'</span>').join('<br>');
+      h+='<br><span class="bb-dim">Pins recoloured: red = onshore/unsafe, amber = turning onshore. A forecast aid \u2014 never a substitute for your own read of the conditions on the rocks.</span>';
+      o.innerHTML=h;
+    }catch(e){o.innerHTML='<span style="color:#ffc04d">No signal for live wind. Try again online \u2014 and set each spot\u2019s unsafe-wind dirs so the check is ready the moment you reconnect.</span>';}};
+})();
 document.getElementById('sp-toggle').onchange=e=>{spotOn=e.target.checked;spotOn?spotLayer.addTo(map):map.removeLayer(spotLayer);};
 document.getElementById('sp-lock').onchange=e=>{spotsUnlocked=e.target.checked;document.body.classList.toggle('pins-unlocked',spotsUnlocked);e.target.parentNode.querySelector('span').textContent=spotsUnlocked?'🔒 Lock pins (drag to move)':'🔓 Unlock pins to drag';renderSpots();};
 map.on('click',e=>{if(placingSpot){placingSpot=false;document.body.classList.remove('placing');openSpotSheet({lat:e.latlng.lat,lng:e.latlng.lng});}});
@@ -1279,13 +1382,16 @@ function profileSVG(verts){const W=240,H=120,pad=26;let cum=[0];
 function txPopup(t){return '<div class="pop"><h2>'+(t.name||'Slope line')+'</h2>'+profileSVG(t.verts)
   +'<div class="warn">From your own soundings \u2014 the gradient between measured points, not surveyed bathymetry.</div>'
   +'<button class="del" data-txdel="'+t.id+'">Delete slope line</button></div>';}
+function renameTx(id){const t=transects.find(x=>x.id===id);if(!t)return;
+  openSheet('Rename slope line',fld('Name','<input id="tx-name" class="fin" value="'+esc(t.name||'')+'">'),function(){const v=val('tx-name');t.name=v||t.name;saveTx();renderTx();});}
 function renderTx(){txLayer.clearLayers();const list=document.getElementById('sl-list');if(list)list.innerHTML='';
   transects.forEach(t=>{const g=L.featureGroup().addTo(txLayer);drawSegments(g,t.verts,true);
     g.bindPopup(txPopup(t),{maxWidth:280,minWidth:250});
     if(list){let len=0;for(let i=1;i<t.verts.length;i++)len+=map.distance([t.verts[i-1].lat,t.verts[i-1].lng],[t.verts[i].lat,t.verts[i].lng]);
       const row=document.createElement('div');row.className='dp-item';
-      row.innerHTML='<span class="d" style="color:#9be3b4">'+t.verts.length+'\u2022</span><span class="n">'+(t.name||'Slope line')+'</span><span class="z" style="color:#8aa3b0;border-color:#8aa3b0">'+Math.round(len)+'m</span><button class="x" data-id="'+t.id+'">\u2715</button>';
+      row.innerHTML='<span class="d" style="color:#9be3b4">'+t.verts.length+'\u2022</span><span class="n">'+(t.name||'Slope line')+'</span><span class="z" style="color:#8aa3b0;border-color:#8aa3b0">'+Math.round(len)+'m</span><button class="e" data-id="'+t.id+'">\u270e</button><button class="x" data-id="'+t.id+'">\u2715</button>';
       row.querySelector('.x').onclick=()=>{if(!confirm('Delete this slope line?'))return;transects=transects.filter(x=>x.id!==t.id);saveTx();renderTx();};
+      row.querySelector('.e').onclick=()=>renameTx(t.id);
       row.querySelector('.n').onclick=()=>{map.fitBounds(g.getBounds().pad(0.4));g.openPopup();};
       list.appendChild(row);}});
   const c=document.getElementById('sl-count');if(c)c.textContent=transects.length;}
@@ -1302,7 +1408,7 @@ renderTx();
 if(!map.getPane('shadePane')){map.createPane('shadePane');const _sp=map.getPane('shadePane');_sp.style.zIndex=350;_sp.style.pointerEvents='none';}
 let shadeOn=false,shadeOverlay=null;
 function depthColor(d){
-  const stops=[[0,[191,233,224]],[1,[127,212,207]],[2,[63,169,201]],[3,[47,111,174]],[4,[35,78,140]],[6,[22,48,106]]];
+  const stops=[[0,[168,240,208]],[1,[108,206,200]],[2,[58,166,196]],[3,[40,116,180]],[4,[28,78,146]],[6,[16,40,98]]];
   d=Math.max(0,Math.min(6,d));
   for(let i=1;i<stops.length;i++){if(d<=stops[i][0]){const a=stops[i-1],b=stops[i],t=(d-a[0])/(b[0]-a[0]);
     return [Math.round(a[1][0]+(b[1][0]-a[1][0])*t),Math.round(a[1][1]+(b[1][1]-a[1][1])*t),Math.round(a[1][2]+(b[1][2]-a[1][2])*t)];}}
@@ -1350,7 +1456,7 @@ map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('dra
 
 /* ---------- BACKUP: export / import JSON ---------- */
 function exportBackup(){
-  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours};
+  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[])};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1368,6 +1474,7 @@ function importBackup(file){
       d.depthPoints.forEach(p=>{if(p&&p.id){if(!by[p.id])np++;by[p.id]=p;}});points=Object.values(by);savePts();renderDepths();}
     if(Array.isArray(d.transects)){const by={};transects.forEach(t=>by[t.id]=t);d.transects.forEach(t=>{if(t&&t.id)by[t.id]=t;});transects=Object.values(by);saveTx();renderTx();}
     if(Array.isArray(d.contours)){const by={};contours.forEach(c=>by[c.id]=c);d.contours.forEach(c=>{if(c&&c.id)by[c.id]=c;});contours=Object.values(by);saveCt();renderContours();}
+    if(Array.isArray(d.walks)&&typeof walks!=='undefined'){const by={};walks.forEach(w=>by[w.id]=w);d.walks.forEach(w=>{if(w&&w.id)by[w.id]=w;});walks=Object.values(by);saveWalks();renderWalks();}
     const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
     if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     buildShade();
@@ -1376,6 +1483,50 @@ function importBackup(file){
   r.readAsText(file);
 }
 document.getElementById('bk-export').onclick=exportBackup;
+/* ---------- WALK TRACKER (opt-in GPS breadcrumb recorder) ---------- */
+const WSTORE='woongarra_walks_v1';
+function loadWalks(){try{return JSON.parse(localStorage.getItem(WSTORE))||[];}catch(e){return[];}}
+function saveWalks(){try{localStorage.setItem(WSTORE,JSON.stringify(walks));}catch(e){}}
+let walks=loadWalks(),wkOn=true,wkWatch=null,recPts=[],liveLine=null;
+const walkRenderer=L.canvas({padding:0.5});
+const walkLayer=L.layerGroup().addTo(map),walkLive=L.layerGroup().addTo(map);
+function walkLen(pts){let m=0;for(let i=1;i<pts.length;i++)m+=map.distance(pts[i-1],pts[i]);return m;}
+function fmtLen(m){return m>=1000?(m/1000).toFixed(2)+' km':Math.round(m)+' m';}
+function wkSay(t){const e=document.getElementById('wk-readout');if(e)e.innerHTML=t;}
+function renameWalk(id){const w=walks.find(x=>x.id===id);if(!w)return;
+  openSheet('Rename walk',fld('Name','<input id="wk-name" class="fin" value="'+esc(w.name||'')+'">'),function(){const v=val('wk-name');w.name=v||w.name;saveWalks();renderWalks();});}
+function renderWalks(){walkLayer.clearLayers();const list=document.getElementById('wk-list');if(list)list.innerHTML='';
+  walks.forEach(w=>{const pl=L.polyline(w.pts,{renderer:walkRenderer,color:'#a78bfa',weight:4,opacity:.92,dashArray:'1,7',lineCap:'round'}).addTo(walkLayer);
+    pl.bindPopup('<div class="pop"><h2>'+(w.name||'Walk').replace(/[<>]/g,'')+'</h2><div class="kv">'+fmtLen(walkLen(w.pts))+' \u00b7 '+w.pts.length+' pts<br>'+new Date(w.date).toLocaleString('en-AU')+'</div><button class="del" data-wkdel="'+w.id+'">Delete walk</button></div>',{maxWidth:240});
+    if(list){const row=document.createElement('div');row.className='dp-item';
+      row.innerHTML='<span class="d" style="color:#c4b5fd">'+fmtLen(walkLen(w.pts))+'</span><span class="n">'+(w.name||'Walk').replace(/[<>]/g,'')+'</span><button class="e" data-id="'+w.id+'">\u270e</button><button class="x" data-id="'+w.id+'">\u2715</button>';
+      row.querySelector('.x').onclick=()=>{if(!confirm('Delete this walk?'))return;walks=walks.filter(x=>x.id!==w.id);saveWalks();renderWalks();};
+      row.querySelector('.e').onclick=()=>renameWalk(w.id);
+      row.querySelector('.n').onclick=()=>{try{map.fitBounds(pl.getBounds().pad(0.3));}catch(e){}pl.openPopup();};
+      list.appendChild(row);}});
+  const c=document.getElementById('wk-count');if(c)c.textContent=walks.length;}
+map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root)return;const d=root.querySelector('[data-wkdel]');
+  if(d&&!d._w){d._w=1;d.onclick=()=>{if(!confirm('Delete this walk?'))return;walks=walks.filter(x=>x.id!==d.dataset.wkdel);saveWalks();renderWalks();map.closePopup();};}});
+function startRec(){if(!navigator.geolocation){wkSay('This device can\u2019t share its location.');return;}
+  recPts=[];walkLive.clearLayers();liveLine=L.polyline([],{renderer:walkRenderer,color:'#c4b5fd',weight:4,opacity:.95,lineCap:'round'}).addTo(walkLive);
+  const b=document.getElementById('wk-rec');b.textContent='\u25a0 Stop';b.classList.add('on');
+  wkSay('Starting\u2026 allow location when asked, and keep this screen on while you walk.');
+  wkWatch=navigator.geolocation.watchPosition(pos=>{const ll=[pos.coords.latitude,pos.coords.longitude];
+    if(recPts.length===0||map.distance(recPts[recPts.length-1],ll)>=3){recPts.push(ll);liveLine.setLatLngs(recPts);
+      if(recPts.length===1)map.setView(ll,Math.max(map.getZoom(),17));
+      wkSay('\u25cf Recording \u2014 '+fmtLen(walkLen(recPts))+' \u00b7 '+recPts.length+' pts. Tap Stop, then Save.');}},
+    err=>{wkSay('Location error: '+(err.message||'denied')+'. On iPhone: Settings \u2192 Safari \u2192 Location.');},
+    {enableHighAccuracy:true,maximumAge:2000,timeout:20000});}
+function stopRec(){if(wkWatch!=null){navigator.geolocation.clearWatch(wkWatch);wkWatch=null;}
+  const b=document.getElementById('wk-rec');b.textContent='\u25cf Record walk';b.classList.remove('on');
+  if(recPts.length<2){wkSay('Stopped \u2014 too few points to save. Try again with location on.');walkLive.clearLayers();return;}
+  wkSay('Stopped \u2014 '+fmtLen(walkLen(recPts))+', '+recPts.length+' pts. Tap Save to keep it.');}
+document.getElementById('wk-rec').onclick=()=>{wkWatch!=null?stopRec():startRec();};
+document.getElementById('wk-save').onclick=()=>{if(recPts.length<2){wkSay('Record a path first (need at least 2 points).');return;}
+  walks.push({id:'w'+Date.now()+Math.floor(Math.random()*999),name:'Walk '+(walks.length+1)+' \u00b7 '+new Date().toLocaleDateString('en-AU'),date:Date.now(),pts:recPts.slice()});
+  saveWalks();renderWalks();recPts=[];walkLive.clearLayers();wkSay('Saved \u2014 '+walks.length+' walk(s) on this device. Rename or delete from the list.');}
+document.getElementById('wk-toggle').onchange=e=>{wkOn=e.target.checked;wkOn?walkLayer.addTo(map):map.removeLayer(walkLayer);};
+renderWalks();
 document.getElementById('bk-import').onchange=ev=>{const f=ev.target.files[0];if(f)importBackup(f);ev.target.value='';};
 
 /* ---------- MEASURE: exclusive mode ---------- */
@@ -1432,6 +1583,45 @@ const BURNETT_TIDES_2026={"2026-01-01":[["00:04",0.66,"L"],["06:40",3.26,"H"],["
     if(/run-?\s?in|incoming|flood|making|rising|to high|before high|high tide|push/.test(note))return 'H';
     if(/run-?\s?out|outgoing|ebb|falling|to low|before low|low tide|drain/.test(note))return 'L';return null;}
   const $=id=>document.getElementById(id);
+  function dayTideSampler(ymd){const T=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026:null;if(!T)return null;
+    const pad=n=>('0'+n).slice(-2),base=new Date(ymd+'T00:00:00'),evs=[];
+    for(let off=-1;off<=1;off++){const d=new Date(base);d.setDate(base.getDate()+off);const key=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());const arr=T[key];if(!arr)continue;
+      arr.forEach(e=>{const hm=e[0].split(':');evs.push({h:off*24+(+hm[0])+(+hm[1])/60,v:e[1]});});}
+    if(evs.length<2)return null;evs.sort((a,b)=>a.h-b.h);
+    return function(hr){let p=null,n=null;for(let i=0;i<evs.length;i++){if(evs[i].h<=hr)p=evs[i];if(evs[i].h>hr){n=evs[i];break;}}
+      if(!p)return n?n.v:0;if(!n)return p.v;const f=(hr-p.h)/(n.h-p.h);return p.v+(n.v-p.v)*(1-Math.cos(Math.PI*f))/2;};}
+  function moonGlyphSVG(cx,cy,r,frac,phase){const dark='#26323e',lit='#e8eef2',edge='#56707e';
+    if(frac<=0.03)return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+dark+'" stroke="'+edge+'" stroke-width="0.6"/>';
+    if(frac>=0.97)return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+lit+'" stroke="'+edge+'" stroke-width="0.6"/>';
+    const waxing=phase<0.5,top=cy-r,bot=cy+r,xr=r*Math.abs(1-2*frac);
+    const limbSweep=waxing?0:1,termSweep=(frac<0.5)?(waxing?1:0):(waxing?0:1);
+    const p='M '+cx+' '+top+' A '+r+' '+r+' 0 0 '+limbSweep+' '+cx+' '+bot+' A '+xr.toFixed(2)+' '+r+' 0 0 '+termSweep+' '+cx+' '+top+' Z';
+    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+dark+'" stroke="'+edge+'" stroke-width="0.6"/><path d="'+p+'" fill="'+lit+'"/>';}
+  function tideCurveSVG(ymd,ev,tideArr){const samp=dayTideSampler(ymd);if(!samp)return '';
+    const W=300,H=116,x0=4,x1=W-4,y0=16,y1=H-16;
+    let mn=99,mx=-99;for(let h=0;h<=24;h+=0.5){const v=samp(h);if(v<mn)mn=v;if(v>mx)mx=v;}
+    if(tideArr)tideArr.forEach(e=>{if(e[1]<mn)mn=e[1];if(e[1]>mx)mx=e[1];});
+    const rng=Math.max(0.5,mx-mn);mn-=rng*0.14;mx+=rng*0.18;
+    const X=h=>x0+(h/24)*(x1-x0),Y=v=>y1-((v-mn)/(mx-mn))*(y1-y0);
+    let shade='';const sr=ev.sunrise,ss=ev.sunset;
+    if(sr!=null)shade+='<rect x="'+X(0)+'" y="'+y0+'" width="'+(X(sr)-X(0)).toFixed(1)+'" height="'+(y1-y0)+'" fill="rgba(18,36,72,.5)"/>';
+    if(ss!=null)shade+='<rect x="'+X(ss).toFixed(1)+'" y="'+y0+'" width="'+(X(24)-X(ss)).toFixed(1)+'" height="'+(y1-y0)+'" fill="rgba(18,36,72,.5)"/>';
+    let line='';for(let h=0;h<=24;h+=0.25)line+=X(h).toFixed(1)+','+Y(samp(h)).toFixed(1)+' ';line=line.trim();
+    const area='M '+X(0).toFixed(1)+','+y1+' L '+line.split(' ').join(' L ')+' L '+X(24).toFixed(1)+','+y1+' Z';
+    const vline=(h,c,d)=>'<line x1="'+X(h).toFixed(1)+'" y1="'+y0+'" x2="'+X(h).toFixed(1)+'" y2="'+y1+'" stroke="'+c+'" stroke-width="1"'+(d?' stroke-dasharray="2,2"':'')+'/>';
+    const gly=(h,t,c)=>'<text x="'+X(h).toFixed(1)+'" y="'+(y0-4)+'" fill="'+c+'" font-size="9" text-anchor="middle">'+t+'</text>';
+    let marks='';if(sr!=null)marks+=vline(sr,'#ffcf6b',0)+gly(sr,'\u2600','#ffcf6b');if(ss!=null)marks+=vline(ss,'#ff9f6b',0)+gly(ss,'\u2600','#ff9f6b');
+    if(ev.moonrise!=null)marks+=vline(ev.moonrise,'#9fd0ff',1)+gly(ev.moonrise,'\u263e','#9fd0ff');if(ev.moonset!=null)marks+=vline(ev.moonset,'#9fd0ff',1)+gly(ev.moonset,'\u263e','#9fd0ff');
+    let hl='';if(tideArr)tideArr.forEach(e=>{const hm=e[0].split(':'),h=(+hm[0])+(+hm[1])/60,y=Y(e[1]);
+      hl+='<circle cx="'+X(h).toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2.4" fill="'+(e[2]==='H'?'#7fe0c0':'#5ad0ff')+'"/>';
+      hl+='<text x="'+X(h).toFixed(1)+'" y="'+(y+(e[2]==='H'?-5:11)).toFixed(1)+'" fill="#c4d4dc" font-size="7.5" text-anchor="middle">'+e[0]+'</text>';});
+    let nowL='';const today=new Date(Date.now()+10*3600000).toISOString().slice(0,10);
+    if(ymd===today){const nd=new Date(Date.now()+10*3600000),nh=nd.getUTCHours()+nd.getUTCMinutes()/60;
+      nowL='<line x1="'+X(nh).toFixed(1)+'" y1="'+y0+'" x2="'+X(nh).toFixed(1)+'" y2="'+y1+'" stroke="#ff5252" stroke-width="1.2"/><text x="'+X(nh).toFixed(1)+'" y="'+(y1+11)+'" fill="#ff8b7a" font-size="7.5" text-anchor="middle">now</text>';}
+    let ticks='';[0,6,12,18,24].forEach(h=>{ticks+='<text x="'+X(h).toFixed(1)+'" y="'+(H-3)+'" fill="#7a93a0" font-size="7.5" text-anchor="middle">'+(h===24?'24':pad2(h))+'</text>';});
+    const mg=moonGlyphSVG(W-13,y0+5,6,ev.illum.fraction,ev.illum.phase);
+    return '<svg viewBox="0 0 '+W+' '+H+'" class="bb-tidesvg">'+shade+'<path d="'+area+'" fill="rgba(90,208,255,.13)"/><polyline points="'+line+'" fill="none" stroke="#5ad0ff" stroke-width="1.6"/>'+marks+hl+nowL+ticks+mg+'</svg>';}
+  const pad2=n=>String(n).padStart(2,'0');
   function render(){
     const ymd=$('bb-date').value;if(!ymd)return;
     const lat=-24.847,lng=152.482;const ev=compute(ymd,lat,lng);
@@ -1457,7 +1647,9 @@ const BURNETT_TIDES_2026={"2026-01-01":[["00:04",0.66,"L"],["06:40",3.26,"H"],["
     if(sp&&tide&&pref){const tgt=tide.filter(e=>e[2]===pref);const lab=pref==='H'?'making up to each high':'draining out to each low';
       prefHtml=`<div class="bb-note">Best on the <b>${(sp.tide||'').trim()||(pref==='H'?'run-in':'run-out')}</b> — strongest water ≈2 hrs ${lab}: `+tgt.map(e=>`<b>${fmt(parseHM(e[0])-2)}–${e[0]}</b>`).join(', ')+'.</div>';}
     else if(sp&&(sp.tide||'').trim())prefHtml=`<div class="bb-note">This spot's tide note: <b>${sp.tide.trim()}</b> — line it up against the tides above.</div>`;
+    const curve=tideCurveSVG(ymd,ev,tide);
     $('bb-out').innerHTML=
+      (curve?`<div class="bb-sec" style="padding-top:0">${curve}<div class="bb-tidekey"><span style="color:#ffcf6b">☀ sun</span><span style="color:#9fd0ff">☾ moon</span><span class="bb-dim">night shaded · ● highs/lows</span></div></div>`:'')+
       `<div class="bb-score"><span class="bb-stars">${stars}</span><span class="bb-scoretx">${sn}</span></div>`+
       `<div class="bb-sec"><div class="bb-h">Bite windows</div>${winHtml}`+
       `<div class="bb-note">Yellow = major (moon overhead/underfoot, ~2 hrs). Teal = minor (moonrise/set, ~1 hr). ☀ overlaps first/last light — usually the pick.</div>`+(moonNote?`<div class="bb-note" style="color:var(--measure)">${moonNote}</div>`:'')+`</div>`+
@@ -1485,12 +1677,12 @@ function saveCt(){try{localStorage.setItem(CSTORE,JSON.stringify(contours));}cat
 let contours=loadCt(),ctOn=true;
 const ctLayer=L.layerGroup().addTo(map);
 const ctRenderer=L.canvas({padding:0.5});
-function ctColor(d){if(d===''||d==null)return '#9fb3bf';let v=Math.max(0,Math.min(8,Math.abs(+d)));
-  const stops=[[0,[150,235,255]],[1.5,[64,184,255]],[3,[60,130,232]],[5,[64,86,210]],[8,[122,60,205]]];let c;
+function ctColor(d){if(d===''||d==null)return '#c9b9a8';let v=Math.max(0,Math.min(8,Math.abs(+d)));
+  const stops=[[0,[255,228,120]],[1.5,[255,176,60]],[3,[255,120,50]],[5,[230,70,60]],[8,[190,40,95]]];let c;
   for(let i=1;i<stops.length;i++){if(v<=stops[i][0]){const a=stops[i-1],b=stops[i],t=(v-a[0])/((b[0]-a[0])||1);
     c=[a[1][0]+(b[1][0]-a[1][0])*t,a[1][1]+(b[1][1]-a[1][1])*t,a[1][2]+(b[1][2]-a[1][2])*t];break;}}
   if(!c)c=stops[stops.length-1][1].slice();
-  const f=(Math.round(v/0.5)%2===0)?1.13:0.88; /* alternate brightness so neighbouring lines separate */
+  const f=(Math.round(v/0.5)%2===0)?1.08:0.85; /* alternate brightness so neighbouring lines separate */
   return 'rgb('+c.map(x=>Math.max(0,Math.min(255,Math.round(x*f)))).join(',')+')';}
 function smoothPts(pts,iter){if(!pts||pts.length<3)return pts;let p=pts;for(let k=0;k<(iter||2);k++){const out=[p[0]];
   for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];out.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25]);out.push([a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75]);}
@@ -1605,6 +1797,31 @@ renderContours();
   btn.onclick=()=>load(BARGARA[0],BARGARA[1],'Bargara');
   if(hereBtn)hereBtn.onclick=()=>{const c=map.getCenter();load(c.lat,c.lng,'this view');};
   const t0=tideLine();if(t0)out.innerHTML=t0+'<span class="bb-dim">Tap Bargara or This view for live wind, rain &amp; swell.</span>';
+})();
+/* ---------- OFFLINE MAP SAVE (prefetch Esri tiles for current view) ---------- */
+async function saveViewOffline(o){
+  if(currentBase!==sat){o.innerHTML='<span style="color:#ffc04d">Switch the base layer to <b>Esri Sat</b> first \u2014 that\u2019s the layer that can be cached \u2014 then Save.</span>';return;}
+  if(!navigator.onLine){o.innerHTML='<span style="color:#ffc04d">You\u2019re offline. Connect to save tiles for later.</span>';return;}
+  const b=map.getBounds(),z0=Math.min(19,Math.max(13,Math.round(map.getZoom()))),zMax=Math.min(19,z0+2),queue=[];
+  for(let z=z0;z<=zMax;z++){const nw=map.project(b.getNorthWest(),z).divideBy(256).floor(),se=map.project(b.getSouthEast(),z).divideBy(256).floor();
+    for(let x=nw.x;x<=se.x;x++)for(let y=nw.y;y<=se.y;y++)queue.push({z:z,x:x,y:y});}
+  const total=queue.length;
+  if(!total){o.textContent='Nothing to save here.';return;}
+  if(total>1500){o.innerHTML='<span style="color:#ffc04d">That area is large ('+total+' tiles). Zoom in a little and save it in pieces.</span>';return;}
+  o.textContent='Saving '+total+' tiles\u2026 keep this screen open.';let done=0,fail=0,idx=0;
+  const tpl='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/';
+  async function one(t){const key='esri:'+t.z+'/'+t.x+'/'+t.y;const ex=await idbGet(key);if(ex){done++;return;}
+    try{const r=await fetch(tpl+t.z+'/'+t.y+'/'+t.x,{mode:'cors'});if(!r.ok)throw 0;await idbPut(key,await r.blob());done++;}catch(e){fail++;}
+    if((done+fail)%20===0)o.textContent='Saving\u2026 '+(done+fail)+'/'+total+(fail?(' ('+fail+' failed)'):'');}
+  async function worker(){while(idx<queue.length)await one(queue[idx++]);}
+  await Promise.all([worker(),worker(),worker(),worker(),worker(),worker()]);
+  const cnt=await idbCount();
+  o.innerHTML='Saved \u2014 '+done+' tiles ('+fail+' failed). <b>'+cnt+'</b> total offline on the <b>Esri Sat</b> layer. This view will now draw with no signal. <button class="lnk" id="ofl-clear">clear cache</button>';
+  const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}
+(function(){const b=document.getElementById('ofl-save'),o=document.getElementById('ofl-out');if(!b||!o)return;
+  b.onclick=()=>saveViewOffline(o);
+  idbCount().then(c=>{if(c>0){o.innerHTML='<b>'+c+'</b> map tiles saved offline (Esri Sat). Switch to that layer to use them, save more from any view, or <button class="lnk" id="ofl-clear">clear cache</button>.';
+    const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}});
 })();
 </script>
 </body>
