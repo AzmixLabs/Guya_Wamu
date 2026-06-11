@@ -2004,8 +2004,13 @@ renderContours();
       const seen={};for(let i=0;i<imported.length;i++)seen[imported[i][0]+':'+imported[i][1]]=1;
       let added=0;
       for(let i=0;i<pts.length;i++){const k=pts[i][0]+':'+pts[i][1];if(!seen[k]){imported.push(pts[i]);added++;}}
-      saveImp();refresh();buildShade();
-      if(st)st.textContent='Imported '+added+' new points ('+imported.length+' total).';
+      saveImp();refresh();
+      /* make the result visible: force shading on, then jump to the data */
+      const tg=document.getElementById('shade-toggle');
+      if(tg&&!tg.checked){tg.checked=true;try{tg.dispatchEvent(new Event('change'));}catch(e2){if(typeof tg.onchange==='function')tg.onchange({target:tg});}}
+      else buildShade();
+      try{if(imported.length){const ll=imported.map(function(p){return [p[0],p[1]];});map.fitBounds(L.latLngBounds(ll).pad(0.15),{maxZoom:16});}}catch(e3){}
+      if(st)st.textContent='Imported '+added+' new points ('+imported.length+' total). Shading switched on \u2014 map moved to the data.';
       fi.value='';
     }catch(err){alert('Could not parse that CSV.');}};
     r.readAsText(f);};
