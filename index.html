@@ -987,6 +987,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="dp-clear" id="ct-clear">Clear all contours</button>
       <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
     </div>
+    <div class="blk"><div class="lbl">Imported depths (LiDAR / survey CSV)</div>
+      <div class="dp-actions"><label class="dp-btn" for="imp-file">Import CSV (lat,lng,depth)</label><input type="file" id="imp-file" accept=".csv,text/csv" hidden><button class="dp-btn" id="imp-clear">Clear imported</button></div>
+      <div class="dp-actions" style="margin-top:6px"><input class="dp-in" id="imp-offset" inputmode="decimal" placeholder="datum offset m (optional)" style="flex:1;text-align:center"></div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:5px;line-height:1.35">Depths must be metres below <b>LAT</b> (negative = dries). If your file is AHD heights, leave it — ask the build chat to convert. Offset is added to every depth on import. <span id="imp-count">0</span> points loaded. <span id="imp-status"></span></div>
+    </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
@@ -1464,12 +1469,14 @@ function inWaterFast(feats,lat,lng){
     for(let j=0;j<f.polys.length;j++)if(pip([lng,lat],f.polys[j]))return true;}
   return false;
 }
+function buildSampleIndex(pts,cellLa,cellLo){const ix={};
+  for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
+  return ix;}
 function buildShade(){
   if(typeof buildAutoContours==='function')buildAutoContours();
   if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
   if(!shadeOn)return;
-  const pts=points.filter(p=>p.depth!==''&&p.depth!=null).map(p=>({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)}));
-  if(typeof contours!=='undefined'){contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth);const step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){pts.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});}});}
+  const pts=depthSamples();
   if(pts.length<3)return;
   let minLa=Math.min.apply(null,pts.map(p=>p.lat)),maxLa=Math.max.apply(null,pts.map(p=>p.lat)),
       minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
@@ -1483,7 +1490,8 @@ function buildShade(){
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));mask[y*W+x]=inWaterFast(feats,la,lo)?1:0;}}
   const mAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?0:mask[y*W+x];
-  /* pass 2: IDW colour, alpha = data-distance fade × soft coastline mask */
+  /* pass 2: bucketed IDW colour, alpha = data-distance fade × soft coastline mask */
+  const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
       const idx=(y*W+x)*4;
@@ -1491,9 +1499,12 @@ function buildShade(){
       const mA=mSum/9;
       if(mA<=0){da[idx+3]=0;continue;}
       let num=0,den=0,near=1e9;
-      for(let k=0;k<pts.length;k++){const dy=(la-pts[k].lat)*mLat,dx=(lo-pts[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*pts[k].d;den+=w;}
-      const depth=den?num/den:0,distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0));
+      const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
+      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
+        for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+      if(!den){da[idx+3]=0;continue;}
+      const depth=num/den,distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0));
       const a=distA*mA;
       if(a<=0.01){da[idx+3]=0;continue;}
       const c=depthColor(depth);
@@ -1506,9 +1517,11 @@ document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
   if(shadeOn&&nPt<3){alert('Add at least 3 depth soundings (or labelled contours) for shading.');}
   buildShade();};
 /* ---- interpolated depth anywhere (depth points + contour vertices), shared by slope tool & tap-to-read ---- */
+let imported=[];try{imported=JSON.parse(localStorage.getItem('woongarra_imported_v1'))||[];}catch(e){imported=[];}
 function depthSamples(){const s=[];
   points.forEach(p=>{if(p.depth!==''&&p.depth!=null)s.push({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)});});
   if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
+  for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
   return s;}
 function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
   const mLat=111320,mLng=111320*Math.cos(lat*Math.PI/180);let num=0,den=0,near=1e9;
@@ -1517,15 +1530,14 @@ function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
   const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>80)return;
-  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)</span></div></div>').openOn(map);});
+  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT \u2014 exposed at low tide \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)</span>'))+'</div></div>').openOn(map);});
 
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
 function buildAutoContours(){
   if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}
   if(!autoCtOn)return;
-  const pts=points.filter(p=>p.depth!==''&&p.depth!=null).map(p=>({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)}));
-  if(typeof contours!=='undefined'){contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth);const step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)pts.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});}
+  const pts=depthSamples();
   if(pts.length<3)return;
   let minLa=Math.min.apply(null,pts.map(p=>p.lat)),maxLa=Math.max.apply(null,pts.map(p=>p.lat)),
       minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
@@ -1534,16 +1546,20 @@ function buildAutoContours(){
   const W=110,H=110,midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R1=65;
   const latAt=y=>maxLa-(maxLa-minLa)*(y/(H-1)),lngAt=x=>minLo+(maxLo-minLo)*(x/(W-1));
   const feats=shadeMaskFeats(),F=new Float32Array(W*H),OK=new Uint8Array(W*H);
+  const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
   for(let y=0;y<H;y++){const la=latAt(y);
     for(let x=0;x<W;x++){const lo=lngAt(x);
       let num=0,den=0,near=1e9;
-      for(let k=0;k<pts.length;k++){const dy=(la-pts[k].lat)*mLat,dx=(lo-pts[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*pts[k].d;den+=w;}
-      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(near<=R1&&inWaterFast(feats,la,lo))?1:0;}}
+      const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
+      for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=sIx[i3+':'+j3];if(!bk)continue;
+        for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&inWaterFast(feats,la,lo))?1:0;}}
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
   if(mxD<=mnD)return;
   const stepL=(mxD-mnD)>4?1:0.5,levels=[];
-  for(let v=Math.ceil(mnD/stepL)*stepL;v<mxD;v+=stepL)levels.push(+v.toFixed(1));
+  let v0=Math.ceil(mnD/stepL)*stepL;if(v0<0)v0=0; /* 0 = LAT waterline; no contours above water */
+  for(let v=v0;v<mxD;v+=stepL)levels.push(+v.toFixed(1));
   if(!levels.length)return;
   if(!autoCtRenderer)autoCtRenderer=L.canvas({padding:0.5});
   autoCtLayer=L.layerGroup();
@@ -1572,7 +1588,7 @@ function buildAutoContours(){
     if(!segs.length)return;
     const col=(typeof ctColor==='function')?ctColor(lv):'#ffb03c';
     const pl=L.polyline(segs,{color:col,weight:1.3,opacity:0.95,dashArray:'5,4',renderer:autoCtRenderer});
-    pl.bindTooltip('\u2248 '+lv+' m (auto contour)',{sticky:true});
+    pl.bindTooltip(lv===0?'LAT waterline (auto)':('\u2248 '+lv+' m (auto contour)'),{sticky:true});
     autoCtLayer.addLayer(pl);});
   autoCtLayer.addTo(map);
 }
@@ -1584,7 +1600,7 @@ function buildAutoContours(){
 
 /* ---------- BACKUP: export / import JSON ---------- */
 function exportBackup(){
-  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[])};
+  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1603,6 +1619,12 @@ function importBackup(file){
     if(Array.isArray(d.transects)){const by={};transects.forEach(t=>by[t.id]=t);d.transects.forEach(t=>{if(t&&t.id)by[t.id]=t;});transects=Object.values(by);saveTx();renderTx();}
     if(Array.isArray(d.contours)){const by={};contours.forEach(c=>by[c.id]=c);d.contours.forEach(c=>{if(c&&c.id)by[c.id]=c;});contours=Object.values(by);saveCt();renderContours();}
     if(Array.isArray(d.walks)&&typeof walks!=='undefined'){const by={};walks.forEach(w=>by[w.id]=w);d.walks.forEach(w=>{if(w&&w.id)by[w.id]=w;});walks=Object.values(by);saveWalks();renderWalks();}
+    if(Array.isArray(d.imported)&&typeof imported!=='undefined'){const seen={};imported.forEach(p=>seen[p[0]+':'+p[1]]=1);
+      d.imported.forEach(p=>{if(Array.isArray(p)&&p.length>=3&&!seen[p[0]+':'+p[1]])imported.push(p);});
+      try{localStorage.setItem('woongarra_imported_v1',JSON.stringify(imported));}catch(e){}}
+    if(Array.isArray(d.sessions)){try{const cur=JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];const by={};
+      cur.forEach(s=>{if(s&&s.id)by[s.id]=s;});d.sessions.forEach(s=>{if(s&&s.id)by[s.id]=s;});
+      localStorage.setItem('woongarra_sessions_v1',JSON.stringify(Object.values(by)));}catch(e){}}
     const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
     if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     buildShade();
@@ -1945,6 +1967,52 @@ renderContours();
 
 /* ---------- Clear all depth points ---------- */
 (function(){const b=document.getElementById('dp-clear');if(b)b.onclick=()=>{if(points.length&&confirm('Remove all '+points.length+' depth points?')){points=[];savePts();renderDepths();buildShade();}};})();
+
+/* ---------- Imported depths (CSV) ---------- */
+(function(){const fi=document.getElementById('imp-file'),off=document.getElementById('imp-offset'),clr=document.getElementById('imp-clear'),cnt=document.getElementById('imp-count'),st=document.getElementById('imp-status');
+  if(!fi)return;
+  function saveImp(){try{localStorage.setItem('woongarra_imported_v1',JSON.stringify(imported));}
+    catch(e){alert('Storage is full \u2014 the imported set is too large. Clear imported data or import a smaller area.');}}
+  function refresh(){if(cnt)cnt.textContent=imported.length;}
+  fi.onchange=function(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=function(){try{
+      const lines=String(r.result).split(/\r?\n/).filter(function(l){return l.trim();});
+      if(!lines.length){alert('Empty file.');return;}
+      let iLat=0,iLng=1,iD=2,start=0;
+      const h=lines[0].toLowerCase();
+      if(/[a-z]/.test(h)){const cols=h.split(/[;,\t]/).map(function(s){return s.trim();});
+        iLat=cols.findIndex(function(c){return c==='lat'||c==='latitude'||c==='y';});
+        iLng=cols.findIndex(function(c){return c==='lng'||c==='lon'||c==='long'||c==='longitude'||c==='x';});
+        iD=cols.findIndex(function(c){return c.indexOf('depth')>=0||c==='z'||c==='d';});
+        if(iLat<0||iLng<0||iD<0){alert('Header found but need lat, lng (or lon) and depth columns.');return;}
+        start=1;}
+      const o=off?(parseFloat(off.value)||0):0;
+      let pts=[];
+      for(let i=start;i<lines.length;i++){const c=lines[i].split(/[;,\t]/);
+        const la=parseFloat(c[iLat]),lo=parseFloat(c[iLng]),d=parseFloat(c[iD]);
+        if(!isFinite(la)||!isFinite(lo)||!isFinite(d))continue;
+        if(la<-90||la>90||lo<-180||lo>180)continue;
+        pts.push([+la.toFixed(6),+lo.toFixed(6),+(d+o).toFixed(2)]);}
+      if(!pts.length){alert('No usable rows \u2014 expected numeric lat,lng,depth.');return;}
+      /* thin to keep storage + rendering sane */
+      const MAXP=6000;let grid=0.00012;
+      while(pts.length>MAXP&&grid<0.01){const m={};
+        for(let i=0;i<pts.length;i++){m[Math.round(pts[i][0]/grid)+':'+Math.round(pts[i][1]/grid)]=pts[i];}
+        const vals=Object.keys(m).map(function(k){return m[k];});
+        if(vals.length<=MAXP){pts=vals;break;}
+        grid*=1.6;pts=vals;}
+      const seen={};for(let i=0;i<imported.length;i++)seen[imported[i][0]+':'+imported[i][1]]=1;
+      let added=0;
+      for(let i=0;i<pts.length;i++){const k=pts[i][0]+':'+pts[i][1];if(!seen[k]){imported.push(pts[i]);added++;}}
+      saveImp();refresh();buildShade();
+      if(st)st.textContent='Imported '+added+' new points ('+imported.length+' total).';
+      fi.value='';
+    }catch(err){alert('Could not parse that CSV.');}};
+    r.readAsText(f);};
+  if(clr)clr.onclick=function(){if(!imported.length)return;
+    if(!confirm('Remove all '+imported.length+' imported depth points? Your own soundings and contours are untouched.'))return;
+    imported=[];saveImp();refresh();buildShade();if(st)st.textContent='Cleared.';};
+  refresh();})();
 
 /* ---------- Emergency position ---------- */
 (function(){const btn=document.getElementById('em-btn'),out=document.getElementById('em-out');if(!btn||!out)return;
