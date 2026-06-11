@@ -1057,7 +1057,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="margin-top:5px">Report a sighting: <b>QWildlife app</b> or <b>1300 130 372</b> (option 1). Check the dashboard before fishing estuaries or creek mouths.</div>
       </div>
     </div>
-    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v13 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
+    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v14 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
     <div class="blk"><div class="lbl">Backup (your data)</div>
       <div class="dp-actions"><button class="dp-btn" id="bk-export">Export</button><label class="dp-btn" for="bk-import">Import</label><input type="file" id="bk-import" accept=".json,application/json" hidden></div>
     </div>
@@ -1463,6 +1463,8 @@ function depthColor(d){ /* discrete chart-style bands - hue steps so each band r
   if(d<11)  return [11,30,84];
   return [8,20,62];
 }
+/* Water mask from the legislated zone polygons — land (outside every zone) never gets shaded. */
+let _shadeFeats=null;
 function shadeMaskFeats(){
   if(_shadeFeats)return _shadeFeats;
   _shadeFeats=ZONES.features.map(f=>{const g=f.geometry,polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
