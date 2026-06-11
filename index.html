@@ -969,11 +969,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="dp-actions"><button class="dp-btn" id="sl-btn">+ Slope line (gradient)</button></div>
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
         <div class="dp-list" id="sl-list"></div>
-        <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
+        <label class="toggle keep" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
         <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
         <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
-        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
+        <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
       </div>
     </div>
@@ -1057,7 +1057,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="margin-top:5px">Report a sighting: <b>QWildlife app</b> or <b>1300 130 372</b> (option 1). Check the dashboard before fishing estuaries or creek mouths.</div>
       </div>
     </div>
-    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v14 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
+    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v15 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
     <div class="blk"><div class="lbl">Backup (your data)</div>
       <div class="dp-actions"><button class="dp-btn" id="bk-export">Export</button><label class="dp-btn" for="bk-import">Import</label><input type="file" id="bk-import" accept=".json,application/json" hidden></div>
     </div>
@@ -1119,7 +1119,9 @@ qld.addTo(map);let currentBase=qld;const BASES={qld,sat,osm};
 function setBase(w){const n=BASES[w];if(!n||n===currentBase)return;map.removeLayer(currentBase);n.addTo(map);n.bringToBack();currentBase=n;}
 document.querySelectorAll('#baseseg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#baseseg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setBase(b.dataset.base);});
 
-function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:s.fillOp,opacity:0.95};}
+function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
+  const fo=(typeof shadeOn!=='undefined'&&shadeOn)?Math.min(s.fillOp,0.06):s.fillOp;
+  return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:fo,opacity:0.95};}
 function zonePopup(p){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · Great Sandy MP</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
   h+=`<div class="rules">${s.rules}</div><div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.<div class="links"><a href="https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>`;return h;}
@@ -1482,8 +1484,10 @@ function inWaterFast(feats,lat,lng){
 function buildSampleIndex(pts,cellLa,cellLo){const ix={};
   for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
   return ix;}
+let _zoneFaded=null;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
+  try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
   if(typeof buildAutoContours==='function')buildAutoContours();
   if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
   if(!shadeOn)return;
@@ -1560,8 +1564,8 @@ function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
   return {d:num/den,near:near};}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>130)return;
-  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT \u2014 exposed at low tide \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)</span>'))+'</div></div>').openOn(map);});
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>150)return;
+  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT \u2014 exposed at low tide \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+(r.near>80?' · low confidence':'')+'</span>'))+'</div></div>').openOn(map);});
 
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
@@ -2069,8 +2073,8 @@ renderContours();
     let r=null;
     try{if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)){el.style.display='none';return;}
       r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
-    if(!r||r.near>80){el.style.display='none';return;}
-    el.textContent=r.d<-0.05?('dries \u2248 '+Math.abs(r.d).toFixed(1)+' m'):('\u2248 '+r.d.toFixed(1)+' m');
+    if(!r||r.near>150){el.textContent='no survey data here';}
+    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
     el.style.display='block';});
   map.on('mouseout',function(){el.style.display='none';});
