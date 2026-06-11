@@ -971,7 +971,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="dp-list" id="sl-list"></div>
         <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
-        <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>8 m</span></div>
+        <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
         <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
@@ -981,6 +981,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
       <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
       <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-shore">〰 Draw 0 m shoreline</button></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-compare">⚖ Compare vs imported</button><button class="dp-btn" id="ct-prune">🧹 Remove covered lines</button></div>
+      <div id="ct-cmp-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:5px;line-height:1.45"></div>
       <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Trace the waterline as a 0 m line — it pins the interpolation to zero at the shore so shading, tap-readings and auto contours stop guessing depth over the rocks.</div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="ct-list"></div>
@@ -1447,8 +1449,9 @@ renderTx();
 if(!map.getPane('shadePane')){map.createPane('shadePane');const _sp=map.getPane('shadePane');_sp.style.zIndex=350;_sp.style.pointerEvents='none';}
 let shadeOn=false,shadeOverlay=null;
 function depthColor(d){
-  const stops=[[0,[168,240,208]],[1,[108,206,200]],[2,[58,166,196]],[3,[40,116,180]],[4,[28,78,146]],[6,[16,40,98]],[8,[10,22,66]]];
-  d=Math.max(0,Math.min(8,d));
+  const stops=[[0,[168,240,208]],[1,[108,206,200]],[2,[58,166,196]],[3,[40,116,180]],[4,[28,78,146]],[6,[16,40,98]],[8,[10,22,66]],[10,[8,15,50]],[12,[6,9,38]]];
+  d=Math.max(0,Math.min(12,d));
+  d=d<2?Math.round(d*2)/2:Math.round(d); /* banded: 0.5 m steps to 2 m, then 1 m bands - reads like a chart */
   for(let i=1;i<stops.length;i++){if(d<=stops[i][0]){const a=stops[i-1],b=stops[i],t=(d-a[0])/(b[0]-a[0]);
     return [Math.round(a[1][0]+(b[1][0]-a[1][0])*t),Math.round(a[1][1]+(b[1][1]-a[1][1])*t),Math.round(a[1][2]+(b[1][2]-a[1][2])*t)];}}
   return stops[stops.length-1][1];
@@ -1473,6 +1476,7 @@ function buildSampleIndex(pts,cellLa,cellLo){const ix={};
   for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
   return ix;}
 function buildShade(){
+  _idwCache=null; /* data changed - rebuild read index lazily */
   if(typeof buildAutoContours==='function')buildAutoContours();
   if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
   if(!shadeOn)return;
@@ -1524,10 +1528,20 @@ function depthSamples(){const s=[];
   if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
   for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
   return s;}
-function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
-  const mLat=111320,mLng=111320*Math.cos(lat*Math.PI/180);let num=0,den=0,near=1e9;
-  for(let k=0;k<s.length;k++){const dy=(lat-s[k].lat)*mLat,dx=(lng-s[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*s[k].d;den+=w;}
-  return den?{d:num/den,near:near}:null;}
+let _idwCache=null;
+function idwIndex(){const s=depthSamples();
+  if(_idwCache&&_idwCache.n===s.length)return _idwCache;
+  const mLat=111320,mLng=111320*Math.cos(-24.85*Math.PI/180),cellLa=120/mLat,cellLo=120/mLng;
+  _idwCache={n:s.length,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};
+  return _idwCache;}
+function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
+  let num=0,den=0,near=1e9;
+  const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
+  for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
+    for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+  if(!den)return null;
+  return {d:num/den,near:near};}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
   const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>130)return;
@@ -1971,6 +1985,67 @@ renderContours();
 /* ---------- Clear all depth points ---------- */
 (function(){const b=document.getElementById('dp-clear');if(b)b.onclick=()=>{if(points.length&&confirm('Remove all '+points.length+' depth points?')){points=[];savePts();renderDepths();buildShade();}};})();
 
+/* ---------- Navionics-vs-imported comparison & cleanup ---------- */
+(function(){const cb=document.getElementById('ct-compare'),pb=document.getElementById('ct-prune'),out=document.getElementById('ct-cmp-out');
+  if(!cb&&!pb)return;
+  const esc3=function(s){return String(s||'').replace(/[<>]/g,'');};
+  function impIndex(){const s=[];for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
+    const mLat=111320,mLng=111320*Math.cos(-24.85*Math.PI/180),cellLa=120/mLat,cellLo=120/mLng;
+    return {s:s,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};}
+  function impAt(C,lat,lng){let num=0,den=0,near=1e9;
+    const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
+    for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
+      for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+    return den?{d:num/den,near:near}:null;}
+  function analyse(){const res=[];
+    if(!imported.length||typeof contours==='undefined'||!contours.length)return res;
+    const C=impIndex();
+    contours.forEach(function(c){if(c.depth===''||c.depth==null||!c.pts||c.pts.length<2)return;
+      const cd=parseFloat(c.depth);if(!isFinite(cd))return;
+      const step=Math.max(1,Math.floor(c.pts.length/20));
+      let nIn=0,nAll=0,sum=0;
+      for(let i=0;i<c.pts.length;i+=step){nAll++;
+        const r=impAt(C,c.pts[i][0],c.pts[i][1]);
+        if(r&&r.near<=60){nIn++;sum+=cd-r.d;}}
+      if(!nAll)return;
+      res.push({c:c,cov:nIn/nAll,diff:nIn?sum/nIn:null,n:nIn});});
+    return res;}
+  if(cb)cb.onclick=function(){if(!out)return;
+    if(!imported.length){out.textContent='No imported depth data loaded yet.';return;}
+    const res=analyse();
+    if(!res.length){out.textContent='No depth-labelled contour lines to compare.';return;}
+    let h='';res.forEach(function(r){
+      h+='<div><b>'+esc3(r.c.name)+'</b> ('+r.c.depth+' m): '+Math.round(r.cov*100)+'% covered by survey data'
+        +(r.diff!=null?(' \u00b7 line reads '+(r.diff>=0?'+':'')+r.diff.toFixed(1)+' m vs survey'):'')+'</div>';});
+    h+='<div style="margin-top:4px">Positive = your traced line is deeper than the survey says. Lines \u226580% covered are candidates for removal \u2014 the survey data already feeds shading and contours there.</div>';
+    out.innerHTML=h;};
+  if(pb)pb.onclick=function(){if(!imported.length){if(out)out.textContent='No imported depth data loaded yet.';return;}
+    const res=analyse().filter(function(r){return r.cov>=0.8;});
+    if(!res.length){if(out)out.textContent='No contour lines are \u226580% covered by imported data \u2014 nothing to remove.';return;}
+    const names=res.map(function(r){return (r.c.name||'line')+' ('+r.c.depth+' m)';}).join(', ');
+    if(!confirm('Remove '+res.length+' traced line(s) now covered by survey data?\n\n'+names+'\n\nYour spots, soundings and other lines are untouched. Export a backup first if unsure.'))return;
+    const ids={};res.forEach(function(r){ids[r.c.id]=1;});
+    contours=contours.filter(function(c){return !ids[c.id];});
+    saveCt();renderContours();buildShade();
+    if(out)out.textContent='Removed '+res.length+' line(s).';};
+})();
+
+/* ---------- Hover depth readout ---------- */
+(function(){const el=document.getElementById('hov-depth');if(!el)return;let last=0;
+  map.on('mousemove',function(e){
+    if(!shadeOn){el.style.display='none';return;}
+    const now=Date.now();if(now-last<80)return;last=now;
+    let r=null;
+    try{if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)){el.style.display='none';return;}
+      r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
+    if(!r||r.near>80){el.style.display='none';return;}
+    el.textContent=r.d<-0.05?('dries \u2248 '+Math.abs(r.d).toFixed(1)+' m'):('\u2248 '+r.d.toFixed(1)+' m');
+    if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
+    el.style.display='block';});
+  map.on('mouseout',function(){el.style.display='none';});
+})();
+
 /* ---------- Imported depths (CSV) ---------- */
 (function(){const fi=document.getElementById('imp-file'),off=document.getElementById('imp-offset'),clr=document.getElementById('imp-clear'),cnt=document.getElementById('imp-count'),st=document.getElementById('imp-status');
   if(!fi)return;
@@ -2195,5 +2270,6 @@ async function saveViewOffline(o){
     const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}});
 })();
 </script>
+<div id="hov-depth" style="position:fixed;display:none;pointer-events:none;z-index:1200;background:rgba(10,18,32,.92);color:#cfe8ff;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:4px 8px;border-radius:6px;border:1px solid rgba(120,170,220,.35)"></div>
 </body>
 </html>
