@@ -980,6 +980,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="blk"><div class="lbl">Depth contours (Navionics routes)</div>
       <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
       <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-shore">〰 Draw 0 m shoreline</button></div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Trace the waterline as a 0 m line — it pins the interpolation to zero at the shore so shading, tap-readings and auto contours stop guessing depth over the rocks.</div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
       <div class="dp-list" id="ct-list"></div>
       <button class="dp-clear" id="ct-clear">Clear all contours</button>
@@ -1014,13 +1016,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="rec-btn">★ Rank my spots</button></div>
       <div class="bb-out" id="rec-out" style="margin-top:8px"><span class="bb-dim">Ranks your saved spots for the date picked in Best bite times — tide match, bite windows, ratings, catches, and live wind once you've run a wind check.</span></div>
     </div>
+    <div class="blk"><div class="lbl">Plan — next 48 h</div>
+      <div class="dp-actions"><button class="dp-btn" id="plan-btn">🗓 Build plan</button></div>
+      <div class="bb-out" id="plan-out" style="margin-top:8px"><span class="bb-dim">One card: tides, major windows, light, top spot and wind for today and tomorrow.</span></div>
+    </div>
     <div class="blk"><div class="lbl">Catch analytics</div>
       <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Analyse my catches</button></div>
       <div class="bb-out" id="ca-out" style="margin-top:8px"></div>
     </div>
+    <div class="blk"><div class="lbl">Emergency — position</div>
+      <div class="dp-actions"><button class="dp-btn" id="em-btn">📍 Get my position</button></div>
+      <div class="bb-out" id="em-out" style="margin-top:8px"><span class="bb-dim">Live GPS in DDM + decimal with copy / SMS, so someone always knows exactly where you are on the rocks. In an emergency call Triple Zero (000).</span></div>
+    </div>
     <div class="blk"><div class="lbl">Session log</div>
       <div class="dp-actions"><button class="dp-btn" id="ss-btn">▶ Start session</button></div>
-      <div id="ss-readout" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Track when you fished and the conditions — end the session to save it with a note.</div>
+      <div id="ss-readout" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Start when you hit the rocks, end when you leave. Catches dated inside a session link to it automatically — log them on the spot or later that night.</div>
       <div style="font-size:10px;color:var(--ink-dim);margin-top:8px">Saved sessions: <span id="ss-count">0</span></div>
       <div class="dp-list" id="ss-list"></div>
     </div>
@@ -1505,8 +1515,9 @@ function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
   for(let k=0;k<s.length;k++){const dy=(lat-s[k].lat)*mLat,dx=(lng-s[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*s[k].d;den+=w;}
   return den?{d:num/den,near:near}:null;}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>120)return;
-  L.popup({maxWidth:150,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b></div></div>').openOn(map);});
+  if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>80)return;
+  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)</span></div></div>').openOn(map);});
 
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
@@ -1800,16 +1811,13 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
   function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;
     if(!z)return '<span class="bb-dim">outside mapped zones — verify yourself</span>';
     return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>');}
-  function rankSpots(){const out=$('rec-out');if(!out)return;
-    const ymd=di?di.value:null;if(!ymd){out.innerHTML='<span class="bb-dim">Pick a date in Best bite times first.</span>';return;}
-    const list=(typeof spots!=='undefined'?spots:[]);
-    if(!list.length){out.innerHTML='<span class="bb-dim">No saved spots yet — add some, then rank.</span>';return;}
+  function scoreSpotsFor(ymd){const list=(typeof spots!=='undefined'?spots:[]);if(!list.length)return [];
     const ev=compute(ymd,-24.847,152.482);
     const tide=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026[ymd]:null;
     const daylight=h=>ev.sunrise!=null&&ev.sunset!=null&&h>=ev.sunrise-0.5&&h<=ev.sunset+0.5;
     const majors=[];if(ev.over!=null)majors.push(ev.over);if(ev.under!=null)majors.push(ev.under);
     const windLive=(typeof liveWindDir!=='undefined'&&liveWindDir!=null);
-    const scored=list.map(s=>{let sc=0;const why=[];let best=null;
+    return list.map(s=>{let sc=0;const why=[];let best=null;
       const rt=parseFloat(s.rating)||0;if(rt){sc+=rt*0.8;why.push(rt+'★');}
       const n=(s.catches||[]).length;if(n){sc+=Math.min(1.5,n*0.3);why.push(n+' catch'+(n>1?'es':''));}
       const pref=tidePref(s.tide);
@@ -1820,10 +1828,38 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
       if(majors.some(m=>daylight(m)))sc+=0.4;
       if(windLive&&typeof windStatus==='function'){const ws=windStatus(s);
         if(ws){if(ws.lvl==='bad'){sc-=2;why.push('⚠ onshore/unsafe wind');}else if(ws.lvl==='warn'){sc-=1;why.push('wind marginal');}else why.push('wind OK');}}
-      return {s:s,sc:sc,why:why,best:best};}).sort((a,b)=>b.sc-a.sc).slice(0,5);
+      return {s:s,sc:sc,why:why,best:best,windLive:windLive};}).sort((a,b)=>b.sc-a.sc);}
+  function rankSpots(){const out=$('rec-out');if(!out)return;
+    const ymd=di?di.value:null;if(!ymd){out.innerHTML='<span class="bb-dim">Pick a date in Best bite times first.</span>';return;}
+    const scored=scoreSpotsFor(ymd).slice(0,5);
+    if(!scored.length){out.innerHTML='<span class="bb-dim">No saved spots yet — add some, then rank.</span>';return;}
+    const windLive=scored[0].windLive;
     out.innerHTML=scored.map((r,i)=>'<div class="bb-line" style="align-items:flex-start"><span class="bb-k">'+(i+1)+'. '+(r.s.name||'spot').replace(/[<>]/g,'')+'</span><span class="bb-v" style="text-align:right">'+(r.best?('fish <b>'+r.best+'</b><br>'):'')+(r.why.join(' · ')||'no data yet')+'<br><span style="font-size:9.5px">'+zoneTag(r.s)+'</span></span></div>').join('')
       +'<div class="bb-note" style="opacity:.8">Scored from your ratings, catches and tide notes vs this date\u2019s tides and bite windows'+(windLive?', plus live wind':'')+'.'+(windLive?'':' Run a \u201cWind check vs spots\u201d to factor wind in.')+' Zone shown for awareness only \u2014 confirm the rules on the official map yourself.</div>';}
   const rb=$('rec-btn');if(rb)rb.onclick=()=>{recOn=true;rankSpots();};
+  /* ---- Plan: next 48 h ---- */
+  function planFor(ymd,label){
+    const ev=compute(ymd,-24.847,152.482);
+    const tide=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026[ymd]:null;
+    const maj=[];if(ev.over!=null)maj.push(ev.over);if(ev.under!=null)maj.push(ev.under);
+    let h='<div class="bb-h" style="margin-top:8px">'+label+'</div>';
+    h+='<div class="bb-line"><span class="bb-k">Tides</span><span class="bb-v">'+(tide?tide.map(e=>e[2]+' '+e[0]+' '+e[1].toFixed(1)+'m').join(' · '):'no table for '+ymd)+'</span></div>';
+    if(maj.length)h+='<div class="bb-line"><span class="bb-k">Majors</span><span class="bb-v">'+maj.map(m=>fmt(m-1)+'–'+fmt(m+1)).join(' · ')+'</span></div>';
+    if(ev.sunrise!=null)h+='<div class="bb-line"><span class="bb-k">Light</span><span class="bb-v">dawn '+fmt(ev.sunrise)+' · dusk '+fmt(ev.sunset)+'</span></div>';
+    const sc=scoreSpotsFor(ymd);
+    if(sc.length){const r=sc[0];
+      h+='<div class="bb-line" style="align-items:flex-start"><span class="bb-k">Top spot</span><span class="bb-v" style="text-align:right"><b>'+(r.s.name||'spot').replace(/[<>]/g,'')+'</b>'+(r.best?(' · fish '+r.best):'')+'<br><span style="font-size:9.5px">'+zoneTag(r.s)+'</span></span></div>';}
+    return h;}
+  function buildPlan(){const out=$('plan-out');if(!out)return;
+    const t1=todayAEST(),p=t1.split('-').map(Number),d2=new Date(Date.UTC(p[0],p[1]-1,p[2]+1)),t2=d2.toISOString().slice(0,10);
+    const base=planFor(t1,'Today · '+t1)+planFor(t2,'Tomorrow · '+t2);
+    out.innerHTML=base+'<div class="bb-note" style="opacity:.8">Fetching wind\u2026</div>';
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=-24.847&longitude=152.482&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=2')
+      .then(r=>r.json()).then(f=>{const d=f&&f.daily;if(!d||!d.time)throw 0;
+        const wl=d.time.map((t,i)=>'<div class="bb-line"><span class="bb-k">Wind '+(i===0?'today':'tmrw')+'</span><span class="bb-v">'+Math.round(d.wind_speed_10m_max[i])+'–'+Math.round(d.wind_gusts_10m_max[i])+' kn '+compassOf(d.wind_direction_10m_dominant[i])+'</span></div>').join('');
+        out.innerHTML=base+wl+'<div class="bb-note" style="opacity:.8">A guide only \u2014 verify zones and conditions yourself.</div>';})
+      .catch(()=>{out.innerHTML=base+'<div class="bb-note" style="opacity:.8">Offline \u2014 wind unavailable. A guide only \u2014 verify zones and conditions yourself.</div>';});}
+  const plb=$('plan-btn');if(plb)plb.onclick=buildPlan;
   /* ---- Catch analytics ---- */
   function caCount(arr,key){const m={};arr.forEach(r=>{const k=key(r);if(!k)return;m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
   function caBar(pairs,title){if(!pairs.length)return '';const mx=pairs[0][1];
@@ -1840,7 +1876,11 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
     const moon=caCount(rows,r=>{try{if(!r.c.date)return null;const il=moonIllum(aestDate(r.c.date,12));
       return il.fraction<0.25?'around new moon':il.fraction>0.75?'around full moon':'quarter moons';}catch(e){return null;}});
     const kept=rows.filter(r=>r.c.kept==='kept').length;
-    out.innerHTML='<div class="bb-line"><span class="bb-k">Total catches</span><span class="bb-v">'+rows.length+' \u00b7 '+kept+' kept / '+(rows.length-kept)+' released</span></div>'
+    let sessLine='';try{const sess=(JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[]).filter(s=>s.end);
+      if(sess.length){const withC=sess.filter(s=>{const a2=new Date(s.start),b2=new Date(s.end);
+        return rows.some(r=>{if(!r.c.date||!r.c.time)return false;const t=new Date(r.c.date+'T'+r.c.time+':00');return t>=a2&&t<=b2;});}).length;
+        sessLine='<div class="bb-line"><span class="bb-k">Sessions</span><span class="bb-v">'+sess.length+' logged \u00b7 '+withC+' produced fish ('+Math.round(100*withC/sess.length)+'%)</span></div>';}}catch(e){}
+    out.innerHTML=sessLine+'<div class="bb-line"><span class="bb-k">Total catches</span><span class="bb-v">'+rows.length+' \u00b7 '+kept+' kept / '+(rows.length-kept)+' released</span></div>'
       +caBar(spec,'By species')+caBar(bait,'By bait / lure')+caBar(bySpot,'By spot')+caBar(stage,'By tide stage')+caBar(moon,'By moon phase')
       +'<div class="bb-note" style="opacity:.75">Tide stage and moon are derived from each catch\u2019s date/time (2026–27 tide tables only).</div>';}
   const cab=$('ca-btn');if(cab)cab.onclick=renderAnalytics;
@@ -1906,6 +1946,28 @@ renderContours();
 /* ---------- Clear all depth points ---------- */
 (function(){const b=document.getElementById('dp-clear');if(b)b.onclick=()=>{if(points.length&&confirm('Remove all '+points.length+' depth points?')){points=[];savePts();renderDepths();buildShade();}};})();
 
+/* ---------- Emergency position ---------- */
+(function(){const btn=document.getElementById('em-btn'),out=document.getElementById('em-out');if(!btn||!out)return;
+  function ddm(v,pos,neg){const h=v<0?neg:pos;v=Math.abs(v);const d=Math.floor(v),m=(v-d)*60;return d+'\u00b0'+m.toFixed(3)+'\u2032'+h;}
+  btn.onclick=function(){
+    if(!navigator.geolocation){out.innerHTML='<span class="bb-dim">Geolocation not available on this device/browser.</span>';return;}
+    out.innerHTML='<span class="bb-dim">Getting GPS fix\u2026</span>';
+    navigator.geolocation.getCurrentPosition(function(pos){
+      const la=pos.coords.latitude,lo=pos.coords.longitude,acc=Math.round(pos.coords.accuracy||0);
+      let nearest=null,nd=1e9;(typeof spots!=='undefined'?spots:[]).forEach(function(s){const dy=(la-s.lat)*111320,dx=(lo-s.lng)*111320*Math.cos(la*Math.PI/180),d=Math.sqrt(dx*dx+dy*dy);if(d<nd){nd=d;nearest=s;}});
+      const ddmS=ddm(la,'N','S')+' '+ddm(lo,'E','W'),dec=la.toFixed(5)+', '+lo.toFixed(5);
+      const msg='My position: '+ddmS+' ('+dec+')'+(nearest&&nd<2000?(' \u2014 near "'+(nearest.name||'spot')+'"'):'')+' \u00b1'+acc+'m';
+      out.innerHTML='<div class="bb-line"><span class="bb-k">DDM</span><span class="bb-v">'+ddmS+'</span></div>'
+        +'<div class="bb-line"><span class="bb-k">Decimal</span><span class="bb-v">'+dec+' (\u00b1'+acc+' m)</span></div>'
+        +(nearest&&nd<2000?('<div class="bb-line"><span class="bb-k">Near</span><span class="bb-v">'+(nearest.name||'spot').replace(/[<>]/g,'')+' ('+Math.round(nd)+' m)</span></div>'):'')
+        +'<div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="em-copy">Copy</button><a class="dp-btn" style="text-decoration:none;text-align:center" href="sms:?&body='+encodeURIComponent(msg)+'">SMS</a></div>'
+        +'<div class="bb-note" style="opacity:.8">In an emergency call Triple Zero (000). VHF Ch 16 reaches Marine Rescue if you carry a radio.</div>';
+      const cb=document.getElementById('em-copy');
+      if(cb)cb.onclick=function(){try{navigator.clipboard.writeText(msg).then(function(){cb.textContent='Copied \u2713';},function(){prompt('Copy this:',msg);});}catch(e){prompt('Copy this:',msg);}};
+    },function(err){out.innerHTML='<span class="bb-dim">GPS unavailable ('+((err&&err.message)?String(err.message).replace(/[<>]/g,''):'denied')+'). Check Location permission for this site.</span>';},
+    {enableHighAccuracy:true,timeout:15000,maximumAge:0});};
+})();
+
 /* ---------- Session log ---------- */
 (function(){const KEY='woongarra_sessions_v1';let sessions;try{sessions=JSON.parse(localStorage.getItem(KEY))||[];}catch(e){sessions=[];}
   let cur=null;try{cur=JSON.parse(localStorage.getItem(KEY+'_cur'))||null;}catch(e){cur=null;}
@@ -1918,10 +1980,13 @@ renderContours();
   function snapshot(){const bits=[];
     if(typeof liveWindKn!=='undefined'&&liveWindKn!=null)bits.push('wind '+Math.round(liveWindKn)+' kn'+(typeof compassOf==='function'&&typeof liveWindDir!=='undefined'&&liveWindDir!=null?' '+compassOf(liveWindDir):''));
     return bits.join(' \u00b7 ');}
+  function catchCount(s){let n=0;try{const a2=new Date(s.start),b2=s.end?new Date(s.end):new Date();
+    (typeof spots!=='undefined'?spots:[]).forEach(function(sp){(sp.catches||[]).forEach(function(c){if(!c.date||!c.time)return;
+      const t=new Date(c.date+'T'+c.time+':00');if(t>=a2&&t<=b2)n++;});});}catch(e){}return n;}
   function renderList(){if(cntEl)cntEl.textContent=sessions.length;if(!listEl)return;listEl.innerHTML='';
     sessions.slice().reverse().slice(0,30).forEach(function(s){const div=document.createElement('div');div.className='dp-item';
       const dur=s.end?Math.max(1,Math.round((new Date(s.end)-new Date(s.start))/60000)):null;
-      div.innerHTML='<span class="n" style="flex:1"><b>'+esc2(s.date)+'</b> '+fmtT(s.start)+(s.end?('\u2013'+fmtT(s.end)+' \u00b7 '+Math.floor(dur/60)+'h '+(dur%60)+'m'):'')
+      div.innerHTML='<span class="n" style="flex:1"><b>'+esc2(s.date)+'</b> '+fmtT(s.start)+(s.end?('\u2013'+fmtT(s.end)+' \u00b7 '+Math.floor(dur/60)+'h '+(dur%60)+'m \u00b7 \ud83d\udc1f '+catchCount(s)):'')
         +(s.cond?'<br><span style="font-size:10px;color:var(--ink-dim)">'+esc2(s.cond)+'</span>':'')
         +(s.note?'<br><span style="font-size:10px;color:var(--ink-dim)">'+esc2(s.note)+'</span>':'')
         +'</span><button class="lnk" data-ss="'+s.id+'">\u2715</button>';
@@ -1931,7 +1996,7 @@ renderContours();
   function ui(){if(cur){btn.textContent='\u25a0 End session';
       if(ro)ro.innerHTML='Session running since <b>'+fmtT(cur.start)+'</b>'+(cur.cond?' \u00b7 '+esc2(cur.cond):'')+'. Tap End to save it with a note.';}
     else{btn.textContent='\u25b6 Start session';
-      if(ro)ro.textContent='Track when you fished and the conditions \u2014 end the session to save it with a note.';}}
+      if(ro)ro.textContent='Start when you hit the rocks, end when you leave. Catches dated inside a session link to it automatically \u2014 log them on the spot or later that night.';}}
   btn.onclick=function(){
     if(!cur){cur={id:'ss'+Date.now(),date:new Date(Date.now()+10*3600000).toISOString().slice(0,10),start:new Date().toISOString(),cond:snapshot()};saveCur();ui();return;}
     const note=prompt('Session note (optional) \u2014 what worked, what didn\u2019t?')||'';
@@ -1962,11 +2027,13 @@ renderContours();
     if(on){map.dragging.disable();map.doubleClickZoom.disable();if(map.tap)try{map.tap.disable();}catch(e){}document.body.classList.add('drawing');btn.classList.add('on');btn.textContent='\u2713 Done';}
     else{map.dragging.enable();map.doubleClickZoom.enable();if(map.tap)try{map.tap.enable();}catch(e){}document.body.classList.remove('drawing');btn.classList.remove('on');btn.textContent='\u270f\ufe0f Draw';}}
   btn.onclick=function(){setMode(!drawing);};
+  const shoreBtn=document.getElementById('ct-shore');
+  if(shoreBtn)shoreBtn.onclick=function(){if(depthIn)depthIn.value='0';setMode(true);};
   if(undoBtn)undoBtn.onclick=function(){if(contours.length){contours.pop();saveCt();renderContours();}};
   el.addEventListener('pointerdown',function(e){if(!drawing)return;e.preventDefault();const ll=map.mouseEventToLatLng(e);path=[ll];lastPt=map.mouseEventToContainerPoint(e);line=L.polyline(path,{color:'#ffd54a',weight:4,opacity:.95}).addTo(map);try{el.setPointerCapture(e.pointerId);}catch(_){}} ,{passive:false});
   el.addEventListener('pointermove',function(e){if(!drawing||!line)return;e.preventDefault();const cp=map.mouseEventToContainerPoint(e);if(lastPt&&cp.distanceTo(lastPt)<3)return;lastPt=cp;path.push(map.mouseEventToLatLng(e));line.setLatLngs(path);},{passive:false});
   function finish(e){if(!drawing||!line)return;if(e)e.preventDefault();map.removeLayer(line);const pts=path.map(function(p){return [+p.lat.toFixed(6),+p.lng.toFixed(6)];});line=null;path=[];lastPt=null;
-    if(pts.length>=2){const dv=depthIn?parseFloat(depthIn.value):NaN;const depth=isNaN(dv)?'':Math.abs(dv);contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999),name:'freehand',depth:depth,pts:pts});saveCt();renderContours();}}
+    if(pts.length>=2){const dv=depthIn?parseFloat(depthIn.value):NaN;const depth=isNaN(dv)?'':Math.abs(dv);contours.push({id:'c'+Date.now()+Math.floor(Math.random()*9999),name:(depth===0?'shoreline':'freehand'),depth:depth,pts:pts});saveCt();renderContours();}}
   el.addEventListener('pointerup',finish,{passive:false});
   el.addEventListener('pointercancel',function(){if(line){map.removeLayer(line);}line=null;path=[];lastPt=null;});
 })();
