@@ -1482,9 +1482,10 @@ function buildShade(){
       minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
-  const W=280,H=280,cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
+  const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
-  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=20,R1=65;
+  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=30,R1=120;
   /* pass 1: water/land mask */
   const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
@@ -1529,7 +1530,7 @@ function idwDepthAt(lat,lng){const s=depthSamples();if(s.length<3)return null;
   return den?{d:num/den,near:near}:null;}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>80)return;
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>130)return;
   L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT \u2014 exposed at low tide \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)</span>'))+'</div></div>').openOn(map);});
 
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
@@ -1543,7 +1544,9 @@ function buildAutoContours(){
       minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
-  const W=110,H=110,midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R1=65;
+  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R1=120;
+  const extM=Math.max((maxLa-minLa)*mLat,(maxLo-minLo)*mLng);
+  const W=Math.max(110,Math.min(360,Math.round(extM/60))),H=W;
   const latAt=y=>maxLa-(maxLa-minLa)*(y/(H-1)),lngAt=x=>minLo+(maxLo-minLo)*(x/(W-1));
   const feats=shadeMaskFeats(),F=new Float32Array(W*H),OK=new Uint8Array(W*H);
   const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
@@ -1995,7 +1998,7 @@ renderContours();
         pts.push([+la.toFixed(6),+lo.toFixed(6),+(d+o).toFixed(2)]);}
       if(!pts.length){alert('No usable rows \u2014 expected numeric lat,lng,depth.');return;}
       /* thin to keep storage + rendering sane */
-      const MAXP=6000;let grid=0.00012;
+      const MAXP=25000;let grid=0.00012; /* bucketed IDW + ~700 KB storage headroom make 25k safe */
       while(pts.length>MAXP&&grid<0.01){const m={};
         for(let i=0;i<pts.length;i++){m[Math.round(pts[i][0]/grid)+':'+Math.round(pts[i][1]/grid)]=pts[i];}
         const vals=Object.keys(m).map(function(k){return m[k];});
