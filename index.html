@@ -1057,7 +1057,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="margin-top:5px">Report a sighting: <b>QWildlife app</b> or <b>1300 130 372</b> (option 1). Check the dashboard before fishing estuaries or creek mouths.</div>
       </div>
     </div>
-    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v15 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
+    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v16 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
     <div class="blk"><div class="lbl">Backup (your data)</div>
       <div class="dp-actions"><button class="dp-btn" id="bk-export">Export</button><label class="dp-btn" for="bk-import">Import</label><input type="file" id="bk-import" accept=".json,application/json" hidden></div>
     </div>
@@ -1119,8 +1119,9 @@ qld.addTo(map);let currentBase=qld;const BASES={qld,sat,osm};
 function setBase(w){const n=BASES[w];if(!n||n===currentBase)return;map.removeLayer(currentBase);n.addTo(map);n.bringToBack();currentBase=n;}
 document.querySelectorAll('#baseseg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#baseseg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setBase(b.dataset.base);});
 
+var _shadeFade=false; /* var (hoisted) - shadeOn is let and in TDZ when zones first style */
 function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
-  const fo=(typeof shadeOn!=='undefined'&&shadeOn)?Math.min(s.fillOp,0.06):s.fillOp;
+  const fo=_shadeFade?Math.min(s.fillOp,0.06):s.fillOp;
   return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:fo,opacity:0.95};}
 function zonePopup(p){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · Great Sandy MP</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
@@ -1487,7 +1488,7 @@ function buildSampleIndex(pts,cellLa,cellLo){const ix={};
 let _zoneFaded=null;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
-  try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
+  try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
   if(typeof buildAutoContours==='function')buildAutoContours();
   if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
   if(!shadeOn)return;
