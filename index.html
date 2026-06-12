@@ -1599,8 +1599,10 @@ function buildShade(){
 }
 (function(){const t=document.getElementById('slope-toggle');if(t)t.onchange=e=>{slopeView=e.target.checked;buildShade();};})();
 document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
-  const nPt=points.filter(p=>p.depth!==''&&p.depth!=null).length+((typeof contours!=='undefined')?contours.filter(c=>c.depth!==''&&c.depth!=null).reduce((a,c)=>a+Math.max(1,Math.floor(c.pts.length/12)),0):0);
-  if(shadeOn&&nPt<3){alert('Add at least 3 depth soundings (or labelled contours) for shading.');}
+  const nPt=points.filter(p=>p.depth!==''&&p.depth!=null).length
+    +((typeof contours!=='undefined')?contours.filter(c=>c.depth!==''&&c.depth!=null).reduce((a,c)=>a+Math.max(1,Math.floor(c.pts.length/12)),0):0)
+    +((typeof imported!=='undefined'&&Array.isArray(imported))?imported.length:0);
+  if(shadeOn&&nPt<3){alert('No depth data yet \u2014 add 3+ soundings, label a contour, or import a survey CSV (Imported depths section).');}
   buildShade();};
 /* ---- interpolated depth anywhere (depth points + contour vertices), shared by slope tool & tap-to-read ---- */
 let imported=[];try{imported=JSON.parse(localStorage.getItem('woongarra_imported_v1'))||[];}catch(e){imported=[];}
@@ -2222,6 +2224,7 @@ renderContours();
         const vals=Object.keys(m).map(function(k){return m[k];});
         if(vals.length<=MAXP){pts=vals;break;}
         grid*=1.6;pts=vals;}
+      if(imported.length&&confirm('You already have '+imported.length+' imported points loaded.\n\nOK = REPLACE them with this file (recommended when loading a corrected dataset).\nCancel = MERGE this file into the existing set.')){imported=[];}
       const seen={};for(let i=0;i<imported.length;i++)seen[imported[i][0]+':'+imported[i][1]]=1;
       let added=0;
       for(let i=0;i<pts.length;i++){const k=pts[i][0]+':'+pts[i][1];if(!seen[k]){imported.push(pts[i]);added++;}}
