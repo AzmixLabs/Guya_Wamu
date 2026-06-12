@@ -885,8 +885,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .bb-tide .ar{font-weight:700}.bb-tide.H .ar{color:var(--depth)}.bb-tide.L .ar{color:var(--measure)}
   .bb-note{font-size:10.5px;color:var(--ink-dim);margin-top:7px;line-height:1.4}
   .pop .sp-rate-row{display:flex;align-items:center;gap:9px;margin:7px 0 3px}
-  .sp-stars{display:inline-flex;gap:3px;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  .sp-stars .st{position:relative;display:inline-block;width:1em;height:1em;font-size:20px;line-height:1}
+  .sp-stars{display:inline-flex;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .sp-stars .st{position:relative;display:inline-block;width:1em;height:1em;font-size:16px;line-height:1}
   .sp-stars .bk{color:#2c4654}
   .sp-stars .fr{position:absolute;left:0;top:0;height:100%;overflow:hidden;color:#ffd54a;width:0;white-space:nowrap}
   .sp-rate-val{font-size:11px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
@@ -1241,7 +1241,7 @@ function fld(label,inner){return '<label class="fld"><span>'+label+'</span>'+inn
 
 /* ---------- SPOTS + CATCH LOG ---------- */
 const SSTORE='woongarra_spots_v1';
-function loadSpots(){try{return JSON.parse(localStorage.getItem(SSTORE))||[];}catch(e){return [];}}
+function loadSpots(){try{const a=JSON.parse(localStorage.getItem(SSTORE))||[];if(localStorage.getItem('woongarra_rating_scale')!=='10'){a.forEach(s=>{const r=parseFloat(s.rating);if(r)s.rating=Math.min(10,r*2);});localStorage.setItem('woongarra_rating_scale','10');try{localStorage.setItem(SSTORE,JSON.stringify(a));}catch(e){}}return a;}catch(e){return [];}}
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
 let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
 let liveWindDir=null,liveWindKn=null;
@@ -1271,7 +1271,7 @@ function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const ws=wi
 function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   if(z){const st=STYLES[z.zt]||{};h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
     if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';}
-  h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 5'):'tap to rate')+'</span></div>';
+  h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
   const kv=[];if(s.species)kv.push('Target: '+s.species);if(s.structure)kv.push('Structure: '+s.structure);
   if(s.tide)kv.push('Best tide: '+s.tide);if(s.depth!==''&&s.depth!=null)kv.push('Depth: '+s.depth+' m');
   if(kv.length)h+='<div class="kv">'+kv.join('<br>')+'</div>';
@@ -1326,7 +1326,7 @@ function openSpotSheet(s){s=s||{};
     +fld('Target species','<input id="f-species" class="fin" value="'+esc(s.species)+'">')
     +fld('Structure','<input id="f-structure" class="fin" value="'+esc(s.structure)+'">')
     +fld('Best tide','<select id="f-tide" class="fin"><option value="">\u2014</option>'+tides.map(t=>'<option '+(s.tide===t?'selected':'')+'>'+t+'</option>').join('')+'</select>')
-    +fld('Rating','<select id="f-rating" class="fin"><option value="">\u2014</option>'+[1,1.5,2,2.5,3,3.5,4,4.5,5].map(r=>'<option '+(+s.rating===r?'selected':'')+'>'+r+'</option>').join('')+'</select>')
+    +fld('Rating','<select id="f-rating" class="fin"><option value="">\u2014</option>'+[1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10].map(r=>'<option '+(+s.rating===r?'selected':'')+'>'+r+'</option>').join('')+'</select>')
     +fld('Depth (m)','<input id="f-depth" class="fin" inputmode="decimal" value="'+((s.depth!=null&&s.depth!=='')?s.depth:'')+'">')
     +fld('Notes','<textarea id="f-notes" class="fin" rows="2">'+(s.notes||'')+'</textarea>')
     +fld('Unsafe wind dirs','<input id="f-wind" class="fin" autocapitalize="characters" placeholder="e.g. E, SE, NE \u2014 onshore/dangerous" value="'+esc(s.windWarn||'')+'">')
@@ -2004,7 +2004,7 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
     const majors=[];if(ev.over!=null)majors.push(ev.over);if(ev.under!=null)majors.push(ev.under);
     const windLive=(typeof liveWindDir!=='undefined'&&liveWindDir!=null);
     return list.map(s=>{let sc=0;const why=[];let best=null;
-      const rt=parseFloat(s.rating)||0;if(rt){sc+=rt*0.8;why.push(rt+'★');}
+      const rt=parseFloat(s.rating)||0;if(rt){sc+=rt*0.4;why.push(rt+'★');}
       const n=(s.catches||[]).length;if(n){sc+=Math.min(1.5,n*0.3);why.push(n+' catch'+(n>1?'es':''));}
       const pref=tidePref(s.tide);
       if(pref&&tide){const tg=tide.filter(e=>e[2]===pref);
