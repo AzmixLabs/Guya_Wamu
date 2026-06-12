@@ -1057,7 +1057,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="margin-top:5px">Report a sighting: <b>QWildlife app</b> or <b>1300 130 372</b> (option 1). Check the dashboard before fishing estuaries or creek mouths.</div>
       </div>
     </div>
-    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v16 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
+    <div class="blk" style="margin-bottom:6px"><div style="font-size:9px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.5px">build v17 · 12 Jun 2026 — if this line is missing or older, the deployed file is stale: hard-refresh / clear site cache</div></div>
     <div class="blk"><div class="lbl">Backup (your data)</div>
       <div class="dp-actions"><button class="dp-btn" id="bk-export">Export</button><label class="dp-btn" for="bk-import">Import</label><input type="file" id="bk-import" accept=".json,application/json" hidden></div>
     </div>
@@ -1549,6 +1549,23 @@ function depthSamples(){const s=[];
   if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
   for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
   return s;}
+function tideHeightNow(){try{
+  const now=new Date(Date.now()+10*3600000);
+  const evs=[];
+  for(let off=-1;off<=1;off++){const d=new Date(now);d.setUTCDate(d.getUTCDate()+off);
+    const k=d.toISOString().slice(0,10),arr=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026[k]:null;if(!arr)continue;
+    for(let i=0;i<arr.length;i++){const hm=arr[i][0].split(':');evs.push({t:off*24+(+hm[0])+(+hm[1])/60,h:arr[i][1]});}}
+  if(evs.length<2)return null;
+  const hNow=now.getUTCHours()+now.getUTCMinutes()/60;
+  evs.sort((x,y)=>x.t-y.t);
+  for(let i=0;i<evs.length-1;i++){if(hNow>=evs[i].t&&hNow<=evs[i+1].t){
+    const f=(hNow-evs[i].t)/(evs[i+1].t-evs[i].t);
+    return evs[i].h+(evs[i+1].h-evs[i].h)*(1-Math.cos(Math.PI*f))/2;}}
+  return null;}catch(e){return null;}}
+function waterNowText(d){const t=tideHeightNow();if(t==null)return '';
+  const wn=t+d; /* d is m below LAT (negative = dries); water over the point right now */
+  if(d<-0.05)return wn>0.15?(' \u00b7 ~'+wn.toFixed(1)+' m over it now'):' \u00b7 exposed now';
+  return ' \u00b7 now ~'+wn.toFixed(1)+' m water (tide +'+t.toFixed(1)+')';}
 let _idwCache=null;
 function idwIndex(){const s=depthSamples();
   if(_idwCache&&_idwCache.n===s.length)return _idwCache;
@@ -1565,8 +1582,11 @@ function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
   return {d:num/den,near:near};}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near<12||r.near>150)return;
-  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT \u2014 exposed at low tide \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+(r.near>80?' · low confidence':'')+'</span>'))+'</div></div>').openOn(map);});
+  const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
+  const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
+  if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near>150)return;
+  L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d)+' \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d)+(r.near>80?' · low confidence':'')+'</span>'))+'</div></div>').openOn(map);});
 
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
@@ -2067,7 +2087,11 @@ renderContours();
 })();
 
 /* ---------- Hover depth readout ---------- */
-(function(){const el=document.getElementById('hov-depth');if(!el)return;let last=0;
+(function(){let el=document.getElementById('hov-depth');
+  if(!el){el=document.createElement('div');el.id='hov-depth';
+    el.style.cssText="position:fixed;display:none;pointer-events:none;z-index:1200;background:rgba(10,18,32,.92);color:#cfe8ff;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:4px 8px;border-radius:6px;border:1px solid rgba(120,170,220,.35)";
+    document.body.appendChild(el);}
+  let last=0;
   map.on('mousemove',function(e){
     if(!shadeOn){el.style.display='none';return;}
     const now=Date.now();if(now-last<80)return;last=now;
@@ -2075,7 +2099,7 @@ renderContours();
     try{if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)){el.style.display='none';return;}
       r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
     if(!r||r.near>150){el.textContent='no survey data here';}
-    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+rough;}
+    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d)+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
     el.style.display='block';});
   map.on('mouseout',function(){el.style.display='none';});
