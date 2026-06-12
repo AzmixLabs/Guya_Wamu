@@ -866,6 +866,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .dlegend .bar-shade{background:linear-gradient(90deg,#a6f0ce,#3ca8c4,#1c4e92,#102862)}
   .dlegend .bar-ct{background:linear-gradient(90deg,#ffe478,#ffb03c,#ff7832,#e6463c,#be285f)}
   .panel-body > .blk.collapsed > label.keep{display:flex!important}
+  .panel-body > .blk.collapsed > div.keep{display:flex!important}
   .bb-in{flex:1;min-width:0;background:#0e1c26;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12.5px;padding:8px 9px;min-height:var(--tap)}
   .bb-out{font-size:12px;line-height:1.5}
   .bb-score{display:flex;align-items:center;gap:9px;margin-bottom:4px}
@@ -940,7 +941,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.12b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.12c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -973,7 +974,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <label class="toggle keep" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
       <div class="keep" id="shade-op-row" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 2px"><span style="font-size:10px;color:var(--ink-dim);white-space:nowrap">shading opacity</span><input type="range" id="shade-op" min="0.25" max="1" step="0.05" style="flex:1;accent-color:#4ec9b0"><span id="shade-op-val" style="font-size:10px;color:var(--ink-dim);width:30px;text-align:right"></span></div>
-        <label class="toggle keep" style="margin-top:6px"><input type="checkbox" id="slope-toggle"><span>Relief shading (depth + slope)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Keeps the depth colours and lights the seabed from the NW — drop-offs and gutter walls show as bright/dark edges, flats stay even. Needs shading on.</div>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
         <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
