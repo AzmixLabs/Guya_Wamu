@@ -940,7 +940,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.12</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.12b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -972,6 +972,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         
       </div>
       <label class="toggle keep" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
+      <div class="keep" id="shade-op-row" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 2px"><span style="font-size:10px;color:var(--ink-dim);white-space:nowrap">shading opacity</span><input type="range" id="shade-op" min="0.25" max="1" step="0.05" style="flex:1;accent-color:#4ec9b0"><span id="shade-op-val" style="font-size:10px;color:var(--ink-dim);width:30px;text-align:right"></span></div>
         <label class="toggle keep" style="margin-top:6px"><input type="checkbox" id="slope-toggle"><span>Relief shading (depth + slope)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Keeps the depth colours and lights the seabed from the NW — drop-offs and gutter walls show as bright/dark edges, flats stay even. Needs shading on.</div>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
@@ -1356,9 +1357,11 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)r
   root.addEventListener('click',ev=>{
     const star=ev.target.closest('.st[data-act="rate"]');
     if(star){const id=star.dataset.id,v=parseFloat(star.dataset.val);const s=spots.find(x=>x.id===id);if(!s)return;
-      s.rating=(s.rating===v)?Math.max(0.5,v-0.5):v;saveSpots();
+      /* tap a higher star = set it; tap the current value = step down 0.5; stepping below 0.5 clears the rating */
+      if(+s.rating===v){const nv=v-0.5;s.rating=nv>=0.5?nv:'';}else{s.rating=v;}
+      saveSpots();
       const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===id)l.setPopupContent(spotPopup(s,z));});
-      const rc=document.querySelector('.dp-item[data-spot="'+id+'"] .rate');if(rc)rc.textContent='\u2605'+s.rating;
+      const rc=document.querySelector('.dp-item[data-spot="'+id+'"] .rate');if(rc)rc.textContent=s.rating?('\u2605'+s.rating):'';
       if(typeof window.bbRefreshSpots==='function')window.bbRefreshSpots();return;}
     const btn=ev.target.closest('.sp-pa');if(!btn)return;
     const id=btn.dataset.id,act=btn.dataset.act;
@@ -1595,8 +1598,14 @@ function buildShade(){
     }
     da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}
   ctx.putImageData(im,0,0);
-  shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:0.96,interactive:false,pane:'shadePane'}).addTo(map);
+  shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
 }
+let shadeOp=0.75;try{const v=parseFloat(localStorage.getItem('woongarra_shade_op'));if(isFinite(v)&&v>=0.25&&v<=1)shadeOp=v;}catch(e){}
+(function(){const r=document.getElementById('shade-op'),o=document.getElementById('shade-op-val');if(!r)return;
+  r.value=shadeOp;if(o)o.textContent=Math.round(shadeOp*100)+'%';
+  r.oninput=function(){shadeOp=parseFloat(r.value)||0.75;if(o)o.textContent=Math.round(shadeOp*100)+'%';
+    try{localStorage.setItem('woongarra_shade_op',String(shadeOp));}catch(e){}
+    if(shadeOverlay)shadeOverlay.setOpacity(shadeOp);};})();
 (function(){const t=document.getElementById('slope-toggle');if(t)t.onchange=e=>{slopeView=e.target.checked;buildShade();};})();
 document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
   const nPt=points.filter(p=>p.depth!==''&&p.depth!=null).length
