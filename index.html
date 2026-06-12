@@ -972,8 +972,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         
       </div>
       <label class="toggle keep" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
-        <label class="toggle keep" style="margin-top:6px"><input type="checkbox" id="slope-toggle"><span>Slope view (channel edges)</span></label>
-        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Colours show which way the seabed faces; stronger colour = steeper. Drop-offs and gutter walls glow; flats go grey. Needs shading on.</div>
+        <label class="toggle keep" style="margin-top:6px"><input type="checkbox" id="slope-toggle"><span>Relief shading (depth + slope)</span></label>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Keeps the depth colours and lights the seabed from the NW — drop-offs and gutter walls show as bright/dark edges, flats stay even. Needs shading on.</div>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
         <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
         <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
@@ -1487,6 +1487,26 @@ function inWaterFast(feats,lat,lng){
 function buildSampleIndex(pts,cellLa,cellLo){const ix={};
   for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
   return ix;}
+/* Masked 3x3 weighted blur over the interpolated field — kills per-sample IDW noise from dense
+   survey imports so gradients (relief/contours) are coherent. Only valid pixels (vAt>thr) mix. */
+function smoothField(F,V,W,H,passes,thr){
+  let src=F,dst=new Float32Array(W*H);
+  for(let it=0;it<passes;it++){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i0=y*W+x;
+      if(V[i0]<=thr){dst[i0]=src[i0];continue;}
+      let s=0,wsum=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx,yy=y+dy;
+        if(xx<0||yy<0||xx>=W||yy>=H)continue;
+        const j=yy*W+xx;
+        if(V[j]<=thr)continue;
+        const w=(dx===0&&dy===0)?2:1;
+        s+=src[j]*w;wsum+=w;}
+      dst[i0]=wsum?s/wsum:src[i0];}
+    const t=src;src=dst;dst=(t===F)?new Float32Array(W*H):t;}
+  if(src!==F)F.set(src);
+}
 let _zoneFaded=null;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
@@ -1535,25 +1555,44 @@ function buildShade(){
       if(!den){AL[i0]=0;continue;}
       const distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0));
       FD[i0]=num/den;AL[i0]=distA*mA;}}
-  /* pass 2b: paint - depth bands, or aspect-slope (hue = facing, saturation = steepness) */
+  /* smooth the field: dense survey imports make raw IDW near-nearest-neighbour, which is far too
+     noisy for gradients (the old aspect view rendered as rainbow static). 2 passes ≈ 1-px gaussian. */
+  smoothField(FD,AL,W,H,2,0.01);
+  /* pass 2b: paint - depth bands; with relief on, modulate by NW-lit hillshade so slope reads as light/dark */
   const pxX=((maxLo-minLo)/(W-1))*mLng,pxY=((maxLa-minLa)/(H-1))*mLat;
-  function hsv(h,s,v){const i=Math.floor(h/60)%6,f=h/60-Math.floor(h/60),p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);
-    const m=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];return [Math.round(m[0]*255),Math.round(m[1]*255),Math.round(m[2]*255)];}
+  /* light from the NW at 45° elevation (toward-light unit vector: east, north, up) */
+  const LE=-0.5,LN=0.5,LZ=0.70710678;
+  /* adaptive vertical exaggeration: scale so the ~90th-percentile gradient lights strongly —
+     gentle sand structure still reads, steep walls don't blow out. Clamped 6–60. */
+  let VE=10;
+  if(slopeView){
+    const gs=[];
+    for(let y=1;y<H-1;y+=2)for(let x=1;x<W-1;x+=2){
+      const i0=y*W+x;if(AL[i0]<=0.01)continue;
+      const gx=(FD[i0+1]-FD[i0-1])/(2*pxX),gy=(FD[i0-W]-FD[i0+W])/(2*pxY);
+      gs.push(Math.sqrt(gx*gx+gy*gy));}
+    if(gs.length>20){gs.sort((a,b)=>a-b);const p90=gs[Math.floor(gs.length*0.9)];
+      if(p90>1e-6)VE=Math.max(6,Math.min(60,1.2/p90));}
+  }
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i0=y*W+x,idx=i0*4,a=AL[i0];
     if(a<=0.01){da[idx+3]=0;continue;}
-    let c;
+    let c=depthColor(FD[i0]);
     if(slopeView){
       const xm=x>0?x-1:x,xp=x<W-1?x+1:x,ym=y>0?y-1:y,yp=y<H-1?y+1:y;
-      if(AL[y*W+xm]<=0.01||AL[y*W+xp]<=0.01||AL[ym*W+x]<=0.01||AL[yp*W+x]<=0.01){da[idx+3]=0;continue;}
-      const dzdx=(FD[y*W+xp]-FD[y*W+xm])/((xp-xm)*pxX);  /* depth increases downward */
-      const dzdy=(FD[yp*W+x]-FD[ym*W+x])/((yp-ym)*pxY);
-      const slope=Math.atan(Math.sqrt(dzdx*dzdx+dzdy*dzdy))*180/Math.PI;
-      if(slope<0.8){c=[128,128,128];da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*70);continue;}
-      let asp=Math.atan2(dzdy,dzdx)*180/Math.PI;asp=(asp+360)%360; /* direction of descent */
-      const sat=slope<3?0.45:slope<8?0.75:1.0,val=slope<3?0.85:slope<8?0.95:1.0;
-      c=hsv(asp,sat,val);
-    }else c=depthColor(FD[i0]);
+      /* substitute centre value at data edges instead of blanking the pixel */
+      const fxm=AL[y*W+xm]>0.01?FD[y*W+xm]:FD[i0],fxp=AL[y*W+xp]>0.01?FD[y*W+xp]:FD[i0];
+      const fym=AL[ym*W+x]>0.01?FD[ym*W+x]:FD[i0],fyp=AL[yp*W+x]>0.01?FD[yp*W+x]:FD[i0];
+      const dde=(fxp-fxm)/(((xp-xm)||1)*pxX);  /* depth change per metre east */
+      const ddn=(fym-fyp)/(((yp-ym)||1)*pxY);  /* depth change per metre north (row 0 = north) */
+      /* seabed elevation h = -depth; surface normal (un-normalised) = (VE*dde, VE*ddn, 1) */
+      const nx=VE*dde,ny=VE*ddn;
+      let shade=(nx*LE+ny*LN+LZ)/Math.sqrt(nx*nx+ny*ny+1);
+      if(shade<0)shade=0;
+      let f=0.35+0.92*shade; /* flat seabed → f≈1.0; lit faces brighten, shadowed faces darken */
+      if(f>1.30)f=1.30;
+      c=[Math.min(255,Math.round(c[0]*f)),Math.min(255,Math.round(c[1]*f)),Math.min(255,Math.round(c[2]*f))];
+    }
     da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}
   ctx.putImageData(im,0,0);
   shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:0.96,interactive:false,pane:'shadePane'}).addTo(map);
@@ -1666,6 +1705,7 @@ function buildAutoContours(){
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
       const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&inWaterFast(feats,la,lo))?1:0;}}
+  smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
   if(mxD<=mnD)return;
   const stepL=(mxD-mnD)>4?1:0.5,levels=[];
