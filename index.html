@@ -941,79 +941,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.12c</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
-    <div class="blk"><div class="lbl">Base map</div>
-      <div class="seg" id="baseseg"><button data-base="qld" class="on">QLD Aerial</button><button data-base="sat">Esri Sat</button><button data-base="osm">Streets</button></div>
-    </div>
-    <div class="blk"><div class="lbl">Tools</div>
-      <button class="toolbtn" id="mbtn"><span class="ic"></span><span id="mbtn-label">Measure distance</span></button>
-    </div>
-    <div class="blk"><div class="lbl">Depth points (your soundings)</div>
-      <div class="dp-actions">
-        <button class="dp-btn" id="dp-add-toggle">+ Add point</button>
-        <label class="dp-btn" for="dp-gpx">Import GPX</label>
-        <input type="file" id="dp-gpx" accept=".gpx,application/gpx+xml" hidden>
-      </div>
-      <div class="dp-form" id="dp-form">
-        <input class="dp-in" id="dp-coord" placeholder="24°52.988'S 152°29.407'E" autocapitalize="off" autocorrect="off">
-        <div class="dp-row"><input class="dp-in" id="dp-depth" placeholder="depth (m)" inputmode="decimal"><input class="dp-in" id="dp-label" placeholder="label (optional)"></div>
-        <div class="dp-err" id="dp-err"></div>
-        <button class="dp-save" id="dp-save">Add to map</button>
-      </div>
-      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
-      <div class="dp-list" id="dp-list"></div>
-      <button class="dp-clear" id="dp-clear">Clear all depth points</button>
-      <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
-        <div class="dp-actions"><button class="dp-btn" id="sl-btn">+ Slope line (gradient)</button></div>
-        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
-        <div class="dp-list" id="sl-list"></div>
-        
-      </div>
-      <label class="toggle keep" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
-      <div class="keep" id="shade-op-row" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 2px"><span style="font-size:10px;color:var(--ink-dim);white-space:nowrap">shading opacity</span><input type="range" id="shade-op" min="0.25" max="1" step="0.05" style="flex:1;accent-color:#4ec9b0"><span id="shade-op-val" style="font-size:10px;color:var(--ink-dim);width:30px;text-align:right"></span></div>
-        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Keeps the depth colours and lights the seabed from the NW — drop-offs and gutter walls show as bright/dark edges, flats stay even. Needs shading on.</div>
-        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
-        <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
-        <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
-        <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
-        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
-    </div>
-    <div class="blk"><div class="lbl">Depth lines (traced / drawn / imported)</div>
-      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
-      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
-      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-shore">〰 Draw 0 m shoreline</button></div>
-      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-compare">⚖ Compare vs imported</button><button class="dp-btn" id="ct-prune">🧹 Remove covered lines</button></div>
-      <div id="ct-cmp-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:5px;line-height:1.45"></div>
-      <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Only needed where no survey data is imported — the LiDAR shelf points already pin the shore along the covered coast.</div>
-      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
-      <div class="dp-list" id="ct-list"></div>
-      <button class="dp-clear" id="ct-clear">Clear all contours</button>
-      <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
-    </div>
-    <div class="blk"><div class="lbl">Imported depths (LiDAR / survey CSV)</div>
-      <div class="dp-actions"><label class="dp-btn" for="imp-file">Import CSV (lat,lng,depth)</label><input type="file" id="imp-file" accept=".csv,text/csv" hidden><button class="dp-btn" id="imp-clear">Clear imported</button></div>
-      <div class="dp-actions" style="margin-top:6px"><input class="dp-in" id="imp-offset" inputmode="decimal" placeholder="datum offset m (optional)" style="flex:1;text-align:center"></div>
-      <div style="font-size:10px;color:var(--ink-dim);margin-top:5px;line-height:1.35">Depths must be metres below <b>LAT</b> (negative = dries). If your file is AHD heights, leave it — ask the build chat to convert. Offset is added to every depth on import. <span id="imp-count">0</span> points loaded. <span id="imp-status"></span></div>
-    </div>
-    <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
-      <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
-      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
-      <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v19 · 12 Jun 2026</div>
-      <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
-      <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
-      <div class="sp-tools"><input id="sp-filter" class="sp-filter" placeholder="Filter spots…" autocapitalize="off" autocorrect="off"><select id="sp-sort" class="sp-sort"><option value="name">A–Z</option><option value="rating">★ rating</option><option value="catches">most catches</option><option value="zone">zone</option><option value="depth">depth</option></select></div>
-      <div class="dp-list" id="sp-list"></div>
-    </div>
-    <div class="blk"><div class="lbl">Walk tracker (GPS · opt-in)</div>
-      <div class="dp-actions"><button class="dp-btn" id="wk-rec">● Record walk</button><button class="dp-btn" id="wk-save">Save</button></div>
-      <div id="wk-readout" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Off. Tap Record to trace your path on foot — your phone will ask to use your location (choose <b>While Using</b>). Nothing is stored until you tap Save.</div>
-      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="wk-toggle" checked><span>Show saved walks <span id="wk-count" class="dp-count">0</span></span></label>
-      <div class="dp-list" id="wk-list"></div>
-    </div>
     <div class="blk"><div class="lbl">Best bite times</div>
       <div class="bb-row">
         <button class="dp-btn" id="bb-prev" style="flex:0 0 34px;padding:6px 0">◀</button>
@@ -1031,13 +962,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="plan-btn">🗓 Build plan</button></div>
       <div class="bb-out" id="plan-out" style="margin-top:8px"><span class="bb-dim">One card: tides, major windows, light, top spot and wind for today and tomorrow.</span></div>
     </div>
-    <div class="blk"><div class="lbl">Catch analytics</div>
-      <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Analyse my catches</button></div>
-      <div class="bb-out" id="ca-out" style="margin-top:8px"></div>
+    <div class="blk"><div class="lbl">Conditions (live)</div>
+      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Bargara</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
+      <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
+    </div>
+    <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
+      <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
+      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
+      <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v20 · 14 Jun 2026</div>
+      <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
+      <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
+      <div class="sp-tools"><input id="sp-filter" class="sp-filter" placeholder="Filter spots…" autocapitalize="off" autocorrect="off"><select id="sp-sort" class="sp-sort"><option value="name">A–Z</option><option value="rating">★ rating</option><option value="catches">most catches</option><option value="zone">zone</option><option value="depth">depth</option></select></div>
+      <div class="dp-list" id="sp-list"></div>
     </div>
     <div class="blk"><div class="lbl">Emergency — position</div>
       <div class="dp-actions"><button class="dp-btn" id="em-btn">📍 Get my position</button></div>
       <div class="bb-out" id="em-out" style="margin-top:8px"><span class="bb-dim">Live GPS in DDM + decimal with copy / SMS, so someone always knows exactly where you are on the rocks. In an emergency call Triple Zero (000).</span></div>
+    </div>
+    <div class="blk"><div class="lbl">Catch analytics</div>
+      <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Analyse my catches</button></div>
+      <div class="bb-out" id="ca-out" style="margin-top:8px"></div>
+    </div>
+    <div class="blk"><div class="lbl">Base map</div>
+      <div class="seg" id="baseseg"><button data-base="qld" class="on">QLD Aerial</button><button data-base="sat">Esri Sat</button><button data-base="osm">Streets</button></div>
+    </div>
+    <div class="blk"><div class="lbl">Map layers</div><label class="toggle keep"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle keep"><input type="checkbox" id="fhatoggle"><span>Fish Habitat Areas</span></label><label class="toggle keep"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle keep"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
+    <div class="blk"><div class="lbl">Tools</div>
+      <button class="toolbtn" id="mbtn"><span class="ic"></span><span id="mbtn-label">Measure distance</span></button>
+    </div>
+    <div class="blk"><div class="lbl">Walk tracker (GPS · opt-in)</div>
+      <div class="dp-actions"><button class="dp-btn" id="wk-rec">● Record walk</button><button class="dp-btn" id="wk-save">Save</button></div>
+      <div id="wk-readout" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Off. Tap Record to trace your path on foot — your phone will ask to use your location (choose <b>While Using</b>). Nothing is stored until you tap Save.</div>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="wk-toggle" checked><span>Show saved walks <span id="wk-count" class="dp-count">0</span></span></label>
+      <div class="dp-list" id="wk-list"></div>
     </div>
     <div class="blk"><div class="lbl">Session log</div>
       <div class="dp-actions"><button class="dp-btn" id="ss-btn">▶ Start session</button></div>
@@ -1045,15 +1003,57 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="font-size:10px;color:var(--ink-dim);margin-top:8px">Saved sessions: <span id="ss-count">0</span></div>
       <div class="dp-list" id="ss-list"></div>
     </div>
-    <div class="blk"><div class="lbl">Conditions (live)</div>
-      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Bargara</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
-      <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
-    </div>
     <div class="blk"><div class="lbl">Offline maps (beta)</div>
       <div class="dp-actions"><button class="dp-btn" id="ofl-save">💾 Save this view</button></div>
       <div id="ofl-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Switch the base layer to <b>Esri Sat</b>, zoom to the area you want, then Save. Tiles for the current view (plus 2 zoom levels closer) are stored on this device so the map still draws with no signal. Imagery only — zones, spots &amp; tides already work offline.</div>
     </div>
-    <div class="blk"><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="fhatoggle"><span>Fish Habitat Areas</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
+    <div class="blk"><div class="lbl">Depth points (your soundings)</div>
+      <div class="dp-actions">
+        <button class="dp-btn" id="dp-add-toggle">+ Add point</button>
+        <label class="dp-btn" for="dp-gpx">Import GPX</label>
+        <input type="file" id="dp-gpx" accept=".gpx,application/gpx+xml" hidden>
+      </div>
+      <div class="dp-form" id="dp-form">
+        <input class="dp-in" id="dp-coord" placeholder="24°52.988'S 152°29.407'E" autocapitalize="off" autocorrect="off">
+        <div class="dp-row"><input class="dp-in" id="dp-depth" placeholder="depth (m)" inputmode="decimal"><input class="dp-in" id="dp-label" placeholder="label (optional)"></div>
+        <div class="dp-err" id="dp-err"></div>
+        <button class="dp-save" id="dp-save">Add to map</button>
+      </div>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="dp-toggle" checked><span>Show depth points <span id="dp-count" class="dp-count">0</span></span></label>
+      <div class="dp-list" id="dp-list"></div>
+      <button class="dp-clear" id="dp-clear">Clear all depth points</button>
+      <div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
+        <div class="dp-actions"><button class="dp-btn" id="sl-btn">+ Slope line (gradient)</button></div>
+        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sl-toggle" checked><span>Show slope lines <span id="sl-count" class="dp-count">0</span></span></label>
+        <div class="dp-list" id="sl-list"></div>
+        
+      </div>
+      <label class="toggle" style="margin-top:10px"><input type="checkbox" id="shade-toggle"><span>Depth shading (interpolated)</span></label>
+      <div id="shade-op-row" style="display:flex;align-items:center;gap:8px;margin:4px 0 0 2px"><span style="font-size:10px;color:var(--ink-dim);white-space:nowrap">shading opacity</span><input type="range" id="shade-op" min="0.25" max="1" step="0.05" style="flex:1;accent-color:#4ec9b0"><span id="shade-op-val" style="font-size:10px;color:var(--ink-dim);width:30px;text-align:right"></span></div>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Keeps the depth colours and lights the seabed from the NW — drop-offs and gutter walls show as bright/dark edges, flats stay even. Needs shading on.</div>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Tints water by depth from your soundings — approximate; fades out where there's no data. With shading on, <b>tap any shaded spot</b> to read its estimated depth.</div>
+        <div class="dlegend"><span>shade</span><span class="bar bar-shade"></span><span>12 m</span></div>
+        <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
+        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
+    </div>
+    <div class="blk"><div class="lbl">Depth lines (traced / drawn / imported)</div>
+      <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-draw">✏️ Draw</button><input class="dp-in" id="ct-draw-depth" inputmode="decimal" placeholder="depth m" style="flex:0 0 80px;text-align:center"><button class="dp-btn" id="ct-undo">↶ Undo</button></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-shore">〰 Draw 0 m shoreline</button></div>
+      <div class="dp-actions" style="margin-top:6px"><button class="dp-btn" id="ct-compare">⚖ Compare vs imported</button><button class="dp-btn" id="ct-prune">🧹 Remove covered lines</button></div>
+      <div id="ct-cmp-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:5px;line-height:1.45"></div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Only needed where no survey data is imported — the LiDAR shelf points already pin the shore along the covered coast.</div>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ct-toggle" checked><span>Show contours <span id="ct-count" class="dp-count">0</span></span></label>
+      <div class="dp-list" id="ct-list"></div>
+      <button class="dp-clear" id="ct-clear">Clear all contours</button>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
+    </div>
+    <div class="blk"><div class="lbl">Imported depths (LiDAR / survey CSV)</div>
+      <div class="dp-actions"><label class="dp-btn" for="imp-file">Import CSV (lat,lng,depth)</label><input type="file" id="imp-file" accept=".csv,text/csv" hidden><button class="dp-btn" id="imp-clear">Clear imported</button></div>
+      <div class="dp-actions" style="margin-top:6px"><input class="dp-in" id="imp-offset" inputmode="decimal" placeholder="datum offset m (optional)" style="flex:1;text-align:center"></div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:5px;line-height:1.35">Depths must be metres below <b>LAT</b> (negative = dries). If your file is AHD heights, leave it — ask the build chat to convert. Offset is added to every depth on import. <span id="imp-count">0</span> points loaded. <span id="imp-status"></span></div>
+    </div>
     <div class="blk"><div class="lbl">Zone legend (2024 plan)</div><div class="legend" id="legend"></div></div>
     <div class="blk"><div class="lbl">Safety — crocodiles</div>
       <div class="note" style="margin-top:0">Bargara sits <b>south of Queensland's formal croc-country management area</b> (it starts around the Boyne River near Gladstone), but vagrant crocodiles have been recorded further south — especially in rivers and creeks after floods. No natural waterway can be assumed crocodile-free.
@@ -2368,9 +2368,9 @@ renderContours();
 })();
 
 /* ---------- Collapsible panel sections ---------- */
-(function(){const KEY='woongarra_collapsed_v1';let st;try{st=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){st={};}
+(function(){const KEY='woongarra_collapsed_v2';let st;try{st=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){st={};}
   /* Sections that stay OPEN by default; everything else starts collapsed until you open it once. */
-  const KEEP_OPEN={'Base map':1,'Fishing spots & catches':1,'Best bite times':1,'Best spots today':1,'Conditions (live)':1};let changed=false;
+  const KEEP_OPEN={'Base map':1,'Fishing spots & catches':1,'Best bite times':1,'Best spots today':1,'Conditions (live)':1,'Plan — next 48 h':1,'Emergency — position':1,'Map layers':1};let changed=false;
   document.querySelectorAll('.panel-body > .blk').forEach(function(blk){const lbl=blk.querySelector(':scope > .lbl');if(!lbl)return;
     const k=lbl.textContent.trim();
     if(st[k]==null&&!KEEP_OPEN[k]){st[k]=true;changed=true;}
