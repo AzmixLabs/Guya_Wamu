@@ -1648,19 +1648,22 @@ function idwIndex(){const s=depthSamples();
   _idwCache={n:s.length,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};
   return _idwCache;}
 function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
-  let num=0,den=0,near=1e9;
+  let num=0,den=0,near=1e9,nearD=0;
   const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
   for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
     for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+      if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
   if(!den)return null;
-  return {d:num/den,near:near};}
+  return {d:num/den,near:near,nearD:nearD};}
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
-  if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng))return;
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);
+  /* water = inside a legislated zone polygon (coast) OR subtidal sounding support within 120 m
+     (river/estuary, which lies outside the marine-park polygons). Paint/read rule, not legality. */
+  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.nearD>=0&&r.near<=120)))return;
   const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
   const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
   if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(!r||r.near>150)return;
+  if(!r||r.near>150)return;
   L.popup({maxWidth:170,className:'depth-pop'}).setLatLng(e.latlng).setContent('<div class="pop"><div class="kv" style="margin:0">'+(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d)+' \u00b7 data '+Math.round(r.near)+' m away</span><button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d)+(r.near>80?' · low confidence':'')+'</span><button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>'))+'</div></div>').openOn(map);
   setTimeout(function(){const fb=document.getElementById('dp-find');if(!fb)return;
     fb.onclick=function(){findDeepest(e.latlng.lat,e.latlng.lng);map.closePopup();};},0);});
@@ -2196,9 +2199,12 @@ renderContours();
   map.on('mousemove',function(e){
     if(!shadeOn){el.style.display='none';return;}
     const now=Date.now();if(now-last<80)return;last=now;
-    let r=null;
-    try{if(!inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)){el.style.display='none';return;}
+    let r=null,inZ=false;
+    try{inZ=inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng);
       r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
+    /* show over zone water (coast) OR where there's subtidal sounding support within 120 m
+       (river/estuary, outside the marine-park polygons) - mirrors the depth-shading paint rule */
+    if(!(inZ||(r&&r.nearD>=0&&r.near<=120))){el.style.display='none';return;}
     if(!r||r.near>150){el.textContent='no survey data here';}
     else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d)+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
