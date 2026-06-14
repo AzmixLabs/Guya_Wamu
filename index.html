@@ -831,6 +831,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .pop .catchlist{margin:0 0 9px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .pop .catchrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:#c4d4dc;padding:5px 8px;border-bottom:1px solid var(--line)}
   .pop .catchrow:last-child{border-bottom:0}
+  .pop .catch-cond{font-family:"IBM Plex Mono",monospace;font-size:9.5px;color:var(--ink-dim);margin-top:2px;letter-spacing:.02em}
+  .pop .pb-badge{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:9px;font-weight:600;color:#0c161e;background:#ffcf4d;border-radius:4px;padding:0 4px;margin-right:5px;vertical-align:middle}
   .pop .sp-pop-actions{display:flex;gap:6px;margin-top:9px}
   .sp-pa{flex:1;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.3px;min-height:38px;border-radius:8px;cursor:pointer;padding:0 4px}
   .sp-pa.primary{background:var(--accent);color:#04181a;border-color:var(--accent);font-weight:700}
@@ -951,7 +953,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14c</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14d</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1276,6 +1278,7 @@ function loadSpots(){try{const a=JSON.parse(localStorage.getItem(SSTORE))||[];if
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
 let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
 let liveWindDir=null,liveWindKn=null;
+let stampEnv=null;/* assigned inside the best-bite IIFE; stamps tide+moon onto a catch from its date/time */
 const COMPASS_PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const COMPASS_DEG={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
 function compassOf(d){if(d==null||isNaN(d))return '';return COMPASS_PTS[Math.round((((d%360)+360)%360)/22.5)%16];}
@@ -1296,6 +1299,11 @@ function windStatus(s){if(liveWindDir==null)return null;const dd=dangerDirs(s);i
 function windColor(lvl){return lvl==='bad'?'#ff5252':lvl==='warn'?'#ffb300':null;}
 const spotLayer=L.layerGroup().addTo(map);
 function biggest(s){return (s.catches||[]).reduce((m,c)=>Math.max(m,parseFloat(c.len)||0),0);}
+function condLine(c){if(!c||!c.env)return '';const e=c.env,bits=[];
+  if(e.tide&&e.tide.state)bits.push(e.tide.state+(e.tide.ht!=null?' '+e.tide.ht+'m':''));
+  if(e.wind&&e.wind.dir!=null)bits.push((compassOf(e.wind.dir)||'')+(e.wind.kn!=null?' '+e.wind.kn+'kn':''));
+  if(e.moon&&e.moon.name)bits.push(e.moon.name.toLowerCase()+(e.moon.illum!=null?' '+e.moon.illum+'%':''));
+  return bits.length?'<div class="catch-cond">'+bits.join(' \u00b7 ')+'</div>':'';}
 function starSpan(i,r,id){const pct=r>=i?100:(r>=i-0.5?50:0);return '<span class="st" data-act="rate" data-id="'+id+'" data-val="'+i+'"><span class="bk">\u2605</span><span class="fr" style="width:'+pct+'%">\u2605</span></span>';}
 function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
   return L.divIcon({className:'spotpin',iconSize:[0,0],html:'<span class="sp"><span class="sp-dot" style="background:'+col+'">'+(n?'<span class="cnt">'+n+'</span>':'')+'</span><span class="sp-name">'+esc(s.name||'Spot')+'</span></span>'});}
@@ -1312,7 +1320,7 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
     h+='<div class="windrow '+ws.lvl+'">'+lab+'<br><span class="bb-dim">wind now '+compassOf(liveWindDir)+' '+(liveWindKn!=null?Math.round(liveWindKn)+' kn':'')+' \u00b7 unsafe dirs: '+dd.map(compassOf).join(', ')+'</span></div>';}}
   const n=(s.catches||[]).length;
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
-  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.photo?'<img class="catch-thumb" data-photo="'+esc(c.photo)+'" alt="">':'')+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
+  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.photo?'<img class="catch-thumb" data-photo="'+esc(c.photo)+'" alt="">':'')+(c.pb?'<span class="pb-badge">\u2605 PB</span>':'')+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+condLine(c)+'</div>').join('')+'</div>';
   h+='<div class="warn">Your own mark. Drag the pin to reposition onto your platform \u2014 the zone re-checks on drop. Verify the zone officially before fishing.</div>';
   h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
@@ -1451,6 +1459,11 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
     kept:document.getElementById('c-kept').value,note:val('c-note')};
     o.species=canonSpecies(o.species);
     if(pendingPhoto){const pid='p'+Date.now()+Math.floor(Math.random()*9999);await photoPut(pid,pendingPhoto);o.photo=pid;}
+    var priorBig=biggest(s);
+    try{if(typeof stampEnv==='function')o.env=stampEnv(o.date,o.time)||{};}catch(e){o.env=o.env||{};}
+    if(liveWindDir!=null){o.env=o.env||{};o.env.wind={dir:Math.round(liveWindDir),kn:(liveWindKn!=null?Math.round(liveWindKn):null)};}
+    if(o.env&&!Object.keys(o.env).length)delete o.env;
+    var nlen=parseFloat(o.len)||0;if(nlen>0&&nlen>priorBig)o.pb=true;
     s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});
   const fileEl=document.getElementById('c-photo-file');
   if(fileEl)fileEl.onchange=async ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;
@@ -2209,6 +2222,12 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
       +caBar(spec,'By species')+caBar(bait,'By bait / lure')+caBar(bySpot,'By spot')+caBar(stage,'By tide stage')+caBar(moon,'By moon phase')
       +'<div class="bb-note" style="opacity:.75">Tide stage and moon are derived from each catch\u2019s date/time (2026–27 tide tables only).</div>';}
   const cab=$('ca-btn');if(cab)cab.onclick=renderAnalytics;
+  stampEnv=function(dateStr,timeStr){const env={};
+    try{if(dateStr&&timeStr){const samp=dayTideSampler(dateStr);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);
+      env.tide={state:d>0.01?'rising':d<-0.01?'falling':'slack',ht:Math.round(ht*100)/100};}}}catch(e){}
+    try{if(dateStr){const il=moonIllum(aestDate(dateStr,timeStr?parseHM(timeStr):12));
+      env.moon={name:moonName(il.phase),illum:Math.round(il.fraction*100)};}}catch(e){}
+    return env;};
   render();
 })();
 
