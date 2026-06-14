@@ -917,6 +917,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .dp-btn.on{background:var(--accent);color:#04181a;border-color:var(--accent);font-weight:600}
   .dlhint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1100;display:none;background:rgba(8,30,34,.94);border:1px solid var(--measure);color:var(--measure);font-family:"IBM Plex Mono",monospace;font-size:11px;padding:7px 14px;border-radius:20px;white-space:nowrap;pointer-events:none}
   body.drawing .dlhint{display:block}
+  /* catch photo */
+  .c-photo-file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+  #c-photo-exif{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.5px;color:var(--accent);min-height:11px;margin:-4px 0 2px}
+  .c-photo-prev{margin-top:6px}
+  .c-photo-prev img{max-width:100%;max-height:220px;display:block;border-radius:10px;border:1px solid var(--line)}
+  .c-photo-del{margin-top:8px;border:1px solid rgba(231,76,60,.4);background:transparent;color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .catch-thumb{width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line);vertical-align:middle;margin-right:6px;cursor:pointer;background:#0a1822}
+  .photo-lb{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
+  .photo-lb.open{display:flex}
+  .photo-lb img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 18px 60px -10px rgba(0,0,0,.9)}
 </style>
 </head>
 <body>
@@ -941,7 +951,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1302,7 +1312,7 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
     h+='<div class="windrow '+ws.lvl+'">'+lab+'<br><span class="bb-dim">wind now '+compassOf(liveWindDir)+' '+(liveWindKn!=null?Math.round(liveWindKn)+' kn':'')+' \u00b7 unsafe dirs: '+dd.map(compassOf).join(', ')+'</span></div>';}}
   const n=(s.catches||[]).length;
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
-  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
+  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.photo?'<img class="catch-thumb" data-photo="'+esc(c.photo)+'" alt="">':'')+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+'</div>').join('')+'</div>';
   h+='<div class="warn">Your own mark. Drag the pin to reposition onto your platform \u2014 the zone re-checks on drop. Verify the zone officially before fishing.</div>';
   h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
@@ -1368,20 +1378,94 @@ function speciesKey(n){return (n||'').toLowerCase().replace(/\s+/g,' ').trim();}
 function allSpecies(){return SPECIES_CATCH.concat(loadSpeciesUser());}
 function speciesOptions(){const seen={},out=[];allSpecies().forEach(function(n){const k=speciesKey(n);if(k&&!seen[k]){seen[k]=1;out.push('<option value="'+esc(n)+'">');}});return out.join('');}
 function canonSpecies(name){const k=speciesKey(name);if(!k)return '';const hit=allSpecies().find(function(x){return speciesKey(x)===k;});if(hit)return hit;const u=loadSpeciesUser();u.push(name.trim());try{localStorage.setItem(SPU,JSON.stringify(u));}catch(e){}return name.trim();}
+/* ---------- CATCH PHOTOS (IndexedDB store + EXIF + downscale) ---------- */
+const PHOTO_DB='woongarra_photos_v1';
+function photoOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(PHOTO_DB,1);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('photos'))db.createObjectStore('photos');};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function photoPut(id,dataUrl){return photoOpen().then(db=>new Promise(res=>{const t=db.transaction('photos','readwrite').objectStore('photos').put(dataUrl,id);t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
+function photoGet(id){return photoOpen().then(db=>new Promise(res=>{const t=db.transaction('photos','readonly').objectStore('photos').get(id);t.onsuccess=()=>res(t.result||null);t.onerror=()=>res(null);})).catch(()=>null);}
+function photoDelete(id){return photoOpen().then(db=>new Promise(res=>{const t=db.transaction('photos','readwrite').objectStore('photos').delete(id);t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
+function photoAll(){return photoOpen().then(db=>new Promise(res=>{const out={};const cur=db.transaction('photos','readonly').objectStore('photos').openCursor();cur.onsuccess=e=>{const c=e.target.result;if(c){out[c.key]=c.value;c.continue();}else res(out);};cur.onerror=()=>res(out);})).catch(()=>({}));}
+/* minimal JPEG EXIF reader: returns DateTimeOriginal "YYYY:MM:DD HH:MM:SS" or null */
+function exifDateTimeOriginal(buf){try{
+  const dv=new DataView(buf),len=dv.byteLength;
+  if(len<4||dv.getUint16(0)!==0xFFD8)return null;
+  let off=2;
+  while(off+4<=len){
+    if(dv.getUint8(off)!==0xFF)break;
+    const marker=dv.getUint8(off+1);
+    if(marker===0xD9||marker===0xDA)break;
+    const L=dv.getUint16(off+2);
+    if(marker===0xE1&&off+4+6<=len&&dv.getUint32(off+4)===0x45786966&&dv.getUint16(off+8)===0x0000){
+      const tiff=off+10;
+      if(tiff+8>len)return null;
+      const little=dv.getUint16(tiff)===0x4949;
+      const u16=o=>dv.getUint16(o,little),u32=o=>dv.getUint32(o,little);
+      if(u16(tiff+2)!==0x002A)return null;
+      const ifd0=tiff+u32(tiff+4);if(ifd0+2>len)return null;
+      let exifIFD=0;const n0=u16(ifd0);
+      for(let i=0;i<n0;i++){const e=ifd0+2+i*12;if(e+12>len)break;if(u16(e)===0x8769){exifIFD=tiff+u32(e+8);break;}}
+      if(!exifIFD||exifIFD+2>len)return null;
+      const n=u16(exifIFD);
+      for(let i=0;i<n;i++){const e=exifIFD+2+i*12;if(e+12>len)break;
+        if(u16(e)===0x9003){const cnt=u32(e+4);const ptr=cnt>4?tiff+u32(e+8):e+8;
+          let s='';for(let j=0;j<cnt-1&&ptr+j<len;j++){const ch=dv.getUint8(ptr+j);if(ch===0)break;s+=String.fromCharCode(ch);}
+          return s||null;}}
+      return null;
+    }
+    off+=2+L;
+  }
+}catch(e){}return null;}
+/* downscale a File to a JPEG data URL, longest side <= maxDim, EXIF orientation applied where supported */
+async function downscaleToDataURL(file,maxDim,quality){
+  let src,w,h,bmp=null;
+  try{bmp=await createImageBitmap(file,{imageOrientation:'from-image'});src=bmp;w=bmp.width;h=bmp.height;}
+  catch(e){src=await new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);res(img);};img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('decode'));};img.src=u;});w=src.naturalWidth||src.width;h=src.naturalHeight||src.height;}
+  const scale=Math.min(1,maxDim/Math.max(w,h));
+  const cw=Math.max(1,Math.round(w*scale)),ch=Math.max(1,Math.round(h*scale));
+  const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
+  cv.getContext('2d').drawImage(src,0,0,cw,ch);
+  if(bmp&&bmp.close)bmp.close();
+  return cv.toDataURL('image/jpeg',quality);
+}
+/* tap-to-enlarge lightbox (shared) */
+function showPhotoLightbox(dataUrl){let lb=document.getElementById('photo-lb');
+  if(!lb){lb=document.createElement('div');lb.id='photo-lb';lb.className='photo-lb';lb.innerHTML='<img alt="catch photo">';document.body.appendChild(lb);
+    lb.onclick=()=>lb.classList.remove('open');}
+  lb.querySelector('img').src=dataUrl;lb.classList.add('open');}
 function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)return;
   const d=new Date();const today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   const hhmm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  const body=fld('Date','<input id="c-date" class="fin" type="date" value="'+today+'">')
+  let pendingPhoto=null;
+  const body=fld('Photo','<input id="c-photo-file" class="c-photo-file" type="file" accept="image/*"><label for="c-photo-file" class="sheet-mini" id="c-photo-label">\ud83d\udcf7 Add photo</label><div id="c-photo-exif"></div><div id="c-photo-prev" class="c-photo-prev"></div>')
+    +fld('Date','<input id="c-date" class="fin" type="date" value="'+today+'">')
     +fld('Time','<input id="c-time" class="fin" type="time" value="'+hhmm+'">')
     +fld('Species','<input id="c-species" class="fin" list="species-dl" autocomplete="off" value="'+esc(s.species)+'"><datalist id="species-dl">'+speciesOptions()+'</datalist>')
     +fld('Length (cm)','<input id="c-len" class="fin" inputmode="decimal">')
     +fld('Bait / lure','<input id="c-bait" class="fin">')
     +fld('Kept / released','<select id="c-kept" class="fin"><option value="kept">Kept</option><option value="released">Released</option></select>')
     +fld('Note','<textarea id="c-note" class="fin" rows="2"></textarea>');
-  openSheet('Log catch \u2014 '+(s.name||'Spot'),body,()=>{const o={id:'c'+Date.now()+Math.floor(Math.random()*999),
+  openSheet('Log catch \u2014 '+(s.name||'Spot'),body,async ()=>{const o={id:'c'+Date.now()+Math.floor(Math.random()*999),
     date:val('c-date'),time:val('c-time'),species:val('c-species'),len:val('c-len'),bait:val('c-bait'),
     kept:document.getElementById('c-kept').value,note:val('c-note')};
-    o.species=canonSpecies(o.species);s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();    const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});}
+    o.species=canonSpecies(o.species);
+    if(pendingPhoto){const pid='p'+Date.now()+Math.floor(Math.random()*9999);await photoPut(pid,pendingPhoto);o.photo=pid;}
+    s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});
+  const fileEl=document.getElementById('c-photo-file');
+  if(fileEl)fileEl.onchange=async ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;
+    const lbl=document.getElementById('c-photo-label'),ex=document.getElementById('c-photo-exif'),prev=document.getElementById('c-photo-prev');
+    if(lbl)lbl.textContent='Processing\u2026';
+    try{
+      let abuf=null;try{abuf=await f.arrayBuffer();}catch(e){abuf=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>res(null);fr.readAsArrayBuffer(f);});}
+      const dt=abuf?exifDateTimeOriginal(abuf):null;
+      if(dt){const m=dt.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})/);if(m){const dEl=document.getElementById('c-date'),tEl=document.getElementById('c-time');if(dEl)dEl.value=m[1]+'-'+m[2]+'-'+m[3];if(tEl)tEl.value=m[4]+':'+m[5];if(ex)ex.textContent='\u2713 date & time set from photo';}}
+      pendingPhoto=await downscaleToDataURL(f,1600,0.8);
+      if(prev){prev.innerHTML='<img src="'+pendingPhoto+'" alt="catch photo"><button type="button" class="c-photo-del" id="c-photo-del">Remove photo</button>';
+        const del=document.getElementById('c-photo-del');if(del)del.onclick=()=>{pendingPhoto=null;prev.innerHTML='';if(ex)ex.textContent='';if(lbl)lbl.textContent='\ud83d\udcf7 Add photo';};}
+      if(lbl)lbl.textContent='\ud83d\udcf7 Change photo';
+    }catch(e){if(lbl)lbl.textContent='\ud83d\udcf7 Add photo';alert('Could not read that image \u2014 try another file.');}
+  };}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)return;root._spWired=true;
   root.addEventListener('click',ev=>{
     const star=ev.target.closest('.st[data-act="rate"]');
@@ -1399,6 +1483,9 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)r
     else if(act==='catch'){openCatchSheet(id);}
     else if(act==='nav'){const s=spots.find(x=>x.id===id);if(s){const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);const url=iOS?('https://maps.apple.com/?daddr='+s.lat+','+s.lng+'&dirflg=d'):('https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'&travelmode=driving');window.open(url,'_blank');}}
   });});
+map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._photoWired)return;root._photoWired=true;
+  root.querySelectorAll('img.catch-thumb[data-photo]').forEach(im=>{const id=im.getAttribute('data-photo');
+    photoGet(id).then(du=>{if(du){im.src=du;im.style.cursor='zoom-in';im.onclick=ev=>{ev.stopPropagation();showPhotoLightbox(du);};}});});});
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
 document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
 (function(){const f=document.getElementById('sp-filter');if(f)f.oninput=renderSpots;const so=document.getElementById('sp-sort');if(so)so.onchange=renderSpots;})();
@@ -1811,8 +1898,11 @@ function buildAutoContours(){
     buildAutoContours();};})();
 
 /* ---------- BACKUP: export / import JSON ---------- */
-function exportBackup(){
-  const data={app:'woongarra',version:1,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})()};
+async function exportBackup(){
+  const photos={};
+  try{const ids={};spots.forEach(s=>(s.catches||[]).forEach(c=>{if(c&&c.photo)ids[c.photo]=1;}));
+    const keys=Object.keys(ids);if(keys.length){const all=await photoAll();keys.forEach(id=>{if(all[id])photos[id]=all[id];});}}catch(e){}
+  const data={app:'woongarra',version:2,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})(),photos:photos};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -1840,6 +1930,7 @@ function importBackup(file){
     const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
     if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     buildShade();
+    if(d.photos&&typeof d.photos==='object'){try{Object.keys(d.photos).forEach(id=>{const v=d.photos[id];if(typeof v==='string')photoPut(id,v);});}catch(e){}}
     alert('Imported '+ns+' new spot(s) and '+np+' new depth point(s). Matching IDs were updated.');
   }catch(e){alert('Could not read that backup file \u2014 is it a Woongarra export?');}};
   r.readAsText(file);
