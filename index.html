@@ -941,7 +941,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -970,7 +970,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v20 · 14 Jun 2026</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v21 · 14 Jun 2026</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div class="sp-tools"><input id="sp-filter" class="sp-filter" placeholder="Filter spots…" autocapitalize="off" autocorrect="off"><select id="sp-sort" class="sp-sort"><option value="name">A–Z</option><option value="rating">★ rating</option><option value="catches">most catches</option><option value="zone">zone</option><option value="depth">depth</option></select></div>
@@ -1360,12 +1360,20 @@ function openSpotSheet(s){s=s||{};
     if(s.id)spots=spots.map(x=>x.id===s.id?o:x);else spots.push(o);
     saveSpots();renderSpots();map.setView([o.lat,o.lng],16);});
   const pb=document.getElementById('f-place');if(pb)pb.onclick=()=>{closeSheet();placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};}
+/* ---------- Species picker (catch autocomplete; seeded QLD list + your additions) ---------- */
+const SPECIES_CATCH=["Yellowfin Bream", "Pikey Bream", "Tarwhine", "Luderick", "Eastern Rock Blackfish (Drummer)", "Silver Drummer", "Dusky Flathead", "Bartail Flathead", "Sand/Northern Flathead", "Flathead — unsure", "Sand (Summer) Whiting", "Trumpeter (Winter) Whiting", "Golden-lined Whiting", "Northern Whiting", "Tailor", "Swallowtail Dart", "Mulloway (Jewfish)", "Mullet (Sea)", "Giant Trevally (GT)", "Golden Trevally", "Bigeye Trevally", "Brassy Trevally", "Diamond (Pennant) Trevally", "Queenfish", "Trevally — unsure", "Spanish Mackerel", "Spotted Mackerel", "School Mackerel", "Grey Mackerel", "Longtail Tuna", "Mackerel Tuna (Mac Tuna)", "Australian Bonito", "Yellowtail Kingfish", "Cobia", "Mangrove Jack", "Fingermark (Golden Snapper)", "Moses Perch", "Stripey Snapper", "Red Emperor", "Crimson Snapper (Nannygai)", "Hussar", "Snapper (Squire)", "Spangled Emperor", "Red-throat Emperor", "Grass Emperor (Grass Sweetlip)", "Long-nose Emperor", "Painted Sweetlip", "Brown Sweetlip", "Emperor/sweetlip — unsure", "Estuary Cod", "Malabar (Blackspotted) Cod", "Greasy Rockcod", "Flowery Cod", "Maori Cod", "Coral Rockcod", "Cod/grouper — unsure", "Blackspot Tuskfish", "Venus Tuskfish", "Purple Tuskfish", "Harlequin Tuskfish", "Tuskfish/wrasse — unsure", "Coral Trout", "Parrotfish", "Surgeonfish", "Barramundi", "King Threadfin", "Blue Threadfin", "Tarpon (Oxeye Herring)", "Jungle Perch", "Australian Bass", "Golden Perch (Yellowbelly)", "Silver Perch", "Murray Cod", "Mary River Cod", "Saratoga (Southern)", "Saratoga (Gulf / Northern)", "Spangled Perch", "Sleepy Cod", "Eel-tailed Catfish", "Forktail Catfish", "Freshwater Mullet", "Redclaw (crayfish)", "Yabby", "Tilapia (introduced)", "European Carp (introduced)", "Freshwater fish — unsure", "Barred Javelin", "Spotted Javelin", "Silver Grunter", "Sooty Grunter (freshwater)", "Grunter/javelin — unsure", "Bull Shark", "Common Blacktip Shark", "Blacktip Reef Shark", "Spinner Shark", "Hammerhead", "Wobbegong", "Eastern Shovelnose Ray", "Giant Shovelnose Ray (Guitarfish)", "Estuary Stingray", "Cowtail Stingray", "Blue-spotted Maskray", "Shark — unsure", "Stingray/ray — unsure", "Mud Crab", "Blue Swimmer (Sand) Crab"];
+const SPU='woongarra_species_user_v1';
+function loadSpeciesUser(){try{return JSON.parse(localStorage.getItem(SPU))||[];}catch(e){return [];}}
+function speciesKey(n){return (n||'').toLowerCase().replace(/\s+/g,' ').trim();}
+function allSpecies(){return SPECIES_CATCH.concat(loadSpeciesUser());}
+function speciesOptions(){const seen={},out=[];allSpecies().forEach(function(n){const k=speciesKey(n);if(k&&!seen[k]){seen[k]=1;out.push('<option value="'+esc(n)+'">');}});return out.join('');}
+function canonSpecies(name){const k=speciesKey(name);if(!k)return '';const hit=allSpecies().find(function(x){return speciesKey(x)===k;});if(hit)return hit;const u=loadSpeciesUser();u.push(name.trim());try{localStorage.setItem(SPU,JSON.stringify(u));}catch(e){}return name.trim();}
 function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)return;
   const d=new Date();const today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   const hhmm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const body=fld('Date','<input id="c-date" class="fin" type="date" value="'+today+'">')
     +fld('Time','<input id="c-time" class="fin" type="time" value="'+hhmm+'">')
-    +fld('Species','<input id="c-species" class="fin" value="'+esc(s.species)+'">')
+    +fld('Species','<input id="c-species" class="fin" list="species-dl" autocomplete="off" value="'+esc(s.species)+'"><datalist id="species-dl">'+speciesOptions()+'</datalist>')
     +fld('Length (cm)','<input id="c-len" class="fin" inputmode="decimal">')
     +fld('Bait / lure','<input id="c-bait" class="fin">')
     +fld('Kept / released','<select id="c-kept" class="fin"><option value="kept">Kept</option><option value="released">Released</option></select>')
@@ -1373,7 +1381,7 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
   openSheet('Log catch \u2014 '+(s.name||'Spot'),body,()=>{const o={id:'c'+Date.now()+Math.floor(Math.random()*999),
     date:val('c-date'),time:val('c-time'),species:val('c-species'),len:val('c-len'),bait:val('c-bait'),
     kept:document.getElementById('c-kept').value,note:val('c-note')};
-    s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();    const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});}
+    o.species=canonSpecies(o.species);s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();    const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)return;root._spWired=true;
   root.addEventListener('click',ev=>{
     const star=ev.target.closest('.st[data-act="rate"]');
