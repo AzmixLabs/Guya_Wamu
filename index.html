@@ -931,6 +931,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .photo-lb{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
   .photo-lb.open{display:flex}
   .photo-lb img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 18px 60px -10px rgba(0,0,0,.9)}
+  /* feature-ID (4b Tier A): hint line under species field + look-alike compare overlay */
+  .c-feat{margin:-4px 0 11px}
+  .feat-line{font-size:11.5px;line-height:1.5;color:var(--ink-dim);background:rgba(63,208,201,.06);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .feat-line b{color:var(--accent);font-weight:600}
+  .feat-cmp{margin-top:7px;width:100%;border:1px dashed var(--accent);background:transparent;color:var(--accent);font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.3px;padding:9px;border-radius:8px;cursor:pointer}
+  .idov{position:fixed;inset:0;z-index:2900;background:rgba(0,0,0,.62);display:none;align-items:flex-end;justify-content:center;padding:0}
+  .idov.open{display:flex}
+  .idov-box{width:100%;max-width:560px;max-height:90vh;overflow:auto;-webkit-overflow-scrolling:touch;background:linear-gradient(180deg,#13222e,#0c1a24);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:6px 16px calc(18px + var(--safe-b));box-shadow:0 -18px 50px -16px rgba(0,0,0,.85)}
+  .idov-head{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:linear-gradient(180deg,#13222e 70%,rgba(19,34,46,0));padding:12px 0 10px;font-size:14px;font-weight:600}
+  .idov-x{margin-left:auto;border:1px solid var(--line);background:transparent;color:var(--ink-dim);width:32px;height:32px;border-radius:8px;font-size:14px;cursor:pointer;flex:none}
+  .idov-tell{font-size:12px;line-height:1.55;color:var(--ink);background:rgba(63,208,201,.07);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:11px}
+  .idov-card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:#0c1a24}
+  .idov-sp{font-weight:600;font-size:13px;margin-bottom:3px}
+  .idov-ft{font-size:11.5px;line-height:1.5;color:var(--ink-dim)}
+  .idov-note{font-size:11px;line-height:1.55;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+  .idov-note b{color:var(--accent)}
+  .idov-note a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
 </style>
 </head>
 <body>
@@ -955,7 +972,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14e</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14f</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1397,6 +1414,79 @@ function speciesKey(n){return (n||'').toLowerCase().replace(/\s+/g,' ').trim();}
 function allSpecies(){return SPECIES_CATCH.concat(loadSpeciesUser());}
 function speciesOptions(){const seen={},out=[];allSpecies().forEach(function(n){const k=speciesKey(n);if(k&&!seen[k]){seen[k]=1;out.push('<option value="'+esc(n)+'">');}});return out.join('');}
 function canonSpecies(name){const k=speciesKey(name);if(!k)return '';const hit=allSpecies().find(function(x){return speciesKey(x)===k;});if(hit)return hit;const u=loadSpeciesUser();u.push(name.trim());try{localStorage.setItem(SPU,JSON.stringify(u));}catch(e){}return name.trim();}
+/* ---------- FEATURE-ID (roadmap 4b Tier A) — offline feature hints + look-alike compare ----------
+   Suggestion only: field marks to review, never an ID verdict, never tied to keep/legal.
+   Confusion-set marks verified against Australian Museum / Fishes of Australia / NSW DPI / QLD DAF (Jun 2026). */
+function htmlEsc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const FEATURE_HINTS={
+ "Dusky Flathead":"One dark spot near the tail-fin edge; tail bluish-grey below, brown-spotted above. The biggest flathead; estuaries and sand.",
+ "Bartail Flathead":"Tail barred black-and-white with a yellow blotch at the top \u2014 no single dark spot.",
+ "Sand/Northern Flathead":"Smaller; tail finely barred or spotted, no big single spot. Open sand, often in numbers.",
+ "Yellowfin Bream":"Silver to olive; pectoral, pelvic and anal fins yellow. Deeper body, steeper snout.",
+ "Pikey Bream":"Darker grey/black body and fins (no yellow), with stouter dorsal and anal spines. Tropical estuaries.",
+ "Tarwhine":"Bream-shaped but with gold horizontal lines along the scale rows and a rounder, blunter snout.",
+ "Sand (Summer) Whiting":"Uniformly silver with NO body blotches; fins pale yellowish; a dark blotch at the pectoral-fin base.",
+ "Trumpeter (Winter) Whiting":"Rows of dark brownish blotches along the back and sides; silver band over a paler belly.",
+ "Golden-lined Whiting":"Silver with a golden stripe running along the side; yellow pelvic/anal fins; rounder belly profile.",
+ "Northern Whiting":"Silvery with a plain silver midline band, no blotches and no dark pectoral blotch. More tropical.",
+ "Spanish Mackerel":"Narrow wavy vertical bars that run below the lateral line, which dips ABRUPTLY under the 2nd dorsal. Largest mackerel.",
+ "Spotted Mackerel":"Rows of small round spots; first dorsal fin steely blue (turns black after capture); blue inside the pectorals.",
+ "School Mackerel":"Bigger grey/brown blotches (fewer than a spotty's); first dorsal jet-black front and rear; lateral line dips GRADUALLY.",
+ "Grey Mackerel":"Plain dark bluish-grey with little or no spotting in adults; juveniles faintly barred.",
+ "Giant Trevally (GT)":"Steep, bull-like head; heavy bony scutes on the rear of the lateral line (armoured tail-wrist); silver to near-black. No spot on the gill cover.",
+ "Golden Trevally":"Golden body with black bars (juveniles bright yellow); rubbery, toothless, protrusible mouth \u2014 unmistakable.",
+ "Bigeye Trevally":"Large eye; a small dark spot on the rear of the gill cover; white/black tip on the 2nd dorsal lobe. Schools by day.",
+ "Brassy Trevally":"Brassy-green sheen; white-edged lower tail lobe; usually a small dark spot high on the gill cover. Often mistaken for a small GT.",
+ "Queenfish":"Long, slim, very compressed body with a row of dark blotches along the side \u2014 shaped nothing like the deep-bodied trevallies.",
+ "Blackspot Tuskfish":"Bluish-green; a small black spot at the base of the last dorsal spine; rows of blue scale-spots down the rear sides.",
+ "Venus Tuskfish":"Greenish-brown over yellowish, reddish around the pectoral; blue spots on the body scales; no black side-blotch.",
+ "Purple Tuskfish":"Bluish-purple sheen, large scales, thick lips; the smaller southern-QLD 'grass parrot'.",
+ "Harlequin Tuskfish":"Unmistakable: about 8 pairs of blue-edged orange bands and bright blue teeth. Reef, to ~30 cm.",
+ "Estuary Cod":"Brown over white with ~5 oblique 'H' bars; many small ORANGE-brown spots over head, body and fins.",
+ "Malabar (Blackspotted) Cod":"Like estuary cod but darker, with BLACK spots rather than orange. Grows enormous.",
+ "Greasy Rockcod":"A reef cod whose common names overlap heavily with estuary and malabar cod \u2014 genuinely easy to muddle. Treat with caution.",
+ "Flowery Cod":"Dense honeycomb of close-set brown polygonal spots, plus a dark saddle on the tail-wrist.",
+ "Coral Trout":"Reddish to orange with many small, well-separated blue spots over the body and head.",
+ "Mangrove Jack":"Bronze-red; prominent canine teeth; juveniles show pale bars and a dark stripe through the eye.",
+ "Mulloway (Jewfish)":"Silver-bronze; often a line of small silver spots along the lateral line; soft 'papery' mouth lining.",
+ "Snapper (Squire)":"Pinkish-red with scattered blue spots over the back; older fish grow a bony forehead and nose bump.",
+ "Tailor":"Greenish-silver, deeply forked tail, jutting lower jaw lined with sharp cutting teeth."
+};
+const LOOKALIKE_SETS=[
+ {key:"flathead",title:"Flathead look-alikes",members:["Dusky Flathead","Bartail Flathead","Sand/Northern Flathead"],triggers:["Flathead \u2014 unsure"],
+  tell:"Read the TAIL. Dusky: one dark spot near the edge. Bartail: black/white bars plus a yellow top blotch. Sand/northern: fine bars or spots, no big single spot."},
+ {key:"bream",title:"Bream & tarwhine",members:["Yellowfin Bream","Pikey Bream","Tarwhine"],
+  tell:"Yellow fins = yellowfin bream. Grey/black fins with stout spines = pikey (tropical). Gold horizontal lines and a blunt, round snout = tarwhine."},
+ {key:"whiting",title:"Whiting \u2014 summer vs winter",members:["Sand (Summer) Whiting","Trumpeter (Winter) Whiting","Golden-lined Whiting","Northern Whiting"],
+  tell:"Body blotches = trumpeter (winter). Plain silver with a dark pectoral-base blotch = sand (summer). Gold side-stripe = golden-lined. QLD Fisheries warns summer and winter whiting are routinely mixed up \u2014 and their size/possession rules differ."},
+ {key:"mackerel",title:"Mackerel look-alikes",members:["Spanish Mackerel","Spotted Mackerel","School Mackerel","Grey Mackerel"],
+  tell:"Wavy bars + abrupt lateral-line dip = Spanish. Small round spots + blue first dorsal = spotted. Bigger grey blotches + jet-black first dorsal + gradual lateral-line dip = school. Plain grey = grey mackerel."},
+ {key:"trevally",title:"Trevally & queenfish",members:["Giant Trevally (GT)","Golden Trevally","Bigeye Trevally","Brassy Trevally","Queenfish"],triggers:["Trevally \u2014 unsure"],
+  tell:"Toothless rubbery mouth + gold/black bars = golden. Dark spot on the gill cover = bigeye (a GT never has one). White-edged lower tail lobe = brassy. Long slim blotched body = queenfish. Steep head + heavy tail-scutes + no gill spot = GT."},
+ {key:"tuskfish",title:"Tuskfish",members:["Blackspot Tuskfish","Venus Tuskfish","Purple Tuskfish","Harlequin Tuskfish"],triggers:["Tuskfish/wrasse \u2014 unsure"],
+  tell:"Orange bands + blue teeth = harlequin. Small black spot at the last dorsal spine = blackspot. Blue scale-spots and a reddish pectoral, no blotch = venus. Purple sheen, thick lips, small = purple."},
+ {key:"cod",title:"Cods & groupers (a hard set)",members:["Estuary Cod","Malabar (Blackspotted) Cod","Greasy Rockcod","Flowery Cod"],triggers:["Cod/grouper \u2014 unsure"],
+  tell:"Orange-brown spots = estuary cod; the same shape with BLACK spots is malabar. Honeycomb spots + a tail-wrist saddle = flowery. These common names overlap and even formal records get them wrong \u2014 when in doubt, log 'Cod/grouper \u2014 unsure' and confirm officially."}
+];
+function featureHintFor(name){const k=speciesKey(name);if(!k)return '';const hit=Object.keys(FEATURE_HINTS).find(function(key){return speciesKey(key)===k;});return hit?FEATURE_HINTS[hit]:'';}
+function lookalikeSetFor(name){const k=speciesKey(name);if(!k)return null;return LOOKALIKE_SETS.find(function(set){return set.members.some(function(m){return speciesKey(m)===k;})||(set.triggers||[]).some(function(t){return speciesKey(t)===k;});})||null;}
+function updateCatchFeatureHint(){const el=document.getElementById('c-feat');if(!el)return;
+  const v=val('c-species');const hint=featureHintFor(v);const set=lookalikeSetFor(v);let h='';
+  if(hint)h+='<div class="feat-line"><b>Look for:</b> '+htmlEsc(hint)+'</div>';
+  if(set)h+='<button type="button" class="feat-cmp" data-cmp="'+set.key+'">\u21c4 Compare look-alikes ('+set.members.length+')</button>';
+  el.innerHTML=h;}
+function openIdCompare(key){const set=LOOKALIKE_SETS.find(function(s){return s.key===key;});if(!set)return;
+  let ov=document.getElementById('id-ov');
+  if(!ov){ov=document.createElement('div');ov.id='id-ov';ov.className='idov';document.body.appendChild(ov);
+    ov.addEventListener('click',function(ev){if(ev.target===ov||ev.target.closest('.idov-x'))ov.classList.remove('open');});}
+  const cards=set.members.map(function(m){return '<div class="idov-card"><div class="idov-sp">'+htmlEsc(m)+'</div><div class="idov-ft">'+htmlEsc(featureHintFor(m)||'')+'</div></div>';}).join('');
+  ov.innerHTML='<div class="idov-box">'
+    +'<div class="idov-head"><span>'+htmlEsc(set.title)+'</span><button type="button" class="idov-x" aria-label="Close">\u2715</button></div>'
+    +'<div class="idov-tell">'+htmlEsc(set.tell)+'</div>'
+    +cards
+    +'<div class="idov-note">Features to review, not an ID. Tools, water and life-stage all shift these marks \u2014 confirm the species (and any current size, possession or closure rule) against the official <b>Qld Fishing 2.0</b> app or <a href="https://www.qld.gov.au/recreation/activities/boating-fishing/recreational-fishing" target="_blank" rel="noopener">Fisheries Queensland</a> before you decide. Not sure? Log it as \u201c\u2014 unsure\u201d.</div>'
+    +'</div>';
+  ov.classList.add('open');}
 /* ---------- CATCH PHOTOS (IndexedDB store + EXIF + downscale) ---------- */
 const PHOTO_DB='woongarra_photos_v1';
 function photoOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(PHOTO_DB,1);
@@ -1461,6 +1551,7 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
     +fld('Date','<input id="c-date" class="fin" type="date" value="'+today+'">')
     +fld('Time','<input id="c-time" class="fin" type="time" value="'+hhmm+'">')
     +fld('Species','<input id="c-species" class="fin" list="species-dl" autocomplete="off" value="'+esc(s.species)+'"><datalist id="species-dl">'+speciesOptions()+'</datalist>')
+    +'<div id="c-feat" class="c-feat"></div>'
     +fld('Length (cm)','<input id="c-len" class="fin" inputmode="decimal">')
     +fld('Bait / lure','<input id="c-bait" class="fin">')
     +fld('Kept / released','<select id="c-kept" class="fin"><option value="kept">Kept</option><option value="released">Released</option></select>')
@@ -1489,7 +1580,11 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
         const del=document.getElementById('c-photo-del');if(del)del.onclick=()=>{pendingPhoto=null;prev.innerHTML='';if(ex)ex.textContent='';if(lbl)lbl.textContent='\ud83d\udcf7 Add photo';};}
       if(lbl)lbl.textContent='\ud83d\udcf7 Change photo';
     }catch(e){if(lbl)lbl.textContent='\ud83d\udcf7 Add photo';alert('Could not read that image \u2014 try another file.');}
-  };}
+  };
+  const spEl=document.getElementById('c-species'),featEl=document.getElementById('c-feat');
+  if(spEl){spEl.addEventListener('input',updateCatchFeatureHint);spEl.addEventListener('change',updateCatchFeatureHint);}
+  if(featEl)featEl.addEventListener('click',ev=>{const b=ev.target.closest('.feat-cmp[data-cmp]');if(b)openIdCompare(b.dataset.cmp);});
+  updateCatchFeatureHint();}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)return;root._spWired=true;
   root.addEventListener('click',ev=>{
     const star=ev.target.closest('.st[data-act="rate"]');
