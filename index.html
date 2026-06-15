@@ -903,10 +903,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .windrow.bad{background:rgba(255,82,82,.14);border:1px solid rgba(255,82,82,.5);color:#ffb3aa}
   .windrow.warn{background:rgba(255,179,0,.12);border:1px solid rgba(255,179,0,.45);color:#ffd98a}
   .windrow.ok{background:rgba(80,220,140,.1);border:1px solid rgba(80,220,140,.4);color:#a7e8c0}
-  .sp-tools{display:flex;gap:6px;margin-top:9px}
-  .sp-filter{flex:1;min-width:0;background:#0c1a24;border:1px solid var(--line);border-radius:8px;color:#d6e4ea;font-size:11px;padding:6px 8px;font-family:inherit}
-  .sp-filter::placeholder{color:#5b7280}
-  .sp-sort{background:#0c1a24;border:1px solid var(--line);border-radius:8px;color:#9fd0ff;font-size:10.5px;padding:6px 6px;font-family:"IBM Plex Mono",monospace}
   .bb-tidesvg{width:100%;height:auto;display:block;background:#0b1822;border:1px solid var(--line);border-radius:8px}
   .bb-tidekey{display:flex;gap:12px;justify-content:center;font-size:9px;color:#8aa3b0;margin-top:4px}
   .lnk{background:none;border:0;color:var(--depth);text-decoration:underline;cursor:pointer;font-size:inherit;padding:0;font-family:inherit}
@@ -993,7 +989,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14i</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14j</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1016,7 +1012,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button class="rng-b rng-on" data-km="0">All</button>
         <button class="rng-b" id="rec-geo" style="margin-left:auto">📍 My location</button>
       </div>
-      <div id="rec-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px"></div>
       <div id="rec-origin" class="bb-dim" style="font-size:9.5px;line-height:1.4;margin-top:5px">Measured from the map centre — pan to your start point (home, or up at 1770). No GPS used.</div>
       <div class="bb-out" id="rec-out" style="margin-top:8px"><span class="bb-dim">Ranks your saved spots for the date picked in Best bite times \u2014 tide match, bite windows, ratings, catches, and live wind once you've run a wind check.</span></div>
     </div>
@@ -1035,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v21 · 14 Jun 2026</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
-      <div class="sp-tools"><input id="sp-filter" class="sp-filter" placeholder="Filter spots…" autocapitalize="off" autocorrect="off"><select id="sp-sort" class="sp-sort"><option value="name">A–Z</option><option value="rating">★ rating</option><option value="catches">most catches</option><option value="zone">zone</option><option value="depth">depth</option></select></div>
+      <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
       <div class="dp-list" id="sp-list"></div>
     </div>
     <div class="blk"><div class="lbl">Emergency — position</div>
@@ -1375,6 +1370,57 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
   return h;}
+/* ---------- saved-spots species filter (chips drive the list) ---------- */
+let spotSpecies=new Set();            /* selected target species: speciesKey or 'grp:Group' (session-only, not stored) */
+let spotSpeciesNameByKey={};
+function spkEsc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function spotSpeciesMatch(s){if(!spotSpecies.size)return true;
+  const tk=speciesKey(s.species||''),tg=groupOfSpecies(s.species||'');
+  const cat=(s.catches||[]).map(c=>({k:speciesKey(c.species||''),g:groupOfSpecies(c.species||'')}));
+  let any=false;
+  spotSpecies.forEach(sel=>{if(sel.indexOf('grp:')===0){const g=sel.slice(4);if(tg===g||cat.some(c=>c.g===g))any=true;}
+    else{if(tk===sel||cat.some(c=>c.k===sel))any=true;}});
+  return any;}
+function renderSpotSpeciesChips(){const wrap=document.getElementById('sp-species');if(!wrap)return;
+  const dataNames={};const add=n=>{if(!n)return;const k=speciesKey(n);if(k&&!dataNames[k])dataNames[k]=String(n).trim();};
+  spots.forEach(s=>{add(s.species);(s.catches||[]).forEach(c=>add(c.species));});
+  spotSpeciesNameByKey={};
+  (typeof SPECIES_GROUPS!=='undefined'?SPECIES_GROUPS:[]).forEach(g=>{spotSpeciesNameByKey['grp:'+g.g]=g.g+' (all)';});
+  (typeof SPECIES_CATCH!=='undefined'?SPECIES_CATCH:[]).forEach(n=>{const k=speciesKey(n);if(!spotSpeciesNameByKey[k])spotSpeciesNameByKey[k]=n;});
+  Object.keys(dataNames).forEach(k=>{spotSpeciesNameByKey[k]=dataNames[k];});
+  spotSpecies.forEach(sel=>{if(!spotSpeciesNameByKey[sel])spotSpeciesNameByKey[sel]=(sel.indexOf('grp:')===0?sel.slice(4)+' (all)':sel);});
+  let h='<span class="bb-dim" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase">Filter by species</span>';
+  Array.from(spotSpecies).forEach(sel=>{h+='<button class="rng-b sp-chip rng-on" data-spk="'+spkEsc(sel)+'">'+spkEsc(spotSpeciesNameByKey[sel]||sel)+' \u2715</button>';});
+  Object.keys(dataNames).sort((a,b)=>dataNames[a].localeCompare(dataNames[b])).forEach(k=>{if(!spotSpecies.has(k))h+='<button class="rng-b sp-chip sp-quick" data-spk="'+spkEsc(k)+'">'+spkEsc(dataNames[k])+'</button>';});
+  h+='<button class="rng-b sp-add" id="sp-sp-add" style="margin-left:auto">+ species</button>';
+  if(spotSpecies.size)h+='<button class="rng-b sp-clear" id="sp-sp-clear">clear</button>';
+  if(!Object.keys(dataNames).length&&!spotSpecies.size)h+='<span class="bb-dim" style="width:100%;font-size:9.5px;line-height:1.4">No target or caught species on your spots yet \u2014 tap <b>+ species</b> to filter by any species.</span>';
+  wrap.innerHTML=h;}
+function spotPickEnsure(){let ov=document.getElementById('sp-pick-ov');if(ov)return ov;
+  ov=document.createElement('div');ov.id='sp-pick-ov';ov.className='sppick-ov';
+  ov.innerHTML='<div class="sppick" role="dialog" aria-label="Filter spots by species">'
+    +'<div class="sppick-h"><b>Filter by species</b><button class="sppick-x" id="sp-pick-x" aria-label="Close">\u2715</button></div>'
+    +'<input class="sppick-s" id="sp-pick-s" placeholder="Search species or group\u2026" autocomplete="off" autocapitalize="off">'
+    +'<div class="sppick-l" id="sp-pick-l"></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)spotPickClose();});
+  document.getElementById('sp-pick-x').onclick=spotPickClose;
+  document.getElementById('sp-pick-s').addEventListener('input',()=>spotPickRender(document.getElementById('sp-pick-s').value));
+  document.getElementById('sp-pick-l').addEventListener('click',e=>{const row=e.target.closest('.sppick-row[data-spk]');if(!row)return;
+    const k=row.getAttribute('data-spk');if(spotSpecies.has(k))spotSpecies.delete(k);else spotSpecies.add(k);
+    renderSpots();spotPickRender(document.getElementById('sp-pick-s').value);});
+  return ov;}
+function spotPickRender(q){const l=document.getElementById('sp-pick-l');if(!l)return;q=(q||'').toLowerCase().trim();
+  const groups=(typeof SPECIES_GROUPS!=='undefined'?SPECIES_GROUPS:[]);let h='';
+  groups.forEach(g=>{const gkey='grp:'+g.g,gHit=g.g.toLowerCase().indexOf(q)>=0;
+    const members=g.m.filter(n=>!q||gHit||n.toLowerCase().indexOf(q)>=0);
+    if(q&&!gHit&&!members.length)return;
+    h+='<div class="sppick-grp">'+spkEsc(g.g)+'</div>';
+    h+='<div class="sppick-row all'+(spotSpecies.has(gkey)?' on':'')+'" data-spk="'+spkEsc(gkey)+'">\u25a4 All '+spkEsc(g.g.toLowerCase())+'<span class="tk">\u2713</span></div>';
+    (q?members:g.m).forEach(n=>{const k=speciesKey(n);h+='<div class="sppick-row'+(spotSpecies.has(k)?' on':'')+'" data-spk="'+spkEsc(k)+'">'+spkEsc(n)+'<span class="tk">\u2713</span></div>';});});
+  l.innerHTML=h||'<div class="sppick-grp">No match for \u201c'+spkEsc(q)+'\u201d</div>';}
+function spotPickOpen(){spotPickEnsure();spotPickRender('');const s=document.getElementById('sp-pick-s');if(s)s.value='';document.getElementById('sp-pick-ov').classList.add('on');if(s)setTimeout(()=>{try{s.focus();}catch(e){}},60);}
+function spotPickClose(){const ov=document.getElementById('sp-pick-ov');if(ov)ov.classList.remove('on');}
 function spotSorter(k,zoneOf){
   const az=(a,b)=>(a.name||'').localeCompare(b.name||'');
   if(k==='rating')return (a,b)=>(+b.rating||0)-(+a.rating||0)||az(a,b);
@@ -1390,11 +1436,10 @@ function renderSpots(){spotLayer.clearLayers();const list=document.getElementByI
     mk.on('dragend',function(){const ll=mk.getLatLng();s.lat=+ll.lat.toFixed(6);s.lng=+ll.lng.toFixed(6);saveSpots();
       const nz=zoneAt(s.lat,s.lng);renderSpots();spotLayer.eachLayer(l=>{if(l._spotId===s.id)l.openPopup();});
       if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);});});
-  const q=((document.getElementById('sp-filter')||{}).value||'').toLowerCase().trim();
-  const sortKey=((document.getElementById('sp-sort')||{}).value)||'name';
+  renderSpotSpeciesChips();
   let arr=spots.slice();
-  if(q)arr=arr.filter(s=>((s.name||'')+' '+(s.species||'')+' '+(s.structure||'')+' '+(s.notes||'')+' '+(s.tide||'')).toLowerCase().indexOf(q)>=0);
-  arr.sort(spotSorter(sortKey,zoneOf));
+  if(spotSpecies.size)arr=arr.filter(spotSpeciesMatch);
+  arr.sort(spotSorter('name',zoneOf));
   arr.forEach(s=>{const z=zoneOf(s);const st=z?(STYLES[z.zt]||{}):{};const n=(s.catches||[]).length;
     const ws=windStatus(s);const wb=(ws&&ws.lvl!=='ok')?'<span class="wind-b '+ws.lvl+'">\u26a0</span>':'';
     const row=document.createElement('div');row.className='dp-item';row.dataset.spot=s.id;
@@ -1405,7 +1450,7 @@ function renderSpots(){spotLayer.clearLayers();const list=document.getElementByI
     row.querySelector('.x').onclick=()=>{if(confirm('Delete this spot and its '+n+' catch record(s)?')){spots=spots.filter(x=>x.id!==s.id);saveSpots();renderSpots();}};
     row.querySelector('.n').onclick=()=>{const mk=mkById[s.id];map.setView([s.lat,s.lng],16);if(mk)mk.openPopup();};
     list.appendChild(row);});
-  document.getElementById('sp-count').textContent=spots.length;}
+  document.getElementById('sp-count').textContent=(spotSpecies.size?(arr.length+'/'+spots.length):spots.length);}
 function openSpotSheet(s){s=s||{};
   const coordVal=(s.lat!=null&&s.lng!=null)?(toDDM(s.lat,true)+' '+toDDM(s.lng,false)):'';
   const tides=['Run-in','Run-out','High','Low','Top of tide','Bottom of tide'];
@@ -1651,7 +1696,14 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._photoWire
     photoGet(id).then(du=>{if(du){im.src=du;im.style.cursor='zoom-in';im.onclick=ev=>{ev.stopPropagation();showPhotoLightbox(du);};}});});});
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
 document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.classList.add('placing');if(window.matchMedia('(max-width:600px)').matches)setCollapsed(true);};
-(function(){const f=document.getElementById('sp-filter');if(f)f.oninput=renderSpots;const so=document.getElementById('sp-sort');if(so)so.onchange=renderSpots;})();
+(function(){const wrap=document.getElementById('sp-species');if(!wrap)return;
+  wrap.addEventListener('click',e=>{
+    if(e.target.closest('#sp-sp-add')){spotPickOpen();return;}
+    if(e.target.closest('#sp-sp-clear')){spotSpecies.clear();renderSpots();return;}
+    const b=e.target.closest('.sp-chip[data-spk]');if(!b)return;const k=b.getAttribute('data-spk');
+    if(spotSpecies.has(k))spotSpecies.delete(k);else spotSpecies.add(k);
+    renderSpots();});
+  renderSpotSpeciesChips();})();
 (function(){const wb=document.getElementById('sp-wind'),o=document.getElementById('sp-wind-out');if(!wb||!o)return;
   wb.onclick=async()=>{o.innerHTML='Checking live wind at Bargara\u2026';
     try{const u='https://api.open-meteo.com/v1/forecast?latitude=-24.847&longitude=152.482&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=Australia%2FBrisbane';
