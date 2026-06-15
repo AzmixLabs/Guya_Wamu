@@ -948,6 +948,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .idov-note{font-size:11px;line-height:1.55;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
   .idov-note b{color:var(--accent)}
   .idov-note a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+  /* target-species filter (best spots): blue, to distinguish from teal range bands */
+  .sp-chip.rng-on{background:var(--depth);border-color:var(--depth);color:#042430}
+  .sp-clear{color:var(--ink-dim)}
+  .sp-match{display:block;margin-top:2px;font-size:9.5px;line-height:1.4;color:var(--depth);letter-spacing:.02em}
 </style>
 </head>
 <body>
@@ -972,7 +976,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14f</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14g</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -995,6 +999,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button class="rng-b rng-on" data-km="0">All</button>
         <button class="rng-b" id="rec-geo" style="margin-left:auto">📍 My location</button>
       </div>
+      <div id="rec-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px"></div>
       <div id="rec-origin" class="bb-dim" style="font-size:9.5px;line-height:1.4;margin-top:5px">Measured from the map centre — pan to your start point (home, or up at 1770). No GPS used.</div>
       <div class="bb-out" id="rec-out" style="margin-top:8px"><span class="bb-dim">Ranks your saved spots for the date picked in Best bite times \u2014 tide match, bite windows, ratings, catches, and live wind once you've run a wind check.</span></div>
     </div>
@@ -2238,9 +2243,12 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
       `<div class="bb-note" style="opacity:.75">AEST. Astronomy on-device; tides © Commonwealth of Australia, Bureau of Meteorology 2026–27 predictions, LAT datum (modified product — BoM gives no warranty and excludes liability). A planning aid, not a guarantee.</div>`;
     if(recOn)rankSpots();
   }
+  let recSpecies=new Set();      /* selected target species (speciesKey set, session-only, not stored) */
+  let recSpeciesNameByKey={};
   function populate(){const sel=$('bb-spot');if(!sel)return;const cur=sel.value;
     sel.innerHTML='<option value="">Coast-wide</option>'+(typeof spots!=='undefined'?spots:[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(s=>`<option value="${s.id}">${(s.name||'spot').replace(/[<>]/g,'')}</option>`).join('');
-    if(cur)sel.value=cur;}
+    if(cur)sel.value=cur;
+    renderSpeciesChips();}
   window.bbRefreshSpots=populate;
   const todayAEST=()=>new Date(Date.now()+10*3600000).toISOString().slice(0,10);
   const di=$('bb-date');if(di){di.value=todayAEST();di.min='2026-01-01';di.max='2027-12-31';di.onchange=render;}
@@ -2255,6 +2263,28 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
   let recBandKm=0;      /* 0 = all; otherwise straight-line km cap (~km/80 = hours drive) */
   let recOriginLL=null; /* null = use live map centre; else [lat,lng] one-shot GPS, not stored */
   function recOrigin(){return recOriginLL||[map.getCenter().lat,map.getCenter().lng];}
+  function speciesEsc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function spKey(n){return (typeof speciesKey==='function')?speciesKey(n||''):String(n||'').toLowerCase().replace(/\s+/g,' ').trim();}
+  function renderSpeciesChips(){const wrap=$('rec-species');if(!wrap)return;
+    const list=(typeof spots!=='undefined'?spots:[]);const nameByKey={};
+    const add=n=>{if(!n)return;const k=spKey(n);if(k&&!nameByKey[k])nameByKey[k]=String(n).trim();};
+    list.forEach(s=>{add(s.species);(s.catches||[]).forEach(c=>add(c.species));});
+    recSpeciesNameByKey=nameByKey;
+    Array.from(recSpecies).forEach(k=>{if(!nameByKey[k])recSpecies.delete(k);}); /* drop selections no longer in data */
+    const lbl='<span class="bb-dim" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase">';
+    const keys=Object.keys(nameByKey).sort((a,b)=>nameByKey[a].localeCompare(nameByKey[b]));
+    if(!keys.length){wrap.innerHTML=lbl+'Target species \u2014 set a spot\u2019s target or log a catch to filter by species</span>';return;}
+    let h=lbl+'Target species (filter)</span>';
+    h+=keys.map(k=>'<button class="rng-b sp-chip'+(recSpecies.has(k)?' rng-on':'')+'" data-spk="'+speciesEsc(k)+'">'+speciesEsc(nameByKey[k])+'</button>').join('');
+    if(recSpecies.size)h+='<button class="rng-b sp-clear" id="rec-sp-clear" style="margin-left:auto">clear</button>';
+    wrap.innerHTML=h;}
+  function speciesMatch(s){if(!recSpecies.size)return {match:true,bump:0,label:''};
+    const tk=spKey(s.species);const counts={};
+    (s.catches||[]).forEach(c=>{const k=spKey(c.species);if(recSpecies.has(k))counts[k]=(counts[k]||0)+1;});
+    const parts=[];let bump=0,any=false;
+    recSpecies.forEach(k=>{const n=counts[k]||0,isT=(tk===k);if(n>0||isT){any=true;bump+=n*0.5+(isT?0.6:0);
+      const nm=recSpeciesNameByKey[k]||k;parts.push(nm+(n>0?(' \u00d7'+n):(isT?' (target)':'')));}});
+    return {match:any,bump:bump,label:parts.join(' \u00b7 ')};}
   function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;
     if(!z)return '<span class="bb-dim">outside mapped zones — verify yourself</span>';
     return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>');}
@@ -2279,7 +2309,11 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
   function rankSpots(){const out=$('rec-out');if(!out)return;
     const ymd=di?di.value:null;if(!ymd){out.innerHTML='<span class="bb-dim">Pick a date in Best bite times first.</span>';return;}
     let scored=scoreSpotsFor(ymd);
-    if(!scored.length){out.innerHTML='<span class="bb-dim">No saved spots yet — add some, then rank.</span>';return;}
+    const rawCount=scored.length;
+    if(recSpecies.size){scored=scored.map(r=>{const m=speciesMatch(r.s);r._sp=m;r.sc+=m.bump;return r;}).filter(r=>r._sp.match).sort((a,b)=>b.sc-a.sc);}
+    if(!scored.length){
+      const selN=Array.from(recSpecies).map(k=>(recSpeciesNameByKey[k]||k)).join(', ').replace(/[<>]/g,'');
+      out.innerHTML='<span class="bb-dim">'+((recSpecies.size&&rawCount)?('None of your saved spots target or have caught '+(selN||'those species')+' \u2014 clear or change the species filter, or log a catch there first.'):'No saved spots yet — add some, then rank.')+'</span>';return;}
     const org=recOrigin();
     scored.forEach(r=>{r.km=(r.s&&r.s.lat!=null&&r.s.lng!=null)?map.distance(org,[r.s.lat,r.s.lng])/1000:null;});
     let shown=scored;
@@ -2288,8 +2322,8 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
     if(!shown.length){out.innerHTML='<span class="bb-dim">No spots within ~'+Math.round(recBandKm/80)+' h of here. Widen the range, or pan the map closer.</span>';return;}
     const windLive=shown[0].windLive;
     const distTxt=r=>{if(r.km==null)return '';const t=r.km/80,th=t>=1?(Math.round(t*10)/10)+' h':Math.round(t*60)+' min';return '<br><span class="bb-dim" style="font-size:9px">\u2248'+(r.km<10?(Math.round(r.km*10)/10):Math.round(r.km))+' km \u00b7 ~'+th+' drive (rough)</span>';};
-    out.innerHTML=shown.map((r,i)=>'<div class="bb-line" style="align-items:flex-start"><span class="bb-k">'+(i+1)+'. '+(r.s.name||'spot').replace(/[<>]/g,'')+'</span><span class="bb-v" style="text-align:right">'+(r.best?('fish <b>'+r.best+'</b><br>'):'')+(r.why.join(' · ')||'no data yet')+'<br><span style="font-size:9.5px">'+zoneTag(r.s)+'</span>'+distTxt(r)+'</span></div>').join('')
-      +'<div class="bb-note" style="opacity:.8">Scored from your ratings, catches and tide notes vs this date\u2019s tides and bite windows'+(windLive?', plus live wind':'')+'.'+(windLive?'':' Run a \u201cWind check vs spots\u201d to factor wind in.')+(recOriginLL?' Distances from your one-shot location (not stored).':' Distances from the map centre.')+' Drive time is a rough straight-line estimate. Zone shown for awareness only \u2014 confirm the rules on the official map yourself.</div>';}
+    out.innerHTML=shown.map((r,i)=>'<div class="bb-line" style="align-items:flex-start"><span class="bb-k">'+(i+1)+'. '+(r.s.name||'spot').replace(/[<>]/g,'')+'</span><span class="bb-v" style="text-align:right">'+(r.best?('fish <b>'+r.best+'</b><br>'):'')+(r.why.join(' · ')||'no data yet')+(r._sp&&r._sp.label?'<span class="sp-match">\u25a3 '+r._sp.label.replace(/[<>]/g,'')+'</span>':'')+'<br><span style="font-size:9.5px">'+zoneTag(r.s)+'</span>'+distTxt(r)+'</span></div>').join('')
+      +'<div class="bb-note" style="opacity:.8">'+(recSpecies.size?('Filtered to spots that target or have caught '+Array.from(recSpecies).map(k=>(recSpeciesNameByKey[k]||k)).join(', ').replace(/[<>]/g,'')+'. '):'')+'Scored from your ratings, catches and tide notes vs this date\u2019s tides and bite windows'+(windLive?', plus live wind':'')+'.'+(windLive?'':' Run a \u201cWind check vs spots\u201d to factor wind in.')+(recOriginLL?' Distances from your one-shot location (not stored).':' Distances from the map centre.')+' Drive time is a rough straight-line estimate. Zone shown for awareness only \u2014 confirm the rules on the official map yourself.</div>';}
   const rb=$('rec-btn');if(rb)rb.onclick=()=>{recOn=true;rankSpots();};
   document.querySelectorAll('#rec-range .rng-b[data-km]').forEach(b=>{b.onclick=()=>{recBandKm=parseFloat(b.getAttribute('data-km'))||0;
     document.querySelectorAll('#rec-range .rng-b[data-km]').forEach(x=>x.classList.toggle('rng-on',x===b));recOn=true;rankSpots();};});
@@ -2299,6 +2333,11 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
     rg.textContent='\u2026';
     navigator.geolocation.getCurrentPosition(p=>{recOriginLL=[p.coords.latitude,p.coords.longitude];rg.textContent='\u{1F4CD} My location';rg.classList.add('rng-on');if(oo)oo.textContent='Measured from your current location — a one-shot fix, not stored and not sent anywhere. Tap again for map centre.';recOn=true;rankSpots();},
       ()=>{rg.textContent='\u{1F4CD} My location';if(oo)oo.textContent='Couldn\u2019t get a fix — using the map centre instead.';recOn=true;rankSpots();},{enableHighAccuracy:false,timeout:8000,maximumAge:60000});};})();
+  (function(){const sw=$('rec-species');if(!sw)return;sw.addEventListener('click',e=>{
+    const clr=e.target.closest('#rec-sp-clear');if(clr){recSpecies.clear();renderSpeciesChips();recOn=true;rankSpots();return;}
+    const b=e.target.closest('.sp-chip[data-spk]');if(!b)return;const k=b.getAttribute('data-spk');
+    if(recSpecies.has(k))recSpecies.delete(k);else recSpecies.add(k);
+    renderSpeciesChips();recOn=true;rankSpots();});})();
   /* ---- Plan: next 48 h ---- */
   function planFor(ymd,label){
     const ev=compute(ymd,-24.847,152.482);
