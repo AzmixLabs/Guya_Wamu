@@ -993,7 +993,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14h</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14i</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1042,8 +1042,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="em-btn">📍 Get my position</button></div>
       <div class="bb-out" id="em-out" style="margin-top:8px"><span class="bb-dim">Live GPS in DDM + decimal with copy / SMS, so someone always knows exactly where you are on the rocks. In an emergency call Triple Zero (000).</span></div>
     </div>
-    <div class="blk"><div class="lbl">Catch analytics</div>
-      <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Analyse my catches</button></div>
+    <div class="blk"><div class="lbl">Your patterns</div>
+      <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Show my patterns</button></div>
       <div class="bb-out" id="ca-out" style="margin-top:8px"></div>
     </div>
     <div class="blk"><div class="lbl">Base map</div>
@@ -2440,22 +2440,35 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
   function renderAnalytics(){const out=$('ca-out');if(!out)return;
     const list=(typeof spots!=='undefined'?spots:[]);const rows=[];
     list.forEach(s=>(s.catches||[]).forEach(c=>rows.push({s:s,c:c})));
-    if(!rows.length){out.innerHTML='<span class="bb-dim">No catches logged yet \u2014 log them from a spot popup and patterns will show up here.</span>';return;}
+    if(!rows.length){out.innerHTML='<span class="bb-dim">No catches logged yet \u2014 log a few from a spot popup and your patterns will build up here.</span>';return;}
+    const COMPASS8=['N','NE','E','SE','S','SW','W','NW'];
+    const dir8=d=>COMPASS8[Math.round((((d%360)+360)%360)/45)%8];
     const bait=caCount(rows,r=>(r.c.bait||'').trim().toLowerCase()||null);
     const spec=caCount(rows,r=>(r.c.species||'').trim().toLowerCase()||null);
     const bySpot=caCount(rows,r=>r.s.name||null);
-    const stage=caCount(rows,r=>{try{if(!r.c.date||!r.c.time)return null;const samp=dayTideSampler(r.c.date);if(!samp)return null;
-      const h=parseHM(r.c.time);const d=samp(h+0.25)-samp(h-0.25);return d>0.01?'rising tide':d<-0.01?'falling tide':'slack';}catch(e){return null;}});
-    const moon=caCount(rows,r=>{try{if(!r.c.date)return null;const il=moonIllum(aestDate(r.c.date,12));
-      return il.fraction<0.25?'around new moon':il.fraction>0.75?'around full moon':'quarter moons';}catch(e){return null;}});
+    /* tide stage: prefer the reading stamped at capture; fall back to the date/time tables for older catches */
+    const stage=caCount(rows,r=>{const e=r.c.env;
+      if(e&&e.tide&&e.tide.state)return e.tide.state==='rising'?'rising tide':e.tide.state==='falling'?'falling tide':'slack';
+      try{if(!r.c.date||!r.c.time)return null;const samp=dayTideSampler(r.c.date);if(!samp)return null;
+        const h=parseHM(r.c.time);const d=samp(h+0.25)-samp(h-0.25);return d>0.01?'rising tide':d<-0.01?'falling tide':'slack';}catch(e2){return null;}});
+    /* moon: prefer the stamped illumination; fall back to re-deriving from the date */
+    const moon=caCount(rows,r=>{const e=r.c.env;
+      if(e&&e.moon&&e.moon.illum!=null)return e.moon.illum<25?'around new moon':e.moon.illum>75?'around full moon':'quarter moons';
+      try{if(!r.c.date)return null;const il=moonIllum(aestDate(r.c.date,12));
+        return il.fraction<0.25?'around new moon':il.fraction>0.75?'around full moon':'quarter moons';}catch(e2){return null;}});
+    /* wind: stamped only \u2014 there is no historical wind table to reconstruct from */
+    const windRows=rows.filter(r=>r.c.env&&r.c.env.wind&&r.c.env.wind.dir!=null);
+    const wind=caCount(windRows,r=>dir8(r.c.env.wind.dir)+' wind');
     const kept=rows.filter(r=>r.c.kept==='kept').length;
     let sessLine='';try{const sess=(JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[]).filter(s=>s.end);
       if(sess.length){const withC=sess.filter(s=>{const a2=new Date(s.start),b2=new Date(s.end);
         return rows.some(r=>{if(!r.c.date||!r.c.time)return false;const t=new Date(r.c.date+'T'+r.c.time+':00');return t>=a2&&t<=b2;});}).length;
         sessLine='<div class="bb-line"><span class="bb-k">Sessions</span><span class="bb-v">'+sess.length+' logged \u00b7 '+withC+' produced fish ('+Math.round(100*withC/sess.length)+'%)</span></div>';}}catch(e){}
-    out.innerHTML=sessLine+'<div class="bb-line"><span class="bb-k">Total catches</span><span class="bb-v">'+rows.length+' \u00b7 '+kept+' kept / '+(rows.length-kept)+' released</span></div>'
-      +caBar(spec,'By species')+caBar(bait,'By bait / lure')+caBar(bySpot,'By spot')+caBar(stage,'By tide stage')+caBar(moon,'By moon phase')
-      +'<div class="bb-note" style="opacity:.75">Tide stage and moon are derived from each catch\u2019s date/time (2026–27 tide tables only).</div>';}
+    const thin=rows.length<8?'<div class="bb-note" style="opacity:.85">Thin so far \u2014 '+rows.length+' catch'+(rows.length===1?'':'es')+' logged. Patterns sharpen as you log more.</div>':'';
+    const windBar=wind.length?caBar(wind,'By wind'):'<div class="bb-h" style="margin-top:8px">By wind</div><div class="bb-note" style="opacity:.7">No wind stamped yet \u2014 wind is recorded on a catch only when a live wind reading is loaded (run a wind check), so it can\u2019t be back-filled.</div>';
+    out.innerHTML=thin+sessLine+'<div class="bb-line"><span class="bb-k">Total catches</span><span class="bb-v">'+rows.length+' \u00b7 '+kept+' kept / '+(rows.length-kept)+' released</span></div>'
+      +caBar(spec,'By species')+caBar(bait,'By bait / lure')+caBar(bySpot,'By spot')+caBar(stage,'By tide stage')+caBar(moon,'By moon phase')+windBar
+      +'<div class="bb-note" style="opacity:.75">Your own log only. Tide and moon use the reading stamped when you logged the catch, falling back to the date/time tables for older entries; wind comes only from catches logged with a live reading. Counts, not catch-rate \u2014 they reflect when you fished, not just when fish bit.</div>';}
   const cab=$('ca-btn');if(cab)cab.onclick=renderAnalytics;
   stampEnv=function(dateStr,timeStr){const env={};
     try{if(dateStr&&timeStr){const samp=dayTideSampler(dateStr);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);
