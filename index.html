@@ -952,6 +952,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sp-chip.rng-on{background:var(--depth);border-color:var(--depth);color:#042430}
   .sp-clear{color:var(--ink-dim)}
   .sp-match{display:block;margin-top:2px;font-size:9.5px;line-height:1.4;color:var(--depth);letter-spacing:.02em}
+  .sp-add{color:var(--depth);border-color:var(--depth)}
+  .sp-quick{opacity:.82}
+  .sppick-ov{position:fixed;inset:0;z-index:2950;background:rgba(4,12,18,.72);display:none;align-items:flex-end;justify-content:center}
+  .sppick-ov.on{display:flex}
+  .sppick{width:100%;max-width:560px;max-height:82vh;background:var(--panel,#0c1a24);border:1px solid var(--line);border-radius:14px 14px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .sppick-h{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line)}
+  .sppick-h b{font-size:13px;color:var(--ink,#dfeaf0)}
+  .sppick-x{margin-left:auto;background:none;border:none;color:var(--ink-dim);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px}
+  .sppick-s{margin:9px 13px 4px;padding:9px 11px;background:var(--bg,#08131b);border:1px solid var(--line);border-radius:8px;color:var(--ink,#dfeaf0);font-size:13px;width:calc(100% - 26px);box-sizing:border-box}
+  .sppick-l{overflow-y:auto;padding:2px 7px 12px}
+  .sppick-grp{font-family:"IBM Plex Mono",monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-dim);padding:10px 7px 3px}
+  .sppick-row{display:flex;align-items:center;gap:8px;padding:9px 9px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink,#dfeaf0)}
+  .sppick-row:active{background:rgba(255,255,255,.05)}
+  .sppick-row .tk{margin-left:auto;color:var(--depth);font-weight:700;opacity:0}
+  .sppick-row.on{background:rgba(80,160,200,.12)}
+  .sppick-row.on .tk{opacity:1}
+  .sppick-row.all{color:var(--depth);font-weight:600}
 </style>
 </head>
 <body>
@@ -976,7 +993,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14g</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14h</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1419,6 +1436,28 @@ function speciesKey(n){return (n||'').toLowerCase().replace(/\s+/g,' ').trim();}
 function allSpecies(){return SPECIES_CATCH.concat(loadSpeciesUser());}
 function speciesOptions(){const seen={},out=[];allSpecies().forEach(function(n){const k=speciesKey(n);if(k&&!seen[k]){seen[k]=1;out.push('<option value="'+esc(n)+'">');}});return out.join('');}
 function canonSpecies(name){const k=speciesKey(name);if(!k)return '';const hit=allSpecies().find(function(x){return speciesKey(x)===k;});if(hit)return hit;const u=loadSpeciesUser();u.push(name.trim());try{localStorage.setItem(SPU,JSON.stringify(u));}catch(e){}return name.trim();}
+/* species groups (target-species filter): the 17 fish headings from guya_species_qld_v3.md */
+const SPECIES_GROUPS=[
+ {g:"Bream, Tarwhine & Drummer",m:["Yellowfin Bream","Pikey Bream","Tarwhine","Luderick","Eastern Rock Blackfish (Drummer)","Silver Drummer"]},
+ {g:"Flathead",m:["Dusky Flathead","Bartail Flathead","Sand/Northern Flathead","Flathead \u2014 unsure"]},
+ {g:"Whiting",m:["Sand (Summer) Whiting","Trumpeter (Winter) Whiting","Golden-lined Whiting","Northern Whiting"]},
+ {g:"Tailor, Dart & Mulloway",m:["Tailor","Swallowtail Dart","Mulloway (Jewfish)","Mullet (Sea)"]},
+ {g:"Trevally & Queenfish",m:["Giant Trevally (GT)","Golden Trevally","Bigeye Trevally","Brassy Trevally","Diamond (Pennant) Trevally","Queenfish","Trevally \u2014 unsure"]},
+ {g:"Mackerel & Tuna",m:["Spanish Mackerel","Spotted Mackerel","School Mackerel","Grey Mackerel","Longtail Tuna","Mackerel Tuna (Mac Tuna)","Australian Bonito"]},
+ {g:"Kingfish & Cobia",m:["Yellowtail Kingfish","Cobia"]},
+ {g:"Mangrove Jack & tropical snappers",m:["Mangrove Jack","Fingermark (Golden Snapper)","Moses Perch","Stripey Snapper","Red Emperor","Crimson Snapper (Nannygai)","Hussar","Snapper (Squire)"]},
+ {g:"Emperors & Sweetlips",m:["Spangled Emperor","Red-throat Emperor","Grass Emperor (Grass Sweetlip)","Long-nose Emperor","Painted Sweetlip","Brown Sweetlip","Emperor/sweetlip \u2014 unsure"]},
+ {g:"Cods & Groupers",m:["Estuary Cod","Malabar (Blackspotted) Cod","Greasy Rockcod","Flowery Cod","Maori Cod","Coral Rockcod","Cod/grouper \u2014 unsure"]},
+ {g:"Tuskfish & Wrasse",m:["Blackspot Tuskfish","Venus Tuskfish","Purple Tuskfish","Harlequin Tuskfish","Tuskfish/wrasse \u2014 unsure"]},
+ {g:"Coral Trout & reef",m:["Coral Trout","Parrotfish","Surgeonfish"]},
+ {g:"Barramundi, threadfin & estuary",m:["Barramundi","King Threadfin","Blue Threadfin","Tarpon (Oxeye Herring)","Jungle Perch"]},
+ {g:"Freshwater / inland",m:["Australian Bass","Golden Perch (Yellowbelly)","Silver Perch","Murray Cod","Mary River Cod","Saratoga (Southern)","Saratoga (Gulf / Northern)","Spangled Perch","Sleepy Cod","Eel-tailed Catfish","Forktail Catfish","Freshwater Mullet","Redclaw (crayfish)","Yabby","Tilapia (introduced)","European Carp (introduced)","Freshwater fish \u2014 unsure"]},
+ {g:"Grunter & Javelin",m:["Barred Javelin","Spotted Javelin","Silver Grunter","Sooty Grunter (freshwater)","Grunter/javelin \u2014 unsure"]},
+ {g:"Sharks & Rays",m:["Bull Shark","Common Blacktip Shark","Blacktip Reef Shark","Spinner Shark","Hammerhead","Wobbegong","Eastern Shovelnose Ray","Giant Shovelnose Ray (Guitarfish)","Estuary Stingray","Cowtail Stingray","Blue-spotted Maskray","Shark \u2014 unsure","Stingray/ray \u2014 unsure"]},
+ {g:"Crabs & crustaceans",m:["Mud Crab","Blue Swimmer (Sand) Crab"]}
+];
+const GROUP_OF=(function(){const o={};SPECIES_GROUPS.forEach(grp=>grp.m.forEach(n=>{o[speciesKey(n)]=grp.g;}));return o;})();
+function groupOfSpecies(name){return GROUP_OF[speciesKey(name||'')]||'';}
 /* ---------- FEATURE-ID (roadmap 4b Tier A) — offline feature hints + look-alike compare ----------
    Suggestion only: field marks to review, never an ID verdict, never tied to keep/legal.
    Confusion-set marks verified against Australian Museum / Fishes of Australia / NSW DPI / QLD DAF (Jun 2026). */
@@ -2266,24 +2305,30 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
   function speciesEsc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
   function spKey(n){return (typeof speciesKey==='function')?speciesKey(n||''):String(n||'').toLowerCase().replace(/\s+/g,' ').trim();}
   function renderSpeciesChips(){const wrap=$('rec-species');if(!wrap)return;
-    const list=(typeof spots!=='undefined'?spots:[]);const nameByKey={};
-    const add=n=>{if(!n)return;const k=spKey(n);if(k&&!nameByKey[k])nameByKey[k]=String(n).trim();};
+    const list=(typeof spots!=='undefined'?spots:[]);const dataNames={};
+    const add=n=>{if(!n)return;const k=spKey(n);if(k&&!dataNames[k])dataNames[k]=String(n).trim();};
     list.forEach(s=>{add(s.species);(s.catches||[]).forEach(c=>add(c.species));});
-    recSpeciesNameByKey=nameByKey;
-    Array.from(recSpecies).forEach(k=>{if(!nameByKey[k])recSpecies.delete(k);}); /* drop selections no longer in data */
-    const lbl='<span class="bb-dim" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase">';
-    const keys=Object.keys(nameByKey).sort((a,b)=>nameByKey[a].localeCompare(nameByKey[b]));
-    if(!keys.length){wrap.innerHTML=lbl+'Target species \u2014 set a spot\u2019s target or log a catch to filter by species</span>';return;}
-    let h=lbl+'Target species (filter)</span>';
-    h+=keys.map(k=>'<button class="rng-b sp-chip'+(recSpecies.has(k)?' rng-on':'')+'" data-spk="'+speciesEsc(k)+'">'+speciesEsc(nameByKey[k])+'</button>').join('');
-    if(recSpecies.size)h+='<button class="rng-b sp-clear" id="rec-sp-clear" style="margin-left:auto">clear</button>';
+    /* label map: group keys, every DB species, then the user's own casing, then any selected */
+    recSpeciesNameByKey={};
+    (typeof SPECIES_GROUPS!=='undefined'?SPECIES_GROUPS:[]).forEach(g=>{recSpeciesNameByKey['grp:'+g.g]=g.g+' (all)';});
+    (typeof SPECIES_CATCH!=='undefined'?SPECIES_CATCH:[]).forEach(n=>{const k=spKey(n);if(!recSpeciesNameByKey[k])recSpeciesNameByKey[k]=n;});
+    Object.keys(dataNames).forEach(k=>{recSpeciesNameByKey[k]=dataNames[k];});
+    recSpecies.forEach(sel=>{if(!recSpeciesNameByKey[sel])recSpeciesNameByKey[sel]=(sel.indexOf('grp:')===0?sel.slice(4)+' (all)':sel);});
+    let h='<span class="bb-dim" style="width:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase">Target species (filter)</span>';
+    Array.from(recSpecies).forEach(sel=>{h+='<button class="rng-b sp-chip rng-on" data-spk="'+speciesEsc(sel)+'">'+speciesEsc(recSpeciesNameByKey[sel]||sel)+' \u2715</button>';});
+    Object.keys(dataNames).sort((a,b)=>dataNames[a].localeCompare(dataNames[b])).forEach(k=>{if(!recSpecies.has(k))h+='<button class="rng-b sp-chip sp-quick" data-spk="'+speciesEsc(k)+'">'+speciesEsc(dataNames[k])+'</button>';});
+    h+='<button class="rng-b sp-add" id="rec-sp-add" style="margin-left:auto">+ species</button>';
+    if(recSpecies.size)h+='<button class="rng-b sp-clear" id="rec-sp-clear">clear</button>';
     wrap.innerHTML=h;}
   function speciesMatch(s){if(!recSpecies.size)return {match:true,bump:0,label:''};
-    const tk=spKey(s.species);const counts={};
-    (s.catches||[]).forEach(c=>{const k=spKey(c.species);if(recSpecies.has(k))counts[k]=(counts[k]||0)+1;});
+    const tk=spKey(s.species),tg=(typeof groupOfSpecies==='function')?groupOfSpecies(s.species):'';
+    const cat=(s.catches||[]).map(c=>({k:spKey(c.species),g:(typeof groupOfSpecies==='function')?groupOfSpecies(c.species):''}));
     const parts=[];let bump=0,any=false;
-    recSpecies.forEach(k=>{const n=counts[k]||0,isT=(tk===k);if(n>0||isT){any=true;bump+=n*0.5+(isT?0.6:0);
-      const nm=recSpeciesNameByKey[k]||k;parts.push(nm+(n>0?(' \u00d7'+n):(isT?' (target)':'')));}});
+    recSpecies.forEach(sel=>{const isGrp=(sel.indexOf('grp:')===0);let n,isT;
+      if(isGrp){const g=sel.slice(4);n=cat.filter(c=>c.g===g).length;isT=(tg===g);}
+      else{n=cat.filter(c=>c.k===sel).length;isT=(tk===sel);}
+      if(n>0||isT){any=true;bump+=n*0.5+(isT?0.6:0);
+        const nm=recSpeciesNameByKey[sel]||(isGrp?sel.slice(4):sel);parts.push(nm+(n>0?(' \u00d7'+n):(isT?' (target)':'')));}});
     return {match:any,bump:bump,label:parts.join(' \u00b7 ')};}
   function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;
     if(!z)return '<span class="bb-dim">outside mapped zones — verify yourself</span>';
@@ -2334,10 +2379,37 @@ Object.assign(BURNETT_TIDES_2026,BURNETT_TIDES_2027);/* one lookup spans 2026-20
     navigator.geolocation.getCurrentPosition(p=>{recOriginLL=[p.coords.latitude,p.coords.longitude];rg.textContent='\u{1F4CD} My location';rg.classList.add('rng-on');if(oo)oo.textContent='Measured from your current location — a one-shot fix, not stored and not sent anywhere. Tap again for map centre.';recOn=true;rankSpots();},
       ()=>{rg.textContent='\u{1F4CD} My location';if(oo)oo.textContent='Couldn\u2019t get a fix — using the map centre instead.';recOn=true;rankSpots();},{enableHighAccuracy:false,timeout:8000,maximumAge:60000});};})();
   (function(){const sw=$('rec-species');if(!sw)return;sw.addEventListener('click',e=>{
+    if(e.target.closest('#rec-sp-add')){spPickOpen();return;}
     const clr=e.target.closest('#rec-sp-clear');if(clr){recSpecies.clear();renderSpeciesChips();recOn=true;rankSpots();return;}
     const b=e.target.closest('.sp-chip[data-spk]');if(!b)return;const k=b.getAttribute('data-spk');
     if(recSpecies.has(k))recSpecies.delete(k);else recSpecies.add(k);
     renderSpeciesChips();recOn=true;rankSpots();});})();
+  /* ---- add-target-species picker (full DB: groups + species, searchable, multi-add) ---- */
+  function spPickEnsure(){let ov=$('sp-pick-ov');if(ov)return ov;
+    ov=document.createElement('div');ov.id='sp-pick-ov';ov.className='sppick-ov';
+    ov.innerHTML='<div class="sppick" role="dialog" aria-label="Add target species">'
+      +'<div class="sppick-h"><b>Add target species</b><button class="sppick-x" id="sp-pick-x" aria-label="Close">\u2715</button></div>'
+      +'<input class="sppick-s" id="sp-pick-s" placeholder="Search species or group\u2026" autocomplete="off" autocapitalize="off">'
+      +'<div class="sppick-l" id="sp-pick-l"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)spPickClose();});
+    $('sp-pick-x').onclick=spPickClose;
+    $('sp-pick-s').addEventListener('input',()=>spPickRender($('sp-pick-s').value));
+    $('sp-pick-l').addEventListener('click',e=>{const row=e.target.closest('.sppick-row[data-spk]');if(!row)return;
+      const k=row.getAttribute('data-spk');if(recSpecies.has(k))recSpecies.delete(k);else recSpecies.add(k);
+      renderSpeciesChips();recOn=true;rankSpots();spPickRender($('sp-pick-s').value);});
+    return ov;}
+  function spPickRender(q){const l=$('sp-pick-l');if(!l)return;q=(q||'').toLowerCase().trim();
+    const groups=(typeof SPECIES_GROUPS!=='undefined'?SPECIES_GROUPS:[]);let h='';
+    groups.forEach(g=>{const gkey='grp:'+g.g,gHit=g.g.toLowerCase().indexOf(q)>=0;
+      const members=g.m.filter(n=>!q||gHit||n.toLowerCase().indexOf(q)>=0);
+      if(q&&!gHit&&!members.length)return;
+      h+='<div class="sppick-grp">'+speciesEsc(g.g)+'</div>';
+      h+='<div class="sppick-row all'+(recSpecies.has(gkey)?' on':'')+'" data-spk="'+speciesEsc(gkey)+'">\u25a4 All '+speciesEsc(g.g.toLowerCase())+'<span class="tk">\u2713</span></div>';
+      (q?members:g.m).forEach(n=>{const k=spKey(n);h+='<div class="sppick-row'+(recSpecies.has(k)?' on':'')+'" data-spk="'+speciesEsc(k)+'">'+speciesEsc(n)+'<span class="tk">\u2713</span></div>';});});
+    l.innerHTML=h||'<div class="sppick-grp">No match for \u201c'+speciesEsc(q)+'\u201d</div>';}
+  function spPickOpen(){spPickEnsure();spPickRender('');const s=$('sp-pick-s');if(s)s.value='';$('sp-pick-ov').classList.add('on');if(s)setTimeout(()=>{try{s.focus();}catch(e){}},60);}
+  function spPickClose(){const ov=$('sp-pick-ov');if(ov)ov.classList.remove('on');}
   /* ---- Plan: next 48 h ---- */
   function planFor(ymd,label){
     const ev=compute(ymd,-24.847,152.482);
