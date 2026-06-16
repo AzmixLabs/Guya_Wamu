@@ -924,6 +924,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .c-photo-prev img{max-width:100%;max-height:220px;display:block;border-radius:10px;border:1px solid var(--line)}
   .c-photo-del{margin-top:8px;border:1px solid rgba(231,76,60,.4);background:transparent;color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer}
   .catch-thumb{width:26px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line);vertical-align:middle;margin-right:6px;cursor:pointer;background:#0a1822}
+  /* profiles / anglers */
+  .pf-av{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;vertical-align:middle;margin-right:5px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+  .pf-row{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--ink-dim)}
+  .pf-chip{display:inline-flex;align-items:center;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;font-size:12px;color:var(--ink)}
+  .pf-list{display:flex;flex-direction:column;gap:6px}
+  .pf-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+  .pf-item.on{outline:2px solid var(--accent)}
+  .pf-item .pf-nm{flex:1}
+  .pf-item .pf-ct{font-size:11px;color:var(--ink-dim)}
+  .pf-item .sheet-mini{padding:2px 7px}
+  .pf-av-pick,.pf-col-pick{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+  .pf-av-pick button{font-size:16px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:transparent;cursor:pointer}
+  .pf-av-pick button.on{outline:2px solid var(--accent)}
+  .pf-col-pick button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+  .pf-col-pick button.on{border-color:#fff}
   .photo-lb{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
   .photo-lb.open{display:flex}
   .photo-lb img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 18px 60px -10px rgba(0,0,0,.9)}
@@ -989,7 +1004,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14j</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14k</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1027,6 +1042,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
+      <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
       <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v21 · 14 Jun 2026</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
@@ -1323,6 +1339,46 @@ function loadSpots(){try{const a=JSON.parse(localStorage.getItem(SSTORE))||[];if
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
 let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
 let liveWindDir=null,liveWindKn=null;
+/* ---------- PROFILES (local, device-only "who's logging") ---------- */
+const PSTORE='woongarra_profiles_v1';
+const PROFILE_AVATARS=['\ud83c\udfa3','\ud83d\udc1f','\ud83d\udc20','\ud83e\udd88','\ud83d\udc19','\ud83e\udd91','\ud83e\udd80','\ud83e\udd9e','\ud83d\udc2c','\ud83d\udc33','\ud83d\udc21','\ud83e\udd90','\u2b50','\ud83d\udc22','\ud83c\udf0a','\ud83e\ude9d'];
+const PROFILE_COLORS=['#3fd0c9','#e8a13a','#7bc86c','#d96c6c','#9b8cff','#f0c450','#5bb0e8','#ef8fb8'];
+function escText(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function loadProfiles(){try{const o=JSON.parse(localStorage.getItem(PSTORE));if(o&&Array.isArray(o.list))return o;}catch(e){}return {v:1,active:null,list:[]};}
+let profiles=loadProfiles();
+function saveProfiles(){try{localStorage.setItem(PSTORE,JSON.stringify(profiles));}catch(e){}}
+function ensureDefaultProfile(){if(!profiles.list.length){const id='u'+Date.now();profiles.list.push({id:id,name:'Me',avatar:PROFILE_AVATARS[0],color:PROFILE_COLORS[0]});profiles.active=id;saveProfiles();}else if(!profiles.active||!profiles.list.some(function(p){return p.id===profiles.active;})){profiles.active=profiles.list[0].id;saveProfiles();}}
+function profileById(id){return profiles.list.find(function(p){return p.id===id;})||null;}
+function activeProfile(){return profileById(profiles.active);}
+function profileCatchCount(id){let n=0;spots.forEach(function(s){(s.catches||[]).forEach(function(c){if(c&&c.by===id)n++;});});return n;}
+function avatarChip(p){if(!p)return '';return '<span class="pf-av" style="background:'+(p.color||'#3fd0c9')+'">'+(p.avatar||PROFILE_AVATARS[0])+'</span>';}
+function addProfile(name,avatar,color){const id='u'+Date.now()+Math.floor(Math.random()*999);const p={id:id,name:name||'Angler',avatar:avatar||PROFILE_AVATARS[profiles.list.length%PROFILE_AVATARS.length],color:color||PROFILE_COLORS[profiles.list.length%PROFILE_COLORS.length]};profiles.list.push(p);saveProfiles();return p;}
+function profileOptions(sel){return profiles.list.map(function(p){return '<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+(p.avatar||PROFILE_AVATARS[0])+' '+escText(p.name)+'</option>';}).join('');}
+function renderProfileChip(){const el=document.getElementById('pf-chip');if(!el)return;const p=activeProfile();el.innerHTML=avatarChip(p)+'<span>'+escText(p?p.name:'Me')+'</span>';}
+function openProfileSheet(){
+  function rowsHtml(){return '<div class="pf-list">'+profiles.list.map(function(p){var c=profileCatchCount(p.id);return '<div class="pf-item'+(p.id===profiles.active?' on':'')+'" data-id="'+p.id+'">'+avatarChip(p)+'<span class="pf-nm">'+escText(p.name)+'</span><span class="pf-ct">'+c+' catch'+(c===1?'':'es')+'</span><button type="button" class="sheet-mini pf-ren" data-id="'+p.id+'">\u270e</button>'+(profiles.list.length>1?'<button type="button" class="sheet-mini pf-del" data-id="'+p.id+'">\ud83d\uddd1</button>':'')+'</div>';}).join('')+'</div>';}
+  var pickAv=PROFILE_AVATARS[profiles.list.length%PROFILE_AVATARS.length];
+  var pickCol=PROFILE_COLORS[profiles.list.length%PROFILE_COLORS.length];
+  var body='<div id="pf-mgr"><div id="pf-rows">'+rowsHtml()+'</div>'
+    +'<div class="lbl" style="margin-top:10px">Add angler</div>'
+    +fld('Name','<input id="pf-new-name" class="fin" placeholder="e.g. Mia" autocomplete="off">')
+    +'<div class="pf-av-pick" id="pf-av-pick">'+PROFILE_AVATARS.map(function(a){return '<button type="button" data-av="'+a+'"'+(a===pickAv?' class="on"':'')+'>'+a+'</button>';}).join('')+'</div>'
+    +'<div class="pf-col-pick" id="pf-col-pick">'+PROFILE_COLORS.map(function(c){return '<button type="button" data-col="'+c+'" style="background:'+c+'"'+(c===pickCol?' class="on"':'')+'></button>';}).join('')+'</div>'
+    +'<button type="button" class="sheet-mini" id="pf-add-btn" style="margin-top:6px">\u2795 Add angler</button></div>';
+  openSheet('Anglers \u2014 who\u2019s logging',body,function(){return true;});
+  function rebind(){var rows=document.getElementById('pf-rows');if(rows)rows.innerHTML=rowsHtml();}
+  var mgr=document.getElementById('pf-mgr');
+  if(mgr)mgr.addEventListener('click',function(e){
+    var rb=e.target.closest('#pf-av-pick button');if(rb){pickAv=rb.getAttribute('data-av');document.querySelectorAll('#pf-av-pick button').forEach(function(b){b.classList.toggle('on',b===rb);});return;}
+    var cb=e.target.closest('#pf-col-pick button');if(cb){pickCol=cb.getAttribute('data-col');document.querySelectorAll('#pf-col-pick button').forEach(function(b){b.classList.toggle('on',b===cb);});return;}
+    if(e.target.closest('#pf-add-btn')){var nm=(document.getElementById('pf-new-name').value||'').trim();if(!nm){alert('Give the angler a name first.');return;}addProfile(nm,pickAv,pickCol);document.getElementById('pf-new-name').value='';rebind();renderProfileChip();return;}
+    var ren=e.target.closest('.pf-ren');if(ren){var pr=profileById(ren.getAttribute('data-id'));if(pr){var nn=(prompt('Rename angler',pr.name)||'').trim();if(nn){pr.name=nn;saveProfiles();rebind();renderProfileChip();}}return;}
+    var del=e.target.closest('.pf-del');if(del){if(profiles.list.length<=1)return;if(confirm('Remove this angler? Their logged catches stay but become unassigned.')){var rid=del.getAttribute('data-id');profiles.list=profiles.list.filter(function(x){return x.id!==rid;});if(profiles.active===rid)profiles.active=profiles.list[0].id;saveProfiles();rebind();renderProfileChip();if(typeof renderSpots==='function')renderSpots();}return;}
+    var it=e.target.closest('.pf-item');if(it){profiles.active=it.getAttribute('data-id');saveProfiles();rebind();renderProfileChip();return;}
+  });
+}
+ensureDefaultProfile();
+(function(){var c=document.getElementById('pf-chip');if(c){c.onclick=openProfileSheet;c.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();openProfileSheet();}};}renderProfileChip();})();
 let stampEnv=null;/* assigned inside the best-bite IIFE; stamps tide+moon onto a catch from its date/time */
 const COMPASS_PTS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const COMPASS_DEG={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
@@ -1365,7 +1421,7 @@ function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
     h+='<div class="windrow '+ws.lvl+'">'+lab+'<br><span class="bb-dim">wind now '+compassOf(liveWindDir)+' '+(liveWindKn!=null?Math.round(liveWindKn)+' kn':'')+' \u00b7 unsafe dirs: '+dd.map(compassOf).join(', ')+'</span></div>';}}
   const n=(s.catches||[]).length;
   h+='<div class="kv">Catches: <b>'+n+'</b>'+(n?' \u00b7 biggest '+biggest(s)+' cm':'')+'</div>';
-  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+(c.photo?'<img class="catch-thumb" data-photo="'+esc(c.photo)+'" alt="">':'')+(c.pb?'<span class="pb-badge">\u2605 PB</span>':'')+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+condLine(c)+'</div>').join('')+'</div>';
+  if(n)h+='<div class="catchlist">'+s.catches.slice(-4).reverse().map(c=>'<div class="catchrow">'+avatarChip(profileById(c.by))+(c.photo?'<img class="catch-thumb" data-photo="'+esc(c.photo)+'" alt="">':'')+(c.pb?'<span class="pb-badge">\u2605 PB</span>':'')+(c.date||'')+(c.time?' '+c.time:'')+' \u00b7 '+(c.species||'?')+' '+(c.len?c.len+'cm':'')+(c.bait?' \u00b7 '+c.bait:'')+' '+(c.kept==='released'?'\u21a9':'\ud83e\udab5')+condLine(c)+'</div>').join('')+'</div>';
   h+='<div class="warn">Your own mark. Drag the pin to reposition onto your platform \u2014 the zone re-checks on drop. Verify the zone officially before fishing.</div>';
   h+='<button class="sp-pa sp-nav" data-act="nav" data-id="'+s.id+'" style="width:100%;margin-top:8px">\ud83e\udded Navigate here (opens Maps)</button>';
   h+='<div class="sp-pop-actions"><button class="sp-pa primary" data-act="catch" data-id="'+s.id+'">\uff0b Log catch</button><button class="sp-pa" data-act="edit" data-id="'+s.id+'">Edit</button><button class="sp-pa sp-del" data-act="del" data-id="'+s.id+'">Delete</button></div></div>';
@@ -1644,10 +1700,12 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
     +fld('Length (cm)','<input id="c-len" class="fin" inputmode="decimal">')
     +fld('Bait / lure','<input id="c-bait" class="fin">')
     +fld('Kept / released','<select id="c-kept" class="fin"><option value="kept">Kept</option><option value="released">Released</option></select>')
+    +fld('Caught by','<select id="c-by" class="fin">'+profileOptions(profiles.active)+'<option value="__new">\u2795 New angler\u2026</option></select>')
     +fld('Note','<textarea id="c-note" class="fin" rows="2"></textarea>');
   openSheet('Log catch \u2014 '+(s.name||'Spot'),body,async ()=>{const o={id:'c'+Date.now()+Math.floor(Math.random()*999),
     date:val('c-date'),time:val('c-time'),species:val('c-species'),len:val('c-len'),bait:val('c-bait'),
-    kept:document.getElementById('c-kept').value,note:val('c-note')};
+    kept:document.getElementById('c-kept').value,note:val('c-note'),
+    by:(function(){var e=document.getElementById('c-by');return (e&&e.value&&e.value!=='__new')?e.value:profiles.active;})()};
     o.species=canonSpecies(o.species);
     if(pendingPhoto){const pid='p'+Date.now()+Math.floor(Math.random()*9999);await photoPut(pid,pendingPhoto);o.photo=pid;}
     var priorBig=biggest(s);
@@ -1673,6 +1731,8 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
   const spEl=document.getElementById('c-species'),featEl=document.getElementById('c-feat');
   if(spEl){spEl.addEventListener('input',updateCatchFeatureHint);spEl.addEventListener('change',updateCatchFeatureHint);}
   if(featEl)featEl.addEventListener('click',ev=>{const b=ev.target.closest('.feat-cmp[data-cmp]');if(b)openIdCompare(b.dataset.cmp);});
+  var byEl=document.getElementById('c-by');
+  if(byEl)byEl.addEventListener('change',function(){if(byEl.value==='__new'){var nm=(prompt('New angler name?')||'').trim();if(nm){var np=addProfile(nm);byEl.innerHTML=profileOptions(np.id)+'<option value="__new">\u2795 New angler\u2026</option>';renderProfileChip();}else{byEl.value=profiles.active;}}});
   updateCatchFeatureHint();}
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)return;root._spWired=true;
   root.addEventListener('click',ev=>{
@@ -2117,7 +2177,7 @@ async function exportBackup(){
   const photos={};
   try{const ids={};spots.forEach(s=>(s.catches||[]).forEach(c=>{if(c&&c.photo)ids[c.photo]=1;}));
     const keys=Object.keys(ids);if(keys.length){const all=await photoAll();keys.forEach(id=>{if(all[id])photos[id]=all[id];});}}catch(e){}
-  const data={app:'woongarra',version:2,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})(),photos:photos};
+  const data={app:'woongarra',version:2,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})(),profiles:profiles,photos:photos};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -2142,6 +2202,7 @@ function importBackup(file){
     if(Array.isArray(d.sessions)){try{const cur=JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];const by={};
       cur.forEach(s=>{if(s&&s.id)by[s.id]=s;});d.sessions.forEach(s=>{if(s&&s.id)by[s.id]=s;});
       localStorage.setItem('woongarra_sessions_v1',JSON.stringify(Object.values(by)));}catch(e){}}
+    if(d.profiles&&Array.isArray(d.profiles.list)){const pby={};profiles.list.forEach(function(p){pby[p.id]=p;});d.profiles.list.forEach(function(p){if(p&&p.id)pby[p.id]=p;});profiles.list=Object.values(pby);if(d.profiles.active&&profileById(d.profiles.active))profiles.active=d.profiles.active;ensureDefaultProfile();saveProfiles();renderProfileChip();}
     const ll=[];spots.forEach(s=>ll.push([s.lat,s.lng]));points.forEach(p=>ll.push([p.lat,p.lng]));transects.forEach(t=>t.verts.forEach(v=>ll.push([v.lat,v.lng])));
     if(ll.length){try{map.fitBounds(L.latLngBounds(ll).pad(0.4),{maxZoom:16});}catch(e){}}
     buildShade();
