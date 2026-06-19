@@ -939,6 +939,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .pf-av-pick button.on{outline:2px solid var(--accent)}
   .pf-col-pick button{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer}
   .pf-col-pick button.on{border-color:#fff}
+  .pf-av-photo{padding:0;overflow:hidden}
+  .pf-av-photo img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+  .pf-photo-pick{display:flex;align-items:center;gap:8px;margin:6px 0 2px}
+  .pf-photo-prev{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--line)}
   .photo-lb{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
   .photo-lb.open{display:flex}
   .photo-lb img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 18px 60px -10px rgba(0,0,0,.9)}
@@ -1004,7 +1008,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14k</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.14l</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1351,27 +1355,35 @@ function ensureDefaultProfile(){if(!profiles.list.length){const id='u'+Date.now(
 function profileById(id){return profiles.list.find(function(p){return p.id===id;})||null;}
 function activeProfile(){return profileById(profiles.active);}
 function profileCatchCount(id){let n=0;spots.forEach(function(s){(s.catches||[]).forEach(function(c){if(c&&c.by===id)n++;});});return n;}
-function avatarChip(p){if(!p)return '';return '<span class="pf-av" style="background:'+(p.color||'#3fd0c9')+'">'+(p.avatar||PROFILE_AVATARS[0])+'</span>';}
+function avatarSpec(p){if(!p)return {type:'emoji',val:PROFILE_AVATARS[0]};var a=p.avatar;if(a&&typeof a==='object'&&a.type)return a;if(typeof a==='string'&&a)return {type:'emoji',val:a};return {type:'emoji',val:PROFILE_AVATARS[0]};}
+function profileGlyph(p){var a=avatarSpec(p);return a.type==='photo'?'\ud83d\udcf7':(a.val||PROFILE_AVATARS[0]);}
+function avatarChip(p){if(!p)return '';var col=p.color||'#3fd0c9',a=avatarSpec(p);if(a.type==='photo')return '<span class="pf-av pf-av-photo" style="background:'+col+'"><img class="pf-av-img" data-avatar="'+esc(a.val)+'" alt=""></span>';return '<span class="pf-av" style="background:'+col+'">'+(a.val||PROFILE_AVATARS[0])+'</span>';}
+function resolveAvatarImgs(root){(root||document).querySelectorAll('img.pf-av-img[data-avatar]').forEach(function(im){if(im._avDone)return;im._avDone=1;var id=im.getAttribute('data-avatar');photoGet(id).then(function(du){if(du)im.src=du;});});}
 function addProfile(name,avatar,color){const id='u'+Date.now()+Math.floor(Math.random()*999);const p={id:id,name:name||'Angler',avatar:avatar||PROFILE_AVATARS[profiles.list.length%PROFILE_AVATARS.length],color:color||PROFILE_COLORS[profiles.list.length%PROFILE_COLORS.length]};profiles.list.push(p);saveProfiles();return p;}
-function profileOptions(sel){return profiles.list.map(function(p){return '<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+(p.avatar||PROFILE_AVATARS[0])+' '+escText(p.name)+'</option>';}).join('');}
-function renderProfileChip(){const el=document.getElementById('pf-chip');if(!el)return;const p=activeProfile();el.innerHTML=avatarChip(p)+'<span>'+escText(p?p.name:'Me')+'</span>';}
+function profileOptions(sel){return profiles.list.map(function(p){return '<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+profileGlyph(p)+' '+escText(p.name)+'</option>';}).join('');}
+function renderProfileChip(){const el=document.getElementById('pf-chip');if(!el)return;const p=activeProfile();el.innerHTML=avatarChip(p)+'<span>'+escText(p?p.name:'Me')+'</span>';resolveAvatarImgs(el);}
 function openProfileSheet(){
   function rowsHtml(){return '<div class="pf-list">'+profiles.list.map(function(p){var c=profileCatchCount(p.id);return '<div class="pf-item'+(p.id===profiles.active?' on':'')+'" data-id="'+p.id+'">'+avatarChip(p)+'<span class="pf-nm">'+escText(p.name)+'</span><span class="pf-ct">'+c+' catch'+(c===1?'':'es')+'</span><button type="button" class="sheet-mini pf-ren" data-id="'+p.id+'">\u270e</button>'+(profiles.list.length>1?'<button type="button" class="sheet-mini pf-del" data-id="'+p.id+'">\ud83d\uddd1</button>':'')+'</div>';}).join('')+'</div>';}
   var pickAv=PROFILE_AVATARS[profiles.list.length%PROFILE_AVATARS.length];
   var pickCol=PROFILE_COLORS[profiles.list.length%PROFILE_COLORS.length];
+  var pickPhoto=null;
   var body='<div id="pf-mgr"><div id="pf-rows">'+rowsHtml()+'</div>'
     +'<div class="lbl" style="margin-top:10px">Add angler</div>'
     +fld('Name','<input id="pf-new-name" class="fin" placeholder="e.g. Mia" autocomplete="off">')
     +'<div class="pf-av-pick" id="pf-av-pick">'+PROFILE_AVATARS.map(function(a){return '<button type="button" data-av="'+a+'"'+(a===pickAv?' class="on"':'')+'>'+a+'</button>';}).join('')+'</div>'
     +'<div class="pf-col-pick" id="pf-col-pick">'+PROFILE_COLORS.map(function(c){return '<button type="button" data-col="'+c+'" style="background:'+c+'"'+(c===pickCol?' class="on"':'')+'></button>';}).join('')+'</div>'
+    +'<div class="pf-photo-pick" id="pf-photo-pick"><input id="pf-photo-file" class="c-photo-file" type="file" accept="image/*"><label for="pf-photo-file" class="sheet-mini" id="pf-photo-label">\ud83d\udcf7 Use a photo</label><img class="pf-photo-prev" id="pf-photo-prev" alt="" style="display:none"><button type="button" class="sheet-mini" id="pf-photo-clear" style="display:none">Use emoji</button></div>'
     +'<button type="button" class="sheet-mini" id="pf-add-btn" style="margin-top:6px">\u2795 Add angler</button></div>';
   openSheet('Anglers \u2014 who\u2019s logging',body,function(){return true;});
-  function rebind(){var rows=document.getElementById('pf-rows');if(rows)rows.innerHTML=rowsHtml();}
+  function rebind(){var rows=document.getElementById('pf-rows');if(rows){rows.innerHTML=rowsHtml();resolveAvatarImgs(rows);}}
+  resolveAvatarImgs(document.getElementById('pf-rows'));
+  (function(){var pfFile=document.getElementById('pf-photo-file');if(!pfFile)return;pfFile.onchange=async function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var lbl=document.getElementById('pf-photo-label'),prev=document.getElementById('pf-photo-prev'),clr=document.getElementById('pf-photo-clear');if(lbl)lbl.textContent='Processing\u2026';try{pickPhoto=await downscaleToDataURL(f,128,0.85);if(prev){prev.src=pickPhoto;prev.style.display='block';}if(clr)clr.style.display='';if(lbl)lbl.textContent='\ud83d\udcf7 Change photo';}catch(e){pickPhoto=null;if(lbl)lbl.textContent='\ud83d\udcf7 Use a photo';alert('Could not read that image \u2014 try another file.');}};})();
   var mgr=document.getElementById('pf-mgr');
   if(mgr)mgr.addEventListener('click',function(e){
     var rb=e.target.closest('#pf-av-pick button');if(rb){pickAv=rb.getAttribute('data-av');document.querySelectorAll('#pf-av-pick button').forEach(function(b){b.classList.toggle('on',b===rb);});return;}
     var cb=e.target.closest('#pf-col-pick button');if(cb){pickCol=cb.getAttribute('data-col');document.querySelectorAll('#pf-col-pick button').forEach(function(b){b.classList.toggle('on',b===cb);});return;}
-    if(e.target.closest('#pf-add-btn')){var nm=(document.getElementById('pf-new-name').value||'').trim();if(!nm){alert('Give the angler a name first.');return;}addProfile(nm,pickAv,pickCol);document.getElementById('pf-new-name').value='';rebind();renderProfileChip();return;}
+    if(e.target.closest('#pf-photo-clear')){pickPhoto=null;var cpp=document.getElementById('pf-photo-prev'),cpl=document.getElementById('pf-photo-label'),cpc=document.getElementById('pf-photo-clear');if(cpp){cpp.removeAttribute('src');cpp.style.display='none';}if(cpl)cpl.textContent='\ud83d\udcf7 Use a photo';if(cpc)cpc.style.display='none';return;}
+    if(e.target.closest('#pf-add-btn')){var nm=(document.getElementById('pf-new-name').value||'').trim();if(!nm){alert('Give the angler a name first.');return;}var av=pickAv;if(pickPhoto){var paid='pa'+Date.now()+Math.floor(Math.random()*9999);photoPut(paid,pickPhoto);av={type:'photo',val:paid};}addProfile(nm,av,pickCol);pickPhoto=null;document.getElementById('pf-new-name').value='';var app=document.getElementById('pf-photo-prev'),apl=document.getElementById('pf-photo-label'),apc=document.getElementById('pf-photo-clear');if(app){app.removeAttribute('src');app.style.display='none';}if(apl)apl.textContent='\ud83d\udcf7 Use a photo';if(apc)apc.style.display='none';rebind();renderProfileChip();return;}
     var ren=e.target.closest('.pf-ren');if(ren){var pr=profileById(ren.getAttribute('data-id'));if(pr){var nn=(prompt('Rename angler',pr.name)||'').trim();if(nn){pr.name=nn;saveProfiles();rebind();renderProfileChip();}}return;}
     var del=e.target.closest('.pf-del');if(del){if(profiles.list.length<=1)return;if(confirm('Remove this angler? Their logged catches stay but become unassigned.')){var rid=del.getAttribute('data-id');profiles.list=profiles.list.filter(function(x){return x.id!==rid;});if(profiles.active===rid)profiles.active=profiles.list[0].id;saveProfiles();rebind();renderProfileChip();if(typeof renderSpots==='function')renderSpots();}return;}
     var it=e.target.closest('.pf-item');if(it){profiles.active=it.getAttribute('data-id');saveProfiles();rebind();renderProfileChip();return;}
@@ -1752,6 +1764,7 @@ map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._spWired)r
     else if(act==='nav'){const s=spots.find(x=>x.id===id);if(s){const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);const url=iOS?('https://maps.apple.com/?daddr='+s.lat+','+s.lng+'&dirflg=d'):('https://www.google.com/maps/dir/?api=1&destination='+s.lat+','+s.lng+'&travelmode=driving');window.open(url,'_blank');}}
   });});
 map.on('popupopen',e=>{const root=e.popup._contentNode;if(!root||root._photoWired)return;root._photoWired=true;
+  resolveAvatarImgs(root);
   root.querySelectorAll('img.catch-thumb[data-photo]').forEach(im=>{const id=im.getAttribute('data-photo');
     photoGet(id).then(du=>{if(du){im.src=du;im.style.cursor='zoom-in';im.onclick=ev=>{ev.stopPropagation();showPhotoLightbox(du);};}});});});
 document.getElementById('sp-add').onclick=()=>openSpotSheet(null);
@@ -2176,6 +2189,7 @@ function buildAutoContours(){
 async function exportBackup(){
   const photos={};
   try{const ids={};spots.forEach(s=>(s.catches||[]).forEach(c=>{if(c&&c.photo)ids[c.photo]=1;}));
+    profiles.list.forEach(function(p){var a=p&&p.avatar;if(a&&typeof a==='object'&&a.type==='photo'&&a.val)ids[a.val]=1;});
     const keys=Object.keys(ids);if(keys.length){const all=await photoAll();keys.forEach(id=>{if(all[id])photos[id]=all[id];});}}catch(e){}
   const data={app:'woongarra',version:2,exported:new Date().toISOString(),spots:spots,depthPoints:points,transects:transects,contours:contours,walks:(typeof walks!=='undefined'?walks:[]),imported:(typeof imported!=='undefined'?imported:[]),sessions:(function(){try{return JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];}catch(e){return [];}})(),profiles:profiles,photos:photos};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
