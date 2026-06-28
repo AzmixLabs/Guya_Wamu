@@ -1008,7 +1008,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.27a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.28a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1039,7 +1039,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="bb-out" id="plan-out" style="margin-top:8px"><span class="bb-dim">One card: tides, major windows, light, top spot and wind for today and tomorrow.</span></div>
     </div>
     <div class="blk"><div class="lbl">Conditions (live)</div>
-      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Bargara</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
+      <div class="dp-actions"><button class="dp-btn" id="wx-refresh">↻ Live wind</button><button class="dp-btn" id="wx-here">📍 This view</button></div>
       <div class="bb-out" id="wx-out" style="margin-top:8px"><span class="bb-dim">Tap refresh when you have signal — pulls live wind, rain &amp; swell for the coast.</span></div>
     </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
@@ -1781,8 +1781,8 @@ document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.c
     renderSpots();});
   renderSpotSpeciesChips();})();
 (function(){const wb=document.getElementById('sp-wind'),o=document.getElementById('sp-wind-out');if(!wb||!o)return;
-  wb.onclick=async()=>{o.innerHTML='Checking live wind at Bargara\u2026';
-    try{const u='https://api.open-meteo.com/v1/forecast?latitude=-24.847&longitude=152.482&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=Australia%2FBrisbane';
+  wb.onclick=async()=>{var _wp;try{_wp=nearestPort(map.getCenter())||PORTS[0];}catch(e){_wp=PORTS[0];}o.innerHTML='Checking live wind at '+(_wp?_wp.name:'the coast')+'\u2026';
+    try{const u='https://api.open-meteo.com/v1/forecast?latitude='+(_wp?_wp.lat:-27.3667)+'&longitude='+(_wp?_wp.lng:153.1667)+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=Australia%2FBrisbane';
       const r=await fetch(u);if(!r.ok)throw 0;const j=await r.json();const c=j.current||{};
       liveWindDir=c.wind_direction_10m;liveWindKn=c.wind_speed_10m;renderSpots();
       const flagged=spots.map(s=>({s:s,w:windStatus(s)})).filter(x=>x.w&&x.w.lvl!=='ok').sort((a,b)=>(a.w.lvl==='bad'?0:1)-(b.w.lvl==='bad'?0:1));
@@ -2345,6 +2345,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
   const $=id=>document.getElementById(id);
   function curPort(){try{return (typeof nearestPort==='function'&&typeof map!=='undefined')?nearestPort(map.getCenter()):(typeof PORTS!=='undefined'?PORTS[0]:null);}catch(e){return (typeof PORTS!=='undefined')?PORTS[0]:null;}}
   function tideTable(){const p=curPort();return p?p.table:null;}
+  const ANCHOR=()=>{const p=curPort()||(typeof PORTS!=='undefined'?PORTS[0]:null);return p?[p.lat,p.lng]:[-27.3667,153.1667];};/* region anchor for on-device astronomy: follows the nearest tide port instead of being pinned to Bargara */
   function dayTideSampler(ymd){const T=tideTable();if(!T)return null;
     const pad=n=>('0'+n).slice(-2),base=new Date(ymd+'T00:00:00'),evs=[];
     for(let off=-1;off<=1;off++){const d=new Date(base);d.setDate(base.getDate()+off);const key=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());const arr=T[key];if(!arr)continue;
@@ -2388,7 +2389,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
   const pad2=n=>String(n).padStart(2,'0');
   function render(){
     const ymd=$('bb-date').value;if(!ymd)return;
-    const lat=-24.847,lng=152.482;const ev=compute(ymd,lat,lng);
+    const [lat,lng]=ANCHOR();const ev=compute(ymd,lat,lng);
     const port=curPort();const tide=(port&&port.table)?port.table[ymd]:null;
     const sp=$('bb-spot').value?(typeof spots!=='undefined'?spots:[]).find(s=>s.id===$('bb-spot').value):null;
     const pref=sp?tidePref(sp.tide):null;
@@ -2477,7 +2478,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
     if(!z)return '<span class="bb-dim">outside mapped zones — verify yourself</span>';
     return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>');}
   function scoreSpotsFor(ymd){const list=(typeof spots!=='undefined'?spots:[]);if(!list.length)return [];
-    const ev=compute(ymd,-24.847,152.482);
+    const [aLat,aLng]=ANCHOR();const ev=compute(ymd,aLat,aLng);
     const _T=tideTable();const tide=_T?_T[ymd]:null;
     const daylight=h=>ev.sunrise!=null&&ev.sunset!=null&&h>=ev.sunrise-0.5&&h<=ev.sunset+0.5;
     const majors=[];if(ev.over!=null)majors.push(ev.over);if(ev.under!=null)majors.push(ev.under);
@@ -2555,7 +2556,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
   function spPickClose(){const ov=$('sp-pick-ov');if(ov)ov.classList.remove('on');}
   /* ---- Plan: next 48 h ---- */
   function planFor(ymd,label){
-    const ev=compute(ymd,-24.847,152.482);
+    const [aLat,aLng]=ANCHOR();const ev=compute(ymd,aLat,aLng);
     const _T=tideTable();const tide=_T?_T[ymd]:null;
     const maj=[];if(ev.over!=null)maj.push(ev.over);if(ev.under!=null)maj.push(ev.under);
     let h='<div class="bb-h" style="margin-top:8px">'+label+'</div>';
@@ -2570,7 +2571,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
     const t1=todayAEST(),p=t1.split('-').map(Number),d2=new Date(Date.UTC(p[0],p[1]-1,p[2]+1)),t2=d2.toISOString().slice(0,10);
     const base=planFor(t1,'Today · '+t1)+planFor(t2,'Tomorrow · '+t2);
     out.innerHTML=base+'<div class="bb-note" style="opacity:.8">Fetching wind\u2026</div>';
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=-24.847&longitude=152.482&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=2')
+    const [pwLat,pwLng]=ANCHOR();fetch('https://api.open-meteo.com/v1/forecast?latitude='+pwLat+'&longitude='+pwLng+'&daily=wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=Australia%2FBrisbane&wind_speed_unit=kn&forecast_days=2')
       .then(r=>r.json()).then(f=>{const d=f&&f.daily;if(!d||!d.time)throw 0;
         const wl=d.time.map((t,i)=>'<div class="bb-line"><span class="bb-k">Wind '+(i===0?'today':'tmrw')+'</span><span class="bb-v">'+Math.round(d.wind_speed_10m_max[i])+'–'+Math.round(d.wind_gusts_10m_max[i])+' kn '+compassOf(d.wind_direction_10m_dominant[i])+'</span></div>').join('');
         out.innerHTML=base+wl+'<div class="bb-note" style="opacity:.8">A guide only \u2014 verify zones and conditions yourself.</div>';})
@@ -2912,11 +2913,11 @@ renderContours();
 (function(){
   const btn=document.getElementById('wx-refresh');const out=document.getElementById('wx-out');if(!btn||!out)return;
   const hereBtn=document.getElementById('wx-here');
-  const BARGARA=[-24.847,152.482];
+  const curP=()=>{try{return nearestPort(map.getCenter())||PORTS[0];}catch(e){return PORTS[0];}};/* nearest tide port by map centre: name + coords + table for region-aware wind & tide */
   function compass(d){if(d==null||isNaN(d))return '';return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round((d%360)/22.5)%16];}
   const r0=v=>(v==null||isNaN(v))?'\u2013':Math.round(v);
   const hhmm=dt=>dt.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
-  function tideNow(){try{const T=tideTable();if(!T)return null;
+  function tideNow(){try{const _p=curP();const T=_p?_p.table:null;if(!T)return null;
     const now=new Date(),pad=n=>('0'+n).slice(-2),evs=[];
     for(let off=-1;off<=1;off++){const dt=new Date(now);dt.setDate(now.getDate()+off);const key=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate());const arr=T[key];if(!arr)continue;
       arr.forEach(e=>{const hm=e[0].split(':');const d=new Date(dt);d.setHours(+hm[0],+hm[1],0,0);evs.push({t:d,h:e[1],type:e[2]});});}
@@ -2936,7 +2937,7 @@ renderContours();
       const fR=await fetch(fU);if(!fR.ok)throw new Error('wx');const f=await fR.json();
       let m=null;try{const mR=await fetch(mU);if(mR.ok)m=await mR.json();}catch(e){}
       const cu=f.current||{},d=f.daily||{};
-      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">'+(label||'Bargara')+'</span><span class="bb-scoretx">updated '+hhmm(new Date())+'</span></div>';
+      let h='<div class="bb-score"><span class="bb-stars" style="color:var(--depth);font-size:13px">'+(label||'live wind')+'</span><span class="bb-scoretx">updated '+hhmm(new Date())+'</span></div>';
       h+=tide;
       h+='<div class="bb-line"><span class="bb-k">Wind</span><span class="bb-v">'+r0(cu.wind_speed_10m)+' kn '+compass(cu.wind_direction_10m)+' \u00b7 gust '+r0(cu.wind_gusts_10m)+'</span></div>';
       h+='<div class="bb-line"><span class="bb-k">Rain now</span><span class="bb-v">'+(cu.precipitation!=null?cu.precipitation+' mm':'\u2013')+'</span></div>';
@@ -2955,13 +2956,13 @@ renderContours();
         const sw=(m&&m.daily&&m.daily.swell_wave_height_max)?(' \u00b7 swell '+m.daily.swell_wave_height_max[i]+'m'):'';
         const sst=sstAt(i);const wt=(sst!=null)?(' \u00b7 water '+sst.toFixed(1)+'\u00b0'):'';
         h+='<div class="bb-line"><span class="bb-k">'+day+'</span><span class="bb-v">'+r0(d.wind_speed_10m_max[i])+'\u2013'+r0(d.wind_gusts_10m_max[i])+' kn '+compass(d.wind_direction_10m_dominant[i])+' \u00b7 '+(d.precipitation_probability_max[i]||0)+'% rain'+sw+wt+'</span></div>';}}
-      h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 tide from the embedded '+curPort().name+' table. Forecast aid \u2014 check official marine warnings before heading out.</div>';
+      h+='</div><div class="bb-note" style="opacity:.75">Open-Meteo \u00b7 knots \u00b7 AEST \u00b7 tide from the embedded '+curP().name+' table. Forecast aid \u2014 check official marine warnings before heading out.</div>';
       out.innerHTML=h;
     }catch(e){out.innerHTML=(tide||'')+'<span class="bb-dim">No signal for live wind/swell \u2014 the tide above is offline. Tap again when you\u2019re back online.</span>';}
   }
-  btn.onclick=()=>load(BARGARA[0],BARGARA[1],'Bargara');
+  btn.onclick=()=>{const p=curP();load(p.lat,p.lng,p.name);};
   if(hereBtn)hereBtn.onclick=()=>{const c=map.getCenter();load(c.lat,c.lng,'this view');};
-  const t0=tideLine();if(t0)out.innerHTML=t0+'<span class="bb-dim">Tap Bargara or This view for live wind, rain &amp; swell.</span>';
+  const t0=tideLine();if(t0)out.innerHTML=t0+'<span class="bb-dim">Tap Live wind or This view for wind, rain &amp; swell.</span>';
 })();
 /* ---------- OFFLINE MAP SAVE (prefetch Esri tiles for current view) ---------- */
 async function saveViewOffline(o){
