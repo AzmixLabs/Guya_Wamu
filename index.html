@@ -984,6 +984,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sppick-row.on{background:rgba(80,160,200,.12)}
   .sppick-row.on .tk{opacity:1}
   .sppick-row.all{color:var(--depth);font-weight:600}
+  /* ---- Badges ---- */
+  .bdg-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .bdg-count{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.5px;color:var(--accent)}
+  .bdg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .bdg{position:relative;border:1px solid var(--line);border-radius:11px;padding:8px 5px 7px;text-align:center;
+    background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.12));overflow:hidden}
+  .bdg.on{border-color:var(--bdgc,#3fd0c9);box-shadow:inset 0 0 0 1px var(--bdgc,#3fd0c9),0 6px 16px -10px var(--bdgc,#3fd0c9)}
+  .bdg.off{opacity:.62}
+  .bdg .ic{font-size:21px;line-height:1.1;display:block;filter:grayscale(1) brightness(.8)}
+  .bdg.on .ic{filter:none}
+  .bdg .nm{font-size:9.5px;font-weight:600;line-height:1.2;margin-top:3px;color:var(--ink)}
+  .bdg.off .nm{color:var(--ink-dim)}
+  .bdg .dt{font-family:"IBM Plex Mono",monospace;font-size:8px;letter-spacing:.3px;color:var(--bdgc,#3fd0c9);margin-top:3px}
+  .bdg .pr{font-family:"IBM Plex Mono",monospace;font-size:8.5px;color:var(--ink-dim);margin-top:3px}
+  .bdg .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.08);margin-top:3px;overflow:hidden}
+  .bdg .bar i{display:block;height:100%;background:var(--bdgc,#3fd0c9);border-radius:2px}
+  .bdg .tier{position:absolute;top:4px;right:5px;font-family:"IBM Plex Mono",monospace;font-size:7px;letter-spacing:.5px;
+    text-transform:uppercase;color:var(--bdgc,#3fd0c9);opacity:.85}
+  .bdg .cert{margin-top:5px;font-size:8.5px;color:var(--accent);background:none;border:1px solid var(--line);
+    border-radius:6px;padding:2px 6px;cursor:pointer;font-family:"IBM Plex Mono",monospace}
+  .bdg .cert:active{background:rgba(63,208,201,.12)}
+  .bdg.secret .ic{filter:grayscale(1) brightness(.55)}
+  .bdg-who{margin-bottom:8px}
+  .bdg-foot{font-size:9px;color:var(--ink-dim);opacity:.8;margin-top:9px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -1008,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.28a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.06.28b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1047,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build v21 · 14 Jun 2026</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.06.28b</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1060,6 +1084,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="blk"><div class="lbl">Your patterns</div>
       <div class="dp-actions"><button class="dp-btn" id="ca-btn">📊 Show my patterns</button></div>
       <div class="bb-out" id="ca-out" style="margin-top:8px"></div>
+    </div>
+    <div class="blk"><div class="lbl">Badges &amp; achievements</div>
+      <div class="dp-actions"><button class="dp-btn" id="badge-btn">🏅 Show badges</button></div>
+      <div class="bb-out" id="badge-out" style="margin-top:8px"><span class="bb-dim">Earn badges from your catch log — milestones, species, tides, moons and a few secrets. Tap to see what's unlocked and what's next. Each unlocked badge can be saved as a certificate.</span></div>
     </div>
     <div class="blk"><div class="lbl">Base map</div>
       <div class="seg" id="baseseg"><button data-base="qld" class="on">QLD Aerial</button><button data-base="sat">Esri Sat</button><button data-base="osm">Streets</button></div>
@@ -2988,6 +3016,158 @@ async function saveViewOffline(o){
   b.onclick=()=>saveViewOffline(o);
   idbCount().then(c=>{if(c>0){o.innerHTML='<b>'+c+'</b> map tiles saved offline (Esri Sat). Switch to that layer to use them, save more from any view, or <button class="lnk" id="ofl-clear">clear cache</button>.';
     const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}});
+})();
+/* ---------- BADGES & ACHIEVEMENTS (item 6) ----------
+   Locally computable from the already-stamped catch log. No egress, no IndexedDB
+   writes; reads top-level `spots` + `profiles` and renders into #badge-out.
+   Badges celebrate the catch/effort, never legality. Certificates are offline canvas PNGs. */
+(function(){
+  const out=document.getElementById('badge-out');
+  const btn=document.getElementById('badge-btn');
+  if(!out||!btn)return;
+  const TIER={bronze:'#c8895a',silver:'#b6c2cc',gold:'#ffcf4d'};
+  let currentWho='';
+
+  function rowsFor(who){
+    const list=(typeof spots!=='undefined'?spots:[]);const rows=[];
+    list.forEach(function(s){(s.catches||[]).forEach(function(c){
+      if(!c)return; if(who&&c.by!==who)return; rows.push({s:s,c:c});});});
+    return rows;
+  }
+  function dtKey(c){return (c.date||'9999-99-99')+'T'+(c.time||'00:00');}
+  function season(dateStr){if(!dateStr)return null;const m=+(((dateStr+'').split('-')[1])||0);if(!m)return null;
+    if(m===12||m<=2)return 'Summer';if(m<=5)return 'Autumn';if(m<=8)return 'Winter';return 'Spring';}
+  function tmin(c){if(!c.time)return null;const p=(c.time+'').split(':');const h=+p[0],mm=+p[1];if(isNaN(h))return null;return h*60+(mm||0);}
+  function moonKind(c){const e=c.env&&c.env.moon;if(!e)return null;
+    if(e.name==='New moon')return 'new';if(e.name==='Full moon')return 'full';
+    if(e.illum!=null){if(e.illum<=12)return 'new';if(e.illum>=88)return 'full';}return null;}
+  function isSpring(c){const e=c.env&&c.env.moon;if(!e||e.illum==null)return false;return e.illum<=15||e.illum>=85;}
+  function tideState(c){const e=c.env&&c.env.tide;return (e&&e.state)?e.state:null;}
+  function spKey(c){return (typeof speciesKey==='function')?speciesKey(c.species):(c.species||'').toLowerCase().trim();}
+  function grp(n){return (typeof groupOfSpecies==='function')?groupOfSpecies(n):'';}
+  function isBream(n){return /bream/i.test(n||'');}
+  function isFlat(n){return grp(n)==='Flathead'||/flathead/i.test(n||'');}
+  function isWhiting(n){return grp(n)==='Whiting'||/whiting/i.test(n||'');}
+
+  const DEFS=[
+    {id:'first',name:'First Fish',ico:'\ud83c\udfa3',tier:'bronze',desc:'Log your first catch.',kind:'count',target:1,m:function(){return true;}},
+    {id:'board',name:'On the Board',ico:'\ud83d\udc1f',tier:'bronze',desc:'Log 10 catches.',kind:'count',target:10,m:function(){return true;}},
+    {id:'reg',name:'Regular',ico:'\ud83c\udfaf',tier:'silver',desc:'Log 25 catches.',kind:'count',target:25,m:function(){return true;}},
+    {id:'cent',name:'Centurion',ico:'\ud83d\udcaf',tier:'gold',desc:'Log 100 catches.',kind:'count',target:100,m:function(){return true;}},
+    {id:'sp5',name:'Species Starter',ico:'\ud83d\udc20',tier:'bronze',desc:'Catch 5 different species.',kind:'count',target:5,m:function(c){return !!spKey(c);},key:function(c){return spKey(c);}},
+    {id:'sp15',name:'Species Collector',ico:'\ud83d\uddc2\ufe0f',tier:'silver',desc:'Catch 15 different species.',kind:'count',target:15,m:function(c){return !!spKey(c);},key:function(c){return spKey(c);}},
+    {id:'sp30',name:'Species Master',ico:'\ud83d\udc51',tier:'gold',desc:'Catch 30 different species.',kind:'count',target:30,m:function(c){return !!spKey(c);},key:function(c){return spKey(c);}},
+    {id:'rel',name:'Release Champion',ico:'\u21a9\ufe0f',tier:'silver',desc:'Release 10 fish.',kind:'count',target:10,m:function(c){return c.kept==='released';}},
+    {id:'spots',name:'Rock Hopper',ico:'\ud83e\udea8',tier:'silver',desc:'Catch fish at 5 different spots.',kind:'count',target:5,m:function(){return true;},key:function(c,s){return s&&s.id;}},
+    {id:'pb',name:'PB Breaker',ico:'\u2b50',tier:'bronze',desc:'Log a personal-best length.',kind:'bool',m:function(c){return !!c.pb;}},
+    {id:'newmoon',name:'New-Moon Ninja',ico:'\ud83c\udf11',tier:'bronze',desc:'Land a catch around the new moon.',kind:'bool',m:function(c){return moonKind(c)==='new';}},
+    {id:'fullmoon',name:'Full-Moon Fever',ico:'\ud83c\udf15',tier:'bronze',desc:'Land a catch around the full moon.',kind:'bool',m:function(c){return moonKind(c)==='full';}},
+    {id:'spring',name:'Spring-Tide Specialist',ico:'\ud83c\udf0a',tier:'silver',desc:'5 catches on the big spring tides (near new or full moon).',kind:'count',target:5,m:function(c){return isSpring(c);}},
+    {id:'tide3',name:'Tide Whisperer',ico:'\ud83c\udf00',tier:'gold',desc:'Catch on a rising, a falling and a slack tide.',kind:'set',val:function(c){return tideState(c);},need:['rising','falling','slack']},
+    {id:'seasons',name:'Four Seasons',ico:'\ud83c\udf42',tier:'gold',desc:'Catch a fish in every season.',kind:'set',val:function(c){return season(c.date);},need:['Summer','Autumn','Winter','Spring']},
+    {id:'slam',name:'Grand Slam',ico:'\ud83c\udfc6',tier:'gold',secret:true,desc:'Bream, flathead and whiting in a single day.',kind:'bool',m:function(){return false;}},
+    {id:'dawn',name:'Dawn Patrol',ico:'\ud83c\udf05',tier:'silver',secret:true,desc:'A catch logged between 4:00 and 6:30am.',kind:'bool',m:function(c){var t=tmin(c);return t!=null&&t>=240&&t<390;}},
+    {id:'night',name:'Night Shift',ico:'\ud83c\udf19',tier:'silver',secret:true,desc:'A catch logged after dark (8pm to 4am).',kind:'bool',m:function(c){var t=tmin(c);return t!=null&&(t>=1200||t<240);}}
+  ];
+
+  function evalBadges(rows){
+    const sorted=rows.slice().sort(function(a,b){var ka=dtKey(a.c),kb=dtKey(b.c);return ka<kb?-1:ka>kb?1:0;});
+    const results=DEFS.map(function(d){
+      var unlocked=false,unlockDate=null,cur=0,target=d.target||1;
+      if(d.kind==='count'){
+        var seen=d.key?{}:null;
+        for(var i=0;i<sorted.length;i++){var r=sorted[i];
+          if(!d.m(r.c,r.s))continue;
+          if(seen){var k=d.key(r.c,r.s);if(k==null||seen[k])continue;seen[k]=1;}
+          cur++;
+          if(!unlocked&&cur>=target){unlocked=true;unlockDate=r.c.date||null;}}
+      }else if(d.kind==='bool'){
+        target=1;
+        for(var j=0;j<sorted.length;j++){if(d.m(sorted[j].c,sorted[j].s)){cur=1;unlocked=true;unlockDate=sorted[j].c.date||null;break;}}
+      }else if(d.kind==='set'){
+        target=d.need.length;var got={};
+        for(var n=0;n<sorted.length;n++){var v=d.val(sorted[n].c,sorted[n].s);
+          if(v==null||d.need.indexOf(v)<0||got[v])continue;got[v]=1;cur=Object.keys(got).length;
+          if(!unlocked&&cur>=target){unlocked=true;unlockDate=sorted[n].c.date||null;}}
+        cur=Object.keys(got).length;
+      }
+      return {id:d.id,name:d.name,ico:d.ico,tier:d.tier,desc:d.desc,secret:!!d.secret,unlocked:unlocked,unlockDate:unlockDate,cur:cur,target:target};
+    });
+    /* Grand Slam — per-day combination, computed across the day's catches */
+    var byDay={};
+    rows.forEach(function(r){var d=r.c.date;if(!d)return;var g=byDay[d]||(byDay[d]={b:false,f:false,w:false});
+      if(isBream(r.c.species))g.b=true;if(isFlat(r.c.species))g.f=true;if(isWhiting(r.c.species))g.w=true;});
+    var slamDays=Object.keys(byDay).filter(function(d){return byDay[d].b&&byDay[d].f&&byDay[d].w;}).sort();
+    var slam=results.find(function(x){return x.id==='slam';});
+    if(slam&&slamDays.length){slam.unlocked=true;slam.cur=1;slam.unlockDate=slamDays[0];}
+    return results;
+  }
+
+  function makeCert(b,who){
+    var p=who&&typeof profileById==='function'?profileById(who):null;
+    var angler=p?p.name:(who?'Angler':'Our crew');
+    var col=TIER[b.tier]||'#3fd0c9';
+    var W=720,H=520,cv=document.createElement('canvas');cv.width=W;cv.height=H;var x=cv.getContext('2d');
+    var g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0e2230');g.addColorStop(1,'#091821');x.fillStyle=g;x.fillRect(0,0,W,H);
+    x.strokeStyle=col;x.lineWidth=4;x.strokeRect(18,18,W-36,H-36);
+    x.strokeStyle='rgba(255,255,255,.12)';x.lineWidth=1;x.strokeRect(30,30,W-60,H-60);
+    x.textAlign='center';
+    x.fillStyle=col;x.font='600 18px "IBM Plex Mono",monospace';x.fillText('G U Y A   \u00b7   ACHIEVEMENT',W/2,80);
+    x.fillStyle='#8aa3b0';x.font='12px "IBM Plex Mono",monospace';x.fillText((b.tier||'').toUpperCase()+' BADGE',W/2,102);
+    x.font='110px serif';x.fillText(b.ico,W/2,252);
+    x.fillStyle='#dfeaf0';x.font='600 34px Sora,system-ui,sans-serif';x.fillText(b.name,W/2,322);
+    x.fillStyle='#aebfc9';x.font='15px Sora,system-ui,sans-serif';x.fillText(b.desc,W/2,354);
+    x.fillStyle='#8aa3b0';x.font='13px "IBM Plex Mono",monospace';x.fillText('AWARDED TO',W/2,412);
+    x.fillStyle=col;x.font='600 26px Sora,system-ui,sans-serif';x.fillText(angler,W/2,444);
+    x.fillStyle='#8aa3b0';x.font='12px "IBM Plex Mono",monospace';x.fillText('Unlocked '+(b.unlockDate||'\u2014')+'   \u00b7   land-based \u00b7 Moreton Bay',W/2,480);
+    try{
+      var url=cv.toDataURL('image/png');
+      var a=document.createElement('a');a.href=url;a.download='guya-badge-'+b.id+'.png';document.body.appendChild(a);a.click();a.remove();
+      if(typeof showPhotoLightbox==='function')showPhotoLightbox(url);
+    }catch(e){alert('Could not generate the certificate image on this device.');}
+  }
+
+  function render(){
+    var who=currentWho;
+    var rows=rowsFor(who);
+    var results=evalBadges(rows);
+    var earned=results.filter(function(b){return b.unlocked;}).length;
+    var plist=(typeof profiles!=='undefined'&&profiles&&profiles.list)?profiles.list:[];
+    var opts='<option value="">Everyone</option>'+plist.map(function(p){
+      return '<option value="'+p.id+'"'+(p.id===who?' selected':'')+'>'+escText(p.name)+'</option>';}).join('');
+    var h='<div class="bdg-head"><select id="bdg-who" class="bb-in bdg-who">'+opts+'</select>'
+      +'<span class="bdg-count">'+earned+' / '+results.length+'</span></div>';
+    if(!rows.length){h+='<div class="bb-note" style="opacity:.85">No catches logged'+(who?' for this angler':'')
+      +' yet \u2014 log a few from a spot popup and badges start unlocking.</div>';}
+    h+='<div class="bdg-grid">';
+    results.forEach(function(b){
+      var col=TIER[b.tier]||'#3fd0c9';
+      var cls='bdg '+(b.unlocked?'on':'off')+(b.secret&&!b.unlocked?' secret':'');
+      var showName=(b.secret&&!b.unlocked)?'Secret badge':b.name;
+      var ico=(b.secret&&!b.unlocked)?'\u2754':b.ico;
+      var mid='';
+      if(b.unlocked){mid='<div class="dt">'+(b.unlockDate?b.unlockDate:'unlocked')+'</div>'
+        +'<button class="cert" data-bid="'+b.id+'">certificate</button>';}
+      else if(b.secret){mid='<div class="pr">hidden</div>';}
+      else if(b.target>1){var pct=Math.max(0,Math.min(100,Math.round(100*b.cur/b.target)));
+        mid='<div class="pr">'+b.cur+' / '+b.target+'</div><div class="bar"><i style="width:'+pct+'%"></i></div>';}
+      else{mid='<div class="pr">locked</div>';}
+      h+='<div class="'+cls+'" style="--bdgc:'+col+'" title="'+escText(b.desc)+'">'
+        +'<span class="tier">'+escText(b.tier)+'</span><span class="ic">'+ico+'</span>'
+        +'<div class="nm">'+escText(showName)+'</div>'+mid+'</div>';
+    });
+    h+='</div>';
+    h+='<div class="bdg-foot">Earned from your own log only. Tide &amp; moon badges use the reading stamped when the catch was logged, so older entries with no reading do not count toward them'
+      +(who?'':'. "Everyone" includes catches logged before anglers were named')
+      +'. Badges celebrate the catch \u2014 never whether a fish is legal to keep.</div>';
+    out.innerHTML=h;
+    var sel=document.getElementById('bdg-who');
+    if(sel)sel.onchange=function(){currentWho=sel.value;render();};
+    out.querySelectorAll('.cert[data-bid]').forEach(function(bn){
+      bn.onclick=function(){var id=bn.getAttribute('data-bid');var b=results.find(function(x){return x.id===id;});if(b)makeCert(b,who);};});
+  }
+
+  btn.onclick=render;
 })();
 </script>
 <div id="hov-depth" style="position:fixed;display:none;pointer-events:none;z-index:1200;background:rgba(10,18,32,.92);color:#cfe8ff;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:4px 8px;border-radius:6px;border:1px solid rgba(120,170,220,.35)"></div>
