@@ -1,0 +1,11 @@
+# Claude Code local/machine-specific overrides (never commit)
+.claude/settings.local.json
+
+# Raw geospatial source data — process locally, commit only the baked output
+data/raw/
+*.tif
+*.tiff
+*.shp
+*.dbf
+*.shx
+*.prj
