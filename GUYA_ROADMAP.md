@@ -1,12 +1,13 @@
 # Guya — Feature Backlog & Roadmap
-*v16.7 · 4 Jul 2026 — storage-check diagnostic shipped (build 2026.07.04a)*
+*v16.12 · 5 Jul 2026 — anomaly resolved (real zones, no bug); Brisbane River/Bremer/Redland
+intertidal-ground CSV processed and exported*
 
 Personal / family land-based fishing **+ nature field-log** tool. Single self-contained HTML
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.04a *(temporary storage-check diagnostic — see changelog v16.7; previous: 2026.06.28b, Badges)*
-**Next session:** current build **2026.07.04a** (temporary `storage_check.html` + info-block link shipped, both flagged for removal); recommended next job: Aaron runs the on-phone storage check → verdict picks 8-way split import (full-res) vs auto-thinned single import (~547 KB), then remove the diagnostic in that same build; pending cleanup: ~128 GB raw LiDAR in `data/raw/` + 3 old EOMAP zips are safe to delete (v16.6). — Item 6 (Badges) is SHIPPED, so the queue's strong picks are: **Region 2b (Sunshine Coast)** — the next region; the old "blocked on external data egress" note is **stale** (that was the claude.ai-sandbox era — Claude Code CLI has confirmed local egress since 2 Jul). As of v16.3, **2b's zoning/FHA/tide-port data is pulled, validated and ready to wire** (`data/great_sandy_zones_2026.geojson`, `data/fha_se_qld_2026.geojson`, Mooloolaba confirmed as the tide port) — the Maroochy/Noosa/Beachmere ELVIS Point Clouds (AHD) delivery has now been processed (v16.5, 4 Jul) into `data/sunshine_coast_intertidal_ground_v1.csv` — but that dataset is **intertidal/exposed ground elevation only, not channel/gutter depth** (the sensors can't see through water — see v16.5 for the empirical proof); genuine bathymetry for Sunshine Coast is still an open decision. A 2b wiring build (zoning/FHA/tides + the intertidal layer) is a clean inline job, not a data-run blocker. **DEA Intertidal exposure layer (item 14b)** — qualified GO, gated on a manual DEA-Maps confidence check over Hays Inlet / Bramble Bay / Pumicestone first; or **profile-aware patterns / views (4c+)** — fully local, no egress, builds on the avatars already stamped. Strong picks for the next inline build: **2b wiring** (zoning/FHA/tides only), 14b (after the manual check), or 4c+. **Badges shipped (v16 / 2026.06.28b):** 18 badges computed entirely from the stamped catch log (counts, distinct-species, released, distinct-spots, PB, moon-phase, spring-tide, all-tide-phases, four-seasons, + secret Grand Slam / Dawn Patrol / Night Shift); per-angler filter; offline canvas PNG certificates; zero egress, no IndexedDB writes, catch-log only. **The Bargara-anchored astronomy / wind remnants were CLEARED (v15 / 2026.06.28a):** best-bite sun/moon, both wind buttons, and the spot wind-check all follow the nearest tide port (`nearestPort(map.getCenter())`); and the live-wind button's latent `ReferenceError` (it called the best-bite IIFE's private `curPort()`/`tideTable()` from a sibling scope and silently fell to "No signal" even online) is fixed in the same pass. **Region 2a is COMPLETE at v14 / 2026.06.27a:** Brisbane Bar 2026 tides + 74-zone Moreton Bay park + `PORTS`/`nearestPort` + most-protective `zoneAt()` (MNP > CPZ > HPZ > GUZ) + region-aware popups + Redcliffe default view. **Still pending for home water:** 2027 Brisbane Bar tides (needed before the 2027 season, not blocking 2026); FHA + depth for Moreton accrete later as the rest of #15.
+**Current build:** 2026.07.04a *(storage_check.html diagnostic page + temporary in-app link — see changelog v16.7)*
+**Next session:** anomaly RESOLVED (v16.12 — MNP03/MNP08 are real legislated no-take zones, no bug, nothing patched; git confirmed NO 2b wiring build has run — zoning/FHA wiring still open). Brisbane River UNPAUSED and DONE: `data/brisbane_river_intertidal_ground_v1.csv` (209,540 pts) exported, awaiting phone import (same auto-thin single-pass route as Sunshine Coast per v16.10). Recommended next job: **2b wiring build** (zoning/FHA/tides — data validated since v16.3) or import the Brisbane CSV; pending cleanup: raw LiDAR in `data/raw/` disposable once the Brisbane CSV renders correctly; `storage_check.html` + its index.html link still flagged for removal. Gold Coast stays parked. — *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
 builds have moved to **Claude Code CLI**, running locally against the `AzmixLabs/Guya` repo
 (`D:\Claude Code` on Aaron's machine) — `CLAUDE.md`, `.claude/settings.json`, and this roadmap are
@@ -572,6 +573,16 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
       file as the first FHA layer, source Mooloolaba's day-by-day 2026 H/L into a
       `MOOLOOLABA_TIDES_2026` embed. Bathy-LiDAR depth ingest remains the separate, meatier piece
       tracked in v16.2.
+      **STATUS UPDATE (v16.9–v16.11, 4 Jul):** the depth half is now DONE — the intertidal-ground CSV
+      (`sunshine_coast_intertidal_ground_v1.csv`, 188,855 points) has been imported to Aaron's phone
+      as a single-pass, auto-thinned import (~18,875 points / ~547 KB, ~79 m effective resolution —
+      the phone's real `localStorage` headroom, measured at ~4.0 MB, doesn't support the full-
+      resolution multi-chunk alternative; see v16.9 for the fill-test result and v16.6/v16.9 for the
+      thinning-algorithm confirmation). **Whether the zoning/FHA/tides wiring build described above
+      has actually been run is now UNCONFIRMED** — a visual anomaly surfaced on the live map (v16.11)
+      that could indicate a wiring build happened silently (with a bug) or could be unrelated; a
+      git-history check is queued to settle this before assuming either way. Do not re-attempt the
+      wiring build until that's resolved — see the top-of-file status block and v16.11.
     - **Data-prep workbench:** **QGIS** turns the official source into app-ready GeoJSON — download the
       **QSpatial** 2019 zoning + FHA (SHP / FGDB), clip to the home extent, reproject **GDA94 → WGS84**,
       **simplify vertices** (keep the single-file size sane), export GeoJSON for `zoneAt()`. QSpatial =
@@ -752,36 +763,6 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   intertidal-only coverage the same way the roadmap's own "no depth layer" fallback already treats
   Moreton Bay's turbid water.
 
-- **v16.7 (4 Jul 2026, build 2026.07.04a — small temporary diagnostic, flagged for removal):**
-  **Answered v16.6's open question by direct code read: the 25,000-point cap is per single CSV
-  parse, not the total merged store** — the `MAXP=25000` thinning loop (index.html ~line 2817)
-  runs on the just-parsed `pts` array *before* the merge prompt, and the persisted `imported`
-  array is only ever appended to, never re-thinned. So the 8-way split-import path is viable:
-  each ~23,500-point chunk dodges the cap entirely and all 188,855 points survive at full 25 m
-  resolution. Also verified the auto-thin algorithm while in there (it's spatial grid-bucketing
-  at ~13 m start, coarsening ×1.6 until under cap — not random drop; one point per bucket wins,
-  which answers v16.6's "undocumented algorithm" caution: simulated in Node against the real CSV,
-  it lands at 18,875 points / ~547 KB). **But split-import total = 5.34 MB of localStorage**
-  (simulated with the app's exact parse/merge semantics, not estimated), and iOS home-screen
-  web apps get their own storage container with a quota that can't be assumed — so the real
-  gate is measured headroom, not the cap. **Shipped build 2026.07.04a to measure it:**
-  `storage_check.html` (repo root, temporary) — on-page phone-readable diagnostic: standalone-
-  container YES/NO check (`navigator.standalone`), per-key localStorage byte table, button-
-  triggered fill-test (1 MB chunks to a throwaway `__quota_test__` key, 30 MB cap, cleaned up in
-  a `finally`), `navigator.storage.estimate()`, and a verdict line against the 5.34 MB full-res
-  import with 2× margin (Brisbane River will need the same store later). Plus one plain
-  same-origin anchor in index.html's info block ("Storage check (temporary)" — no `target=_blank`,
-  so it stays inside the home-screen container). `saveImp()` failure path also checked for the
-  split-import scenario: quota failure alerts but doesn't corrupt — each chunk's `setItem` is
-  all-or-nothing, so a failure on chunk N leaves chunks 1..N−1 persisted; the only loss risk is
-  closing the app before re-trying (in-memory merge isn't re-saved). Leaflet block byte-identical
-  (md5 cab0fd0f0d88d5ae473c6a6812dba859), both script blocks `node --check` clean, `zoneAt()` +
-  green-zone drag safeguard confirmed intact. **REMOVAL FLAGGED: both `storage_check.html` and
-  the index.html anchor come out in a later build once the import decision is made.**
-  **Next:** Aaron runs the storage check on the phone (from the home-screen app, confirm the
-  YES on section 0) → verdict decides: ≥2× margin → 8-way split import at full resolution;
-  tight/no → auto-thinned single import (18,875 pts, ~547 KB). Then Brisbane River AOI order.
-
 - **v16.6 (4 Jul 2026, planning-chat review — no code shipped):** Reviewed the v16.5 output.
   Point count, elevation range, sign convention, and coverage-delta math all check out — no
   errors found, the "100% negative = dries-only" empirical proof is a sound way to confirm the
@@ -805,9 +786,153 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   disposable per the existing policy (Sunshine Coast CSV is validated) — safe to delete now and
   free the disk space; the 3 old rejected EOMAP zips sitting alongside the new data in the same
   `Sunshine-Coast/` folder are also safe to clear out, no further use.
-  **Next:** Claude Code check — per-import or total-store cap? — then either the 8-way split
-  import (no data loss) or a ~70–75m re-export (fallback). Brisbane River AOI still needs
-  ordering (mouth→Mt Crosby Weir, separate draw, not started). Gold Coast stays parked.
+
+- **v16.7 (4 Jul 2026, Claude Code build 2026.07.04a):** Shipped `storage_check.html` (repo root,
+  flagged temporary) + a small `index.html` change to reach it. **Why the link was needed:** Guya
+  now runs on Aaron's phone as an iOS home-screen web app — standalone mode has no URL bar, and
+  each home-screen icon gets its own separate storage container, so the diagnostic page had to be
+  reachable via an in-app, same-origin link (plain relative anchor, deliberately NO `target=_blank`
+  — the adjacent official-zoning links do use `_blank`, an easy mistake avoided). **Page contents:**
+  Section 0 — big YES/NO on `navigator.standalone` (+ display-mode fallback) so results can't be
+  misread as coming from the wrong container; Section 1 — per-key `localStorage` usage + total;
+  Section 2 — button-triggered fill-test (not auto-run, to avoid freezing the page mid-load), 1 MB
+  chunks to a throwaway key, 30 MB cap, removed in a `finally` even on error; Section 3 —
+  `navigator.storage.estimate()` usage/quota; a verdict line answering directly whether the 5.34 MB
+  full-resolution Sunshine Coast import fits with ≥2× margin, stating remaining headroom either
+  way (explicitly flagging that Brisbane River will need the same store later). **Build discipline:**
+  Leaflet block byte-identical (md5 confirmed, 147,570 bytes before/after), both script blocks
+  `node --check` clean, `zoneAt()` most-protective-wins intact, green-zone drag safeguard intact,
+  build string bumped in both locations. **Mid-session scare, resolved as a non-issue:** the repo
+  was found renamed to `AzmixLabs/Guya_Wamu`; flagged as a risk to the GitHub Pages URL and the
+  phone's home-screen icon (icons re-added under a new URL get a fresh, empty container). **Aaron
+  confirmed no rebuild was needed — the existing URL/icon kept working.** No migration occurred.
+
+- **v16.8 (4 Jul 2026, planning + instructions rewrite — no code shipped):** Diagnosed an earlier
+  phone-side data loss (spots + test photos missing from Aaron's iPhone) as most likely **iOS
+  Safari's ~7-day script-writable-storage eviction** — confirmed NOT caused by the Claude Code
+  workflow migration, which never touches the phone. **Standing fix adopted:** Guya lives on the
+  phone as a **home-screen app** going forward (exempt from the eviction, gets its own storage
+  container) — all phone-side imports and quota checks happen in that container, never a Safari
+  tab. **version:2 export adopted as a standing backup habit** (confirmed to carry spots, photos,
+  profiles, and imported depths together) — export after any import session or meaningful logging
+  day, save to iCloud/Files. **Project instructions rewritten (rev B)** with three new sections —
+  MODEL SELECTION (Sonnet default; Fable 5 for long autonomous runs/root-cause work, ~2× credit
+  cost, past failures were process gaps not model quality), DEVICE DATA & BACKUPS (the per-device/
+  per-container storage facts above), LONG-RUN DISCIPLINE (progress print + checkpoint + resume +
+  smoke-test + real PID, required for any batch job over ~100 files or ~10 minutes) — plus
+  corrected ELVIS facts (Point Clouds/AHD is the correct bucket; Bathymetry-3m is EOMAP
+  satellite-derived and rejected; the ~15 GB cap auto-chunks rather than rejects; GA's result email
+  can take hours, silence ≠ failure; QLD coastal Point Clouds are topo-NIR, class-2 ground only,
+  never call the output "depth"/"bathymetry") and the Noosa Head Standard Port fix carried through
+  into the instructions file itself, not just this roadmap.
+
+- **v16.9 (4 Jul 2026, on-phone verification — no code shipped):** Ran `storage_check.html` on the
+  phone in the home-screen container. **Section 0 confirmed standalone: YES** — numbers are real.
+  **Section 1:** existing data confirmed intact — `woongarra_imported_v1` (262.6 KB, the Woongarra
+  depth set) and `woongarra_spots_v1` (20.8 KB) both present; total usage 284.3 KB across 10 keys.
+  Nothing was actually lost from this container. **Section 3** (`estimate()`) reported 1.23 MB used
+  of a 39,321.6 MB quota — **flagged as the wrong number to decide on**, since that figure is
+  IndexedDB-inclusive (photos, offline tiles) and vastly overstates the much stricter
+  `localStorage`-specific ceiling. **Section 2 fill-test (the number that actually decided this):
+  ~4.0 MB real remaining headroom.** Verdict: **full-resolution 8-chunk import (needs ≥10.68 MB
+  margin) does NOT fit — single-pass auto-thinned import is the correct path.** Decision made:
+  import the full 188,855-point CSV as one file; the app's own grid-thinning brings it under the
+  25,000-point cap automatically (simulated result from v16.6-era code-read: ~18,875 points,
+  ~547 KB). **Resolves the v16.6 open question on the thinning algorithm — confirmed SPATIAL grid-
+  thinning, not random sampling** (Claude Code's direct code-read of the parse/thin loop). Working:
+  188,855 ÷ 18,875 ≈ 10.01× fewer points → grid spacing scales with √10.01 ≈ 3.16× → 25 m × 3.16 ≈
+  **~79 m effective resolution** post-thin, in the same ballpark as the v16.6 manual-regrid fallback
+  estimate — the app is doing that job automatically at import time, no extra Claude Code
+  processing needed.
+
+- **v16.10 (4 Jul 2026, data-processing — no `index.html` change):** Sunshine Coast CSV imported to
+  the phone (single pass, MERGE — preserving the existing Woongarra data confirmed in v16.9).
+  `sunshine_coast_intertidal_ground_v1.csv` (the full, un-thinned 188,855-point file, 5.16 MB on
+  disk) confirmed as the kept artefact per the existing disposable-raw/kept-CSV policy — to be
+  committed to the repo (not `data/raw/`) if not already; `git status` check flagged as the way to
+  confirm this rather than assume it. **Brisbane River LiDAR AOI now downloaded** by Aaron — **not
+  yet processed**, pending confirmation of (1) correct ELVIS bucket (Point Clouds/AHD, not the
+  EOMAP Bathymetry-3m bucket the first Sunshine Coast attempt mistakenly ordered from) and (2)
+  correct AOI bounds (the tidal reach only, mouth→Mt Crosby Weir, not a wide Moreton-Bay-style box —
+  the same mislabelling risk that hit the first Sunshine Coast draw). Remaining phone `localStorage`
+  headroom after the thinned import: ~4.0 MB measured − 0.55 MB just used ≈ **~3.45 MB** — Brisbane
+  River's output size needs checking against this before it's imported, likely also single-pass/
+  auto-thinned rather than multi-chunk.
+
+- **v16.11 (4 Jul 2026, planning — investigation queued, no code shipped):** Post-import visual
+  check surfaced a geometric anomaly on the live map near/offshore of Caloundra — a wedge converging
+  to a single point, plus a disconnected dashed-green quadrilateral sitting alone in open ocean.
+  **Reproduced identically on both desktop and phone** — rules out a stale-view explanation. Renders
+  under the app's existing **"Marine-park zones" toggle** (dashed-green matches established MNP
+  no-take styling), which redirects the investigation to **`ZONES.features`, not the newly-imported
+  depth CSV**. Two leading theories, **neither confirmed yet**: (a) a **partial-reprojection bug**
+  on a specific feature — some vertices transformed correctly, others left in the wrong coordinate
+  system, producing exactly this wedge-to-a-point shape (precedent already on file: `Noosa_2015_LGA`'s
+  known-bad CRS VLR from v16.5); or (b) a **stray AOI/clip-boundary scratch polygon** — used to
+  bound a data pull, then accidentally merged into `ZONES.features` instead of being discarded
+  (simple rectangles/wedges are exactly what a clip boundary looks like, as opposed to a real
+  legislated zone). **Also newly open: whether a 2b zoning/FHA wiring build was actually run and
+  never reported back to this planning chat** — a `git log -p` check on whatever last touched
+  `ZONES.features` is queued to settle this alongside the anomaly itself. **Reassessed as likely
+  correct, not a bug:** the complex coastline-hugging zone shapes visible around Bribie Island/
+  Redcliffe in the same wider screenshots — Moreton Bay Marine Park's documented northern boundary
+  is Caloundra, so already-shipped 2a zone data would legitimately start appearing exactly there;
+  Aaron simply hadn't scrolled this far north in the app before. Lower priority to verify than the
+  offshore anomaly, but worth a spot-check against the known-good v14 Moreton zone set (same zid/
+  name/zt) once the main investigation is underway. **Diagnostic-first Claude Code prompt issued —
+  explicitly does NOT patch or re-export anything until it reports back which of the above this
+  actually is.** **Brisbane River processing stays paused** behind this: if the root cause turns out
+  to be a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on
+  Brisbane River's zone/tide wiring, not just Sunshine Coast's.
+
+- **v16.12 (5 Jul 2026, investigation + data-processing — no `index.html` change):**
+  **Anomaly RESOLVED — real zones, no bug, nothing patched.** Both shapes are legislated
+  Marine National Park (no-take) zones rendering correctly: the wedge is **MNP03 "Northern
+  Wedge"** (125.41 km², 7 vertices) and the quadrilateral is **MNP08 "Deep Offshore Moreton
+  Island"** (15.15 km², 5 vertices). Chain of custody verified unbroken: geometry byte-identical
+  from the raw ArcGIS pull (`data/raw/moreton_zones_raw.geojson`, official `zone_type` "Marine
+  National Park Zone" + legislated areas) → validated `moreton_zones_2019.geojson` → shipped
+  `ZONES.features`. The schedule-style round coordinates (153.16667 = 153°10′E) are how offshore
+  boundaries are legislated — straight lines between listed points — which is exactly why real
+  offshore zones look like hand-drawn wedges, unlike coastline-hugging inshore zones. Neither
+  theory (partial reprojection / stray AOI scratch) held. **Git-history check: NO 2b wiring
+  build was ever run** — `ZONES.features` counts exactly 178 = 104 Great Sandy + 74 Moreton
+  (v14 state); 2b wiring remains open. **Bribie/Redcliffe spot-check passed in full:** all 74
+  Moreton features byte-identical to the validated 2019 set, zero property drift. Incidental
+  note: `zid` values collide across parks (GUZ01 = both "Kolan"/Great Sandy and "Bulcock
+  Beach"/Moreton) — harmless today (`zoneAt()` returns properties, no zid lookups), a trap only
+  if anything keyed on bare `zid` gets built.
+  **Brisbane River UNPAUSED and processed end-to-end** (verification report → Aaron's go-ahead
+  → full run): 1,076 point-cloud tiles across 12 survey groups (682 Brisbane 2009/2014/2019,
+  185 Ipswich/Bremer 2009/2014/2019/2023, 203 Redland 2009/2014/2022, 9 Pine River strays) from
+  2 deliveries (~97 GB); `DATA_2047337.zip` (DEM bucket, 331 tiles) deleted unprocessed — wrong
+  product type, zero point-cloud tiles inside. **Same sensor verdict as Sunshine Coast,
+  empirically confirmed, with a new trap found and fixed:** topographic NIR, no channel
+  coverage — but Brisbane's class-2 included a dense 180×175 m fused-survey/artifact patch at
+  −15..−2 m AHD (CBD tile, ~4,180 pts/cell — far too dense for aerial LiDAR through water) that a
+  naive export would have shipped as fake riverbed. Fixed by tightening the class-2 floor to
+  **−1.6 m AHD** (just below Brisbane Bar LAT −1.32; genuine intertidal ground can't sit below
+  LAT) — fix verified on that exact tile before the batch. **Datum:** AHD confirmed per-tile
+  across all six vintages (2009→"AHD" … 2023→"AHD, AusGeoid2020"); horizontal split GDA94
+  (pre-2022) / GDA2020 (2022–23) handled per-group. **AHD→LAT offsets carried per-group through
+  the pipeline, not blanket:** Brisbane/Redland/Pine River → Brisbane Bar 1.32 m; Ipswich groups
+  → Warrego Highway Bridge (Bremer) 1.21 m — both from MSQ 2024 Semidiurnal Tidal Planes; the
+  0.11 m seam between the two at the Moggill junction is a noted soft precision limit. **AOI check:** zero tiles
+  upstream of Mt Crosby Weir on the Brisbane arm; the 88 tiles west of the weir's easting are
+  the tidal Bremer corridor (MSQ station exists), and the Redland/Cleveland block + Pine River
+  strays were confirmed deliberate by Aaron — full AOI processed, no scope exclusions.
+  **Output: `data/brisbane_river_intertidal_ground_v1.csv`** — 209,540 points (25 m grid,
+  newest-vintage-wins dedup), 5.97 billion raw class-2 returns in, 19 all-water/zero-ground
+  tiles, zero read errors. Range −6.32 to +0.19 m below LAT; 209,538 of 209,540 points are
+  negative (dries above LAT) — the 2 at/below LAT are low-tide water's-edge returns, within
+  tolerance. Coordinate range lon 152.737–153.324 / lat −27.643–−27.285 matches
+  Bremer→Redland exactly. Over the 25k import cap — same single-pass auto-thin import route as
+  Sunshine Coast (v16.10) applies. **Labelling discipline held: intertidal/exposed-ground
+  elevation, never "depth"/"bathymetry", in filename, code, and comments.** Pipeline hardening
+  vs the SC run: per-cell reservoir sampling capped the checkpoint at 52 MB (SC hit 9 GB).
+
+  **Next (pre-v16.12 list, still-open items only):** Brisbane CSV phone import; 2b wiring
+  build; Gold Coast stays parked.
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
