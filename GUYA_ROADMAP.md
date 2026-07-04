@@ -1,12 +1,145 @@
 # Guya — Feature Backlog & Roadmap
-*v16 · 28 Jun 2026*
+*v16.7 · 4 Jul 2026 — storage-check diagnostic shipped (build 2026.07.04a)*
 
 Personal / family land-based fishing **+ nature field-log** tool. Single self-contained HTML
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.06.28b *(Badges / achievements shipped — see changelog v16)*
-**Next build:** `2026.06.NNa` — **open.** Item 6 (Badges) is now SHIPPED, so the queue's strong picks are: **Region 2b (Sunshine Coast)** — the next region, where depth actually works (real 5 m Maroochy/Noosa bathy-LiDAR), but still **blocked on external data egress** (LAT tide tables + FHA polygons + LiDAR are unreachable in-sandbox → **local-build handoff, not an inline build**); **DEA Intertidal exposure layer (item 14b)** — qualified GO, gated on a manual DEA-Maps confidence check over Hays Inlet / Bramble Bay / Pumicestone first; or **profile-aware patterns / views (4c+)** — fully local, no egress, builds on the avatars already stamped. The cleanest *inline* next job is 14b (after the manual check) or 4c+; 2b needs a data run first. **Badges shipped (v16 / 2026.06.28b):** 18 badges computed entirely from the stamped catch log (counts, distinct-species, released, distinct-spots, PB, moon-phase, spring-tide, all-tide-phases, four-seasons, + secret Grand Slam / Dawn Patrol / Night Shift); per-angler filter; offline canvas PNG certificates; zero egress, no IndexedDB writes, catch-log only. **The Bargara-anchored astronomy / wind remnants were CLEARED (v15 / 2026.06.28a):** best-bite sun/moon, both wind buttons, and the spot wind-check all follow the nearest tide port (`nearestPort(map.getCenter())`); and the live-wind button's latent `ReferenceError` (it called the best-bite IIFE's private `curPort()`/`tideTable()` from a sibling scope and silently fell to "No signal" even online) is fixed in the same pass. **Region 2a is COMPLETE at v14 / 2026.06.27a:** Brisbane Bar 2026 tides + 74-zone Moreton Bay park + `PORTS`/`nearestPort` + most-protective `zoneAt()` (MNP > CPZ > HPZ > GUZ) + region-aware popups + Redcliffe default view. **Still pending for home water:** 2027 Brisbane Bar tides (needed before the 2027 season, not blocking 2026); FHA + depth for Moreton accrete later as the rest of #15.
+**Current build:** 2026.07.04a *(temporary storage-check diagnostic — see changelog v16.7; previous: 2026.06.28b, Badges)*
+**Next session:** current build **2026.07.04a** (temporary `storage_check.html` + info-block link shipped, both flagged for removal); recommended next job: Aaron runs the on-phone storage check → verdict picks 8-way split import (full-res) vs auto-thinned single import (~547 KB), then remove the diagnostic in that same build; pending cleanup: ~128 GB raw LiDAR in `data/raw/` + 3 old EOMAP zips are safe to delete (v16.6). — Item 6 (Badges) is SHIPPED, so the queue's strong picks are: **Region 2b (Sunshine Coast)** — the next region; the old "blocked on external data egress" note is **stale** (that was the claude.ai-sandbox era — Claude Code CLI has confirmed local egress since 2 Jul). As of v16.3, **2b's zoning/FHA/tide-port data is pulled, validated and ready to wire** (`data/great_sandy_zones_2026.geojson`, `data/fha_se_qld_2026.geojson`, Mooloolaba confirmed as the tide port) — the Maroochy/Noosa/Beachmere ELVIS Point Clouds (AHD) delivery has now been processed (v16.5, 4 Jul) into `data/sunshine_coast_intertidal_ground_v1.csv` — but that dataset is **intertidal/exposed ground elevation only, not channel/gutter depth** (the sensors can't see through water — see v16.5 for the empirical proof); genuine bathymetry for Sunshine Coast is still an open decision. A 2b wiring build (zoning/FHA/tides + the intertidal layer) is a clean inline job, not a data-run blocker. **DEA Intertidal exposure layer (item 14b)** — qualified GO, gated on a manual DEA-Maps confidence check over Hays Inlet / Bramble Bay / Pumicestone first; or **profile-aware patterns / views (4c+)** — fully local, no egress, builds on the avatars already stamped. Strong picks for the next inline build: **2b wiring** (zoning/FHA/tides only), 14b (after the manual check), or 4c+. **Badges shipped (v16 / 2026.06.28b):** 18 badges computed entirely from the stamped catch log (counts, distinct-species, released, distinct-spots, PB, moon-phase, spring-tide, all-tide-phases, four-seasons, + secret Grand Slam / Dawn Patrol / Night Shift); per-angler filter; offline canvas PNG certificates; zero egress, no IndexedDB writes, catch-log only. **The Bargara-anchored astronomy / wind remnants were CLEARED (v15 / 2026.06.28a):** best-bite sun/moon, both wind buttons, and the spot wind-check all follow the nearest tide port (`nearestPort(map.getCenter())`); and the live-wind button's latent `ReferenceError` (it called the best-bite IIFE's private `curPort()`/`tideTable()` from a sibling scope and silently fell to "No signal" even online) is fixed in the same pass. **Region 2a is COMPLETE at v14 / 2026.06.27a:** Brisbane Bar 2026 tides + 74-zone Moreton Bay park + `PORTS`/`nearestPort` + most-protective `zoneAt()` (MNP > CPZ > HPZ > GUZ) + region-aware popups + Redcliffe default view. **Still pending for home water:** 2027 Brisbane Bar tides (needed before the 2027 season, not blocking 2026); FHA + depth for Moreton accrete later as the rest of #15.
+**As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
+builds have moved to **Claude Code CLI**, running locally against the `AzmixLabs/Guya` repo
+(`D:\Claude Code` on Aaron's machine) — `CLAUDE.md`, `.claude/settings.json`, and this roadmap are
+committed there; this project (chat) stays for planning/ideas/roadmap deltas only, never builds.
+**index.html (2026.06.28b) re-verified by direct file read, not assumed:** 178 zone features
+confirmed present (104 Great Sandy + 74 Moreton — matches spec), zoning is genuinely complete. One
+cosmetic gap found: the header still reads "Woongarra Coast · Great Sandy MP" with no mention of
+Moreton Bay despite the data being loaded — fix in a future build, not urgent. **Depth-data
+architecture clarified from the actual import code (was previously under-specified):** imported
+LiDAR/survey depths are NOT baked into `index.html` — they live in browser `localStorage`
+(`woongarra_imported_v1`) via the existing, already-generic "Imported depths" panel (plain CSV,
+`lat,lng,depth` in metres below LAT, auto-thins to 25,000 points). This means multi-region depth
+work (Sunshine Coast, Brisbane River, Burnett-area rivers) is a **data-processing task** (clip raw
+LiDAR, convert AHD→LAT properly, export CSV, import through the app's own UI) — **not an
+index.html build**, no `node --check`, no commit needed for the depth data itself. One trap: the
+imported set is a single array, not region-scoped — importing a new area must choose MERGE, not
+REPLACE, or it wipes prior regions' depths. **2b (Sunshine Coast) — zoning/FHA half reclassified,
+depth half unchanged:** a Claude Code investigation (2 Jul, Sonnet 5) found Queensland runs a live
+ArcGIS REST service exposing zoning + FHA directly (`.../ParksMarineProtectedAreas/MapServer`,
+layers for Great Sandy zones, Moreton Bay zones, and statewide FHA, `f=geojson&outSR=4326`, both
+under the 4000-record cap, no pagination) — this is fetchable and buildable by Claude Code itself,
+**no manual QSpatial order needed**, a better route than 2a used. Confirmed **not** fetchable: the
+Maroochy/Noosa 5 m bathymetric LiDAR — checked the CKAN API directly, only resource on record is a
+QSpatial manual-order page (same order-and-email-link flow, no bulk API) — stays a **you-step**
+regardless of which model builds it. Sunshine Coast tide port (Mooloolaba/Noosa) sourcing is still
+unchecked. **Brisbane scope clarified:** Aaron's "Brisbane" means Brisbane River + Pine River +
+bay surrounds. Pine River (HPZ08) and the broader bay are already covered — the whole marine park
+was deliberately embedded in 2a specifically so Bribie/Pumicestone/bayside wouldn't be dropped. The
+Brisbane River itself is the one open item: not part of the marine park, so needs its own check for
+any zone-style closure (not yet done), plus depth via ELVIS (bounded to the tidal reach — LAT isn't
+meaningful past the tidal limit). **ELVIS was down (dataset search failing) as of 2 Jul** —
+transient per past experience, Aaron retrying.
+
+**As of 3 Jul 2026 — 2b/Brisbane River data-sourcing progress + roadmap additions (v16.2, planning
+only, nothing shipped):** The 2 Jul Claude Code investigation (zone/FHA fetch, Brisbane River
+closure check, Sunshine Coast tide port) stalled after task 1 of 4 (Great Sandy zones fetch
+in-flight) when Aaron switched devices — read from the terminal transcript only, repo state
+unverified; cause was near-certainly a missed permission prompt, not a crash, and nothing was at
+risk (fetch/validate only, no `index.html` edit, no commit). Confirms the CLAUDE.md/roadmap-in-repo
+design resumes cleanly across devices — same instruction, fresh clone, no session continuity
+needed. **ELVIS is back up.** Product choice clarified: QLD Government's **Bathymetry (3 m)** is
+the correct product — finer than the 5 m previously assumed, a genuine improvement; **Digital
+Elevation Models are the wrong product type** regardless of resolution (land elevation only, not
+underwater depth) and must not be substituted for Bathymetry; Point Clouds (AHD) stay a fallback
+only if Bathymetry has coverage gaps over the target reaches. **ELVIS order cap confirmed: ~10,000
+tiles per order.** A Noosa→Bribie Island AOI returned exactly Sunshine Coast coverage (950
+Bathymetry-3m tiles, under cap) but does **not** reach the Brisbane River mouth — the two regions
+need separate AOIs regardless of the cap. A wider "Brisbane River or below" AOI hit ~17,000 tiles,
+over cap — needs tightening (Bathymetry-only, single resolution, corridor bounded to the tidal
+reach actually fished, not the full tidal limit) before it will submit. **Repo split for the
+two regions:** `data/raw/sunshine_coast/` and `data/raw/brisbane_river/` (both gitignored) set up
+ahead of data landing, keeping raw LiDAR separate through clip/convert. **Depth-data retention
+policy set:** raw LiDAR tiles are disposable once clipped/converted and the resulting CSV is
+confirmed imported and rendering correctly — delete freely, ELVIS is free and re-orderable. The
+small processed `lat,lng,depth` CSV itself must be **kept**: it's **unconfirmed** whether the
+`version:2` catch-log export/import actually carries `woongarra_imported_v1` (the depth array) the
+way it's confirmed to carry photos, so the CSV may be the only durable backup until that's checked.
+**New Hold item added:** national-scale coverage (QLD-wide + NT + WA + partial NSW) — see Hold
+section; explicitly sequenced behind every remaining SEQ home-water region. **New backlog item
+added:** 6b — wildlife/sighting badges, formalising the sighting-badges deferral already recorded
+in item 6's v16 delta.
+
+**As of 3 Jul 2026 — the stalled zone/FHA/closure/tide-port investigation completed (v16.3,
+data-prep only, nothing shipped to `index.html`):** picked up cleanly on a fresh device exactly as
+v16.2 predicted — same instruction, fresh clone, no lost context. All four original tasks done.
+**Great Sandy zones + statewide FHA pulled and validated:** live ArcGIS fetch
+(`.../ParksMarineProtectedAreas/MapServer/15` and `/7`, `f=geojson&outSR=4326`) confirmed **104**
+Great Sandy features (28 CPZ / 17 GUZ / 31 MNP / 28 HPZ — matches the count already shipped in
+`index.html`, and the shipped `zid`/`name` values — e.g. `CPZ25` "Snapper Creek" — match this pull
+exactly, so the live Great Sandy zones already in the app are current, not stale) and **72 unique
+declared FHAs statewide** (93 features incl. multi-part entries — matches Business Queensland's own
+"72 declared" count, confirms the pull is complete, not partial). Clipped the FHA layer to a SE QLD
+extent (lon 151.9–153.7, lat -28.2–-24.4 — Hervey Bay through Gold Coast) → **35 features / 26
+unique plans**, incl. **Maroochy (FHA-008)** and **Noosa River (FHA-051)**, the two 2b needs.
+Reprojected geometry simplified (~20 m tolerance, matching the 2a convention) and written to app
+schema — confirmed by direct comparison against already-shipped features in `index.html`: zones use
+`{name, zt, zid, notake}` (no per-feature `plan`/`src` — those come from `zonePopup`'s Great-Sandy
+fallback), FHA uses `{plan: plan_num, name: res_name, mgmt: mngmt_type}` (verified against the
+shipped Woongarra FHA entries, e.g. `FHA-002` "Kinkuna"). Output: **`data/great_sandy_zones_2026.geojson`**
+(104 features, 494 KB) and **`data/fha_se_qld_2026.geojson`** (35 features, 436 KB) — both
+merge-ready for a future wiring build, **not wired in this session** (data-prep only, per CLAUDE.md).
+Raw pulls kept in `data/raw/` (gitignored). A validation script (interior-point + schema + range
+checks, `notake` correctness, duplicate-`zid` check, cross-check against `index.html`'s already-shipped
+feature IDs) passed 0 errors. **Brisbane River — no zone-style closure found, checked against the
+complete authoritative data, not inferred:** point-in-polygon tested six points along the river
+(mouth at Fisherman Islands through to Moggill) against all 74 Moreton Bay zone polygons — **zero**
+hits; the full 72-declared-FHA statewide list contains **no Brisbane River entry**. So neither
+pipeline that feeds `zoneAt()`-style behaviour (marine-park zoning, declared FHA) covers the river —
+the app's existing "outside marine-park zoning — general rules apply" default is already correct
+there, confirmed rather than assumed. **Caveat, a different mechanism, not zone-style, not wired:**
+the Fisheries Regulation 2008 (checked directly against the current legislation text) separately
+lists small weir-buffer closures — "Brisbane River at Old Mt Crosby Weir" / "at Mt Crosby Weir" / "at
+Wivenhoe Dam" (the standard freshwater fish-passage pattern applied at every QLD weir/dam, not
+Brisbane-specific) — and lists "Brisbane River (netting)" under the *commercial netting* closed-waters
+schedule (recreational line fishing unaffected, same as the HPZ "line fishing generally OK" precedent).
+Neither is a polygon zone; nothing to add to `zoneAt()`; noted for completeness only. **Sunshine Coast
+tide port — Mooloolaba confirmed as the pick, Noosa Head is secondary, not blocking:** BOM's National
+Tidal Centre port list (`bom.gov.au/oceanography/projects/ntc/qld_tide_tables.shtml`) classifies
+**Mooloolaba as a Standard Port** — its own direct harmonic prediction, no offset math, 2026 + 2027
+PDFs already published (`IDO59001_2026_QLD_TP019.pdf`, confirmed downloaded and spot-checked: header
+reads "MOOLOOLABA – QUEENSLAND", coords 26°41′S 153°07′E, full daily H/L table present, heights in
+metres — datum presumed LAT consistent with all other standard QLD ports per MSQ's general tidal-datum
+statement, not independently re-stated in this PDF's own header, so flagged rather than asserted).
+This is the same standard-port pattern already used for Burnett Heads and Brisbane Bar — Mooloolaba
+alone can anchor the whole 2b region via `nearestPort`, same as Brisbane Bar alone anchored all of 2a
+before Redcliffe's secondary offset was added. **Noosa Head is a Secondary Port** (own predicted-table
+PDF exists, `TP021`, but time/height values are offset-derived from a standard port, not yet identified
+which one or by how much) — a nice-to-have refinement later, exactly parallel to how Redcliffe was
+added after Brisbane Bar in 2a, **not required to start a 2b build.** **Net new artefacts this
+session:** `data/great_sandy_zones_2026.geojson`, `data/fha_se_qld_2026.geojson` (both trackable —
+only `data/raw/` is gitignored). **Nothing wired into `index.html`; no build string bump; no commit
+made by this session** (per CLAUDE.md, data-prep is not a build).
+
+**As of 3 Jul 2026 — the two v16.3 open validation items resolved (v16.4, verification only,
+nothing shipped):** **`version:2` export/import confirmed to carry `woongarra_imported_v1`** —
+verified by direct code read, not inferred: `exportBackup()` (line 2225) writes the top-level
+`imported` array out under the `imported` key alongside `spots`/`photos`/`profiles`;
+`importBackup()` (lines 2244–2246) merge-restores it by lat:lng dedup and writes back to
+`localStorage`. The `typeof imported!=='undefined'` guard is defensive style, not evidence of a
+scope gap — `imported` is a top-level `let` in the same script block, so both functions close over
+it. **The v16.2 "CSV may be the only durable backup" caution is superseded** — a `version:2` export
+now covers imported depths on the same tier as photos/profiles. Raw processed CSVs are still worth
+keeping short-term as the source-of-truth for re-deriving a region if needed, but that's a
+convenience, not a backup necessity, now. **ELVIS Bathymetry (3 m) datum confirmed genuinely
+unconfirmable via any headless route, not just unchecked:** the portal (`elevation.fsdf.org.au`) is
+a pure Angular SPA — every path probed, including its own JS bundle filename, returned the same
+empty HTML shell; no ANZLIC/ICSM catalogue record exists for this specific product on either
+data.gov.au or data.qld.gov.au (the one adjacent record, the older 5 m Sunshine Coast product,
+doesn't state a vertical datum either, so it wouldn't have resolved this regardless). **Downgraded to a
+manual-order handoff, per the ROUTING rules:** check the datum field on the product/layer info panel
+in the ELVIS UI itself before submitting the Bathymetry (3 m) order — not a Claude Code task, not
+worth further searching.
+
 **Species seed:** `guya_species_qld_v3.md` — kept in project knowledge (private), not the repo. Repo stays just the shipped `index.html`.
 
 **Phase 1 spine (items 1 → 2 → 3) is complete.** Keystone journal, best-bets/range, and personal
@@ -178,6 +311,38 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
    - *Rule held:* badges reward the catch/sighting/effort, **never legality**; foot disclaimer states
      own-log-only + "celebrate the catch — never legality." Captive sightings excluded from rare/wild
      badges (moot until the sightings store lands).
+   - *Also flagged (not yet spec'd):* Aaron raised badge-unlock **presentation** styling — a
+     popup/toast fired at the unlock moment, distinct from the existing on-demand certificate —
+     explicitly deferred for him to think through before it's scoped. Not a commitment yet.
+
+6b. **Wildlife / sighting badges (depends on item 4/5 — the sightings store, not yet built).**
+   - Extends the badge engine (item 6) from catch-log-only to the wildlife/nature sightings log once
+     it exists — reuses the same computation model, `#badge-out` UI, and offline PNG-certificate
+     machinery; not a parallel system.
+   - **The animal list and a rare/special badge tier already exist — in `guya_species_qld_v3.md`,
+     not this file.** Bush wildlife (mammals: echidna, kangaroo, wallaby, koala, possums, flying-fox;
+     reptiles: goannas, water dragon, blue-tongue, shingleback, pythons, brown/red-bellied black
+     snake; iconic birds; frogs) was seeded 14 Jun 2026, alongside a badges section: first-of-category,
+     count milestones (10/20/50 per domain), a **rare/special** tier (any marine or bush sighting, a
+     protected species, a PB, first-of-species), and a **local-hero** badge (Mon Repos loggerhead).
+     6b does not re-spec any of that — it's confirmed already written, just blocked on the sightings
+     store existing to fire from.
+   - **What's actually new here, distinct from the existing rare/special tier:** a **phased rollout
+     by commonality** — ship badges for the common, frequently-logged species first, then add
+     rarer/harder-to-spot species-specific badges as the sightings log matures, rather than the full
+     list landing at once. The existing rare/special tier is a single badge for "any" rare-class
+     sighting; this adds a *progressive*, per-species unlock ladder on top of it — the two are
+     complementary, not overlapping.
+   - **Captive vs wild reuses the existing `captive` flag (item 4), not a new field.** Zoo/aquarium
+     sightings are logged and visible but **excluded from wild-tally badges**, same discipline
+     already recorded for item 5's species tally. A separate, smaller **"Zoo Log" badge set** (a
+     captive-sightings count, so a captive sighting still unlocks something rather than being
+     silently excluded) is worth considering — genuinely optional, not yet decided.
+   - **Rule held, same as item 6:** badges reward the sighting/effort, never legality or
+     protected-status — no badge implies a species was legal to approach, handle, or collect;
+     look-don't-take stays the sightings ethic (design rules, above).
+   - **Blocked until the sightings store ships.** Don't sequence ahead of item 4/5 — there's no
+     sighting data to badge yet.
 
 **Reference / utility layers (independent — slot in anytime):**
 
@@ -281,6 +446,23 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
     - **"Local" = a two-region home cluster, built 2a → 2b (decided 19 Jun 2026): 2a = Moreton Bay /
       Redcliffe (the thin slice, immediate priority); 2b = Sunshine Coast (next).** Build the slice
       machinery once (multi-port tides, multi-polygon `zoneAt()`); each region is then just added data.
+    - **Brisbane River (clarified 2 Jul 2026) — Aaron's "Brisbane" means river + Pine River + bay
+      surrounds.** Pine River (HPZ08) and the broader bay are already covered — 2a deliberately
+      embedded the whole marine park (not a home-water clip) so Bribie/Pumicestone/bayside wouldn't
+      be dropped, and that same embed covers Pine River and general bayside water. The river itself
+      is not part of the marine park and is the one open item: (1) check whether any zone-style
+      closure applies to it at all — if none, the app's default "general rules apply" behaviour is
+      already correct and there's nothing to build; (2) depth via ELVIS, bounded to the tidally
+      -influenced reach only (LAT stops being a meaningful datum past the tidal limit — confirm where
+      that sits before processing further upstream). Depth is a data-processing/import task, not an
+      index.html build (see status block at top of file).
+      **(1) RESOLVED 3 Jul 2026 — no zone-style closure.** Checked directly, not inferred: zero of the
+      74 Moreton zone polygons contain any point along the river (mouth→Moggill tested) and the river
+      has no entry in the full 72-declared statewide FHA list. The app's default already-correct
+      behaviour needs no change. A separate, non-zone mechanism exists (Fisheries Regulation 2008 weir
+      buffers at Mt Crosby Weir / Wivenhoe Dam + a commercial-netting closed-waters listing) — doesn't
+      touch recreational line fishing or `zoneAt()`, noted for completeness, not wired. See v16.3
+      status block for full detail. (2) depth via ELVIS stays open, tracked in v16.2's status block.
     - **2a — Moreton Bay / Redcliffe thin slice. ✅ SHIPPED 27 Jun 2026 (v14 / 2026.06.27a).** Rationale: **dogfooding.** The app isn't usable
       day-to-day while all its data sits ~4 h north, so make home *minimally usable now* and let real
       sessions reorder the rest — don't wait to build the whole region. Features (journal, patterns,
@@ -367,11 +549,36 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
       "outside marine-park zoning — general fisheries rules + FHAs still apply, confirm via Qld Fishing
       2.0," never silence that reads as "anything goes" (the safety-layer rule). Confirm the Noosa-north
       edge against Great Sandy's southern boundary when sourcing.
+      **SOURCING ROUTE UPGRADED 2 Jul 2026:** Claude Code confirmed a live ArcGIS REST service
+      (`spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/ParksMarineProtectedAreas/MapServer`)
+      exposes Great Sandy zones (layer 15, 104 features), Moreton Bay zones (layer 2 — same family
+      that fed 2a), and statewide FHA (layer 7, 93 features, includes Maroochy/Noosa) directly —
+      `?where=1=1&outFields=*&f=geojson&outSR=4326` pulls each layer whole, both counts under the
+      4000-record cap, `outSR=4326` returns WGS84 straight (skips the GDA94→WGS84 reprojection 2a's
+      QGIS workbench needed). **No QSpatial manual order required for zoning/FHA** — Claude Code can
+      pull, clip, simplify, and build this GeoJSON itself. The bathy-LiDAR half is unaffected —
+      confirmed separately (CKAN API checked directly) as still order-and-email-link only, no bulk
+      API, no shortcut; stays a manual ELVIS job regardless.
+      **ZONING/FHA PULL + TIDE PORT DONE 3 Jul 2026** (data-prep, not wired): Great Sandy zones (104)
+      + SE-QLD-clipped FHA (35, incl. Maroochy/Noosa) fetched, validated, written to
+      `data/great_sandy_zones_2026.geojson` / `data/fha_se_qld_2026.geojson`, app-schema-matched
+      against what's already shipped. **Tide port = Mooloolaba** (BOM/NTC Standard Port, own harmonic
+      prediction, 2026+2027 PDFs published, no offset math — same pattern as Burnett Heads/Brisbane
+      Bar). **Correction (v16.5, 4 Jul):** Noosa Head is itself a **Standard Port** (own harmonic
+      prediction, confirmed against MSQ's 2024 Semidiurnal Tidal Planes table), not a Secondary Port
+      as first assumed here — no offset math needed there either.
+      Full detail in the v16.3 status block (tide-port discovery) and v16.5 (the correction). Ready for a wiring build: merge the zone file (already
+      matches what's shipped, so this is really a freshness-confirmation, not new data), add the FHA
+      file as the first FHA layer, source Mooloolaba's day-by-day 2026 H/L into a
+      `MOOLOOLABA_TIDES_2026` embed. Bathy-LiDAR depth ingest remains the separate, meatier piece
+      tracked in v16.2.
     - **Data-prep workbench:** **QGIS** turns the official source into app-ready GeoJSON — download the
       **QSpatial** 2019 zoning + FHA (SHP / FGDB), clip to the home extent, reproject **GDA94 → WGS84**,
       **simplify vertices** (keep the single-file size sane), export GeoJSON for `zoneAt()`. QSpatial =
       the zone / FHA source. The **GA portal / GA online tools** are discovery + coarse open-coast
-      bathy only (AusBathyTopo) — no help inside the bay.
+      bathy only (AusBathyTopo) — no help inside the bay. **Superseded for 2b zoning/FHA specifically**
+      by the direct ArcGIS REST route above — QGIS/QSpatial-order remains the fallback pattern for any
+      future region where no equivalent live service is found.
 16. **Scout / candidate-spot finder (find spots in a *new* area, independent of your own log).**
     Distinct from #2, which only ranks spots you've already saved. Two tracks, deliberately split:
     - **In-app Scout = structure-first, offline, zone-aware (the buildable version).** Define an area
@@ -463,6 +670,18 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   that quietly imply "spot"/"legal"; (2) **copyright** — commercial editorial, can't bake the archive
   into a shipped app; (3) **architecture** — a scrape/parse/store pipeline breaks offline-first/$0.
   Reports as a *chat research step → candidate pins* is the supported path (#16).
+- **National-scale coverage (QLD-wide + NT + WA + partial NSW)** — flagged as a possible future
+  direction, explicitly sequenced **behind every remaining SEQ home-water region** (2b Sunshine
+  Coast, Brisbane River) — near-before-far, places Aaron actually fishes first. Architecture
+  blocker, not just a priority call: the single-file baked-zone model and the flat, non-region-
+  scoped `woongarra_imported_v1` depth array don't scale past a handful of SEQ regions — zone
+  polygons baked into `index.html` would grow an order of magnitude (each state runs its own
+  separate marine-park estate, zoning/FHA source, schema, and licensing — no shared endpoint the
+  way QLD's ArcGIS service was), and depth storage needs a real rework (region-scoped keys, likely
+  IndexedDB with spatial partitioning instead of one flat localStorage array) before this is viable
+  at all. Tide-port sourcing likely scales better — BOM/National Tidal Centre produces tables
+  nationally — but zoning/FHA sourcing is a from-scratch integration per state. Needs its own
+  architecture spike before touching a fifth region, not a #15 line item.
 
 ---
 
@@ -479,6 +698,215 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
 ---
 
 ## Changelog
+
+- **v16.5 (4 Jul 2026, data-processing only — no code shipped, no `index.html` change):**
+  Processed the newly-landed ELVIS **Point Clouds/AHD** delivery for Sunshine Coast (953 tiles,
+  8 survey/vintage groups spanning Noosa→Beachmere: Sunshine_Coast_2022/2014/2008_LGA,
+  Noosa_2022/2015_LGA, MoretonBay_2018/2014/2009_LGA — the Moreton Bay groups are the southern
+  end of the same custom-polygon order, at Aaron's confirmation, not stray data). **Major finding,
+  supersedes the v16.2 "Point Clouds (AHD) stay a fallback" framing:** this delivery's sensors
+  (Riegl VQ-780II, Optech Galaxy Prime) are topographic near-infrared LiDAR, not bathymetric
+  green-laser — confirmed empirically, not just by spec sheet: every water-covered sample tile is
+  100% classification-9 ("Water") with Z clustered in a ~2 m band matching tide state at flight
+  time, not real seabed variation. **Point Clouds (AHD) cannot supply channel/gutter depth at all,
+  structurally — it's not a coverage gap, it's the wrong sensor type for water.** What it *can*
+  supply, reliably: classification-2 (dry ground) elevation for intertidal flats, sandbanks and
+  rock platforms exposed at flight time — genuinely useful for a land-based-fishing app, but must
+  never be labelled "depth" or "bathymetry" going forward; call it **intertidal/exposed ground
+  elevation** everywhere (code comments, this roadmap, any future UI). Confirmed empirically, not
+  just by policy: of 188,855 output points, **100% came out negative** (dries above LAT) under the
+  depth sign convention — zero genuine submerged-at-LAT points exist in this dataset, which is
+  exactly what "ground-classified, can't see through water" predicts.
+  **Datum:** AHD confirmed via per-tile project metadata XML (nested two levels inside each tile's
+  own zip — present for all 953 tiles, not just a folder-name convention), not via the LAS binary
+  header (which never carries a vertical CRS in this delivery, checked directly with laspy on 8
+  sample tiles across all vintages). One data-quality catch: the Noosa_2015_LGA tiles' embedded
+  CRS VLR is simply wrong (declares geographic EPSG:4283 but stores projected UTM metres) —
+  disregarded, treated as GDA94/MGA zone 56 by coordinate-magnitude convention instead. Horizontal
+  datum differs by vintage (GDA94 pre-2022, GDA2020 for 2022) — each transformed through its own
+  correct EPSG rather than one blanket assumption.
+  **AHD→LAT conversion:** port-bucketed by latitude using the same "MSL as AHD proxy" convention
+  already used for Brisbane Bar (1.32 m) in the DEA Intertidal spec — sourced from MSQ's official
+  2024 Semidiurnal Tidal Planes table: Noosa Head 1.15 m (lat > −26.533°), Mooloolaba 1.00 m
+  (−26.533° to −26.908°), Beachmere/Moreton Bay secondary 1.26 m (< −26.908°). **Correction:**
+  Noosa Head is a **Standard Port** (own harmonic prediction) per the official table, not a
+  Secondary Port as v16.3 stated.
+  **Coverage delta (2022 vintage vs older):** the 2022 Sunshine Coast + Noosa layer covers 73.67 km²;
+  older vintages add 44.36 km² the 2022 layer doesn't touch — but 53.15 km² of that is Moreton
+  Bay/Beachmere, which has **no 2022 counterpart in this delivery at all** (not a genuine old-vs-new
+  comparison). The real same-region delta (Sunshine Coast/Noosa 2008/2014/2015 vs 2022) is a small
+  4.97 km² — confirms 2022 mostly supersedes the older SC/Noosa vintage coverage as expected, not
+  mostly-overlap-with-nothing-gained.
+  **Output:** `data/sunshine_coast_intertidal_ground_v1.csv` — 188,855 points (lat,lng,depth,
+  metres below LAT, negative = dries), well over the app's 25,000-point import cap and **not
+  pre-thinned** — left for the app's existing import-time auto-thin, or a coarser re-export on
+  request. Raw LiDAR (953 tiles, ~128 GB compressed across 14 zips) stays in `data/raw/` per the
+  disposable-once-converted policy; not committed. **Untouched this session (per Aaron):**
+  Brisbane-River and Gold-Coast folders (mid-retrieval), and the 3 old rejected EOMAP zips sitting
+  alongside the new data in the same `data/raw/Sunshine-Coast/` folder.
+  **Next:** same pipeline (`data/raw/_inventory/process_tiles.py` + `export_csv.py`, both disposable
+  scratch, not committed) needs re-running for Brisbane-River and Gold-Coast once those downloads
+  land — same per-region AHD→LAT offset + AOI-clip work applies. Separately worth a decision: since
+  Point Clouds (AHD) structurally cannot give real channel/gutter depth for Sunshine Coast, decide
+  whether to keep pursuing genuine bathymetric (green-laser or sonar) data for that, or accept
+  intertidal-only coverage the same way the roadmap's own "no depth layer" fallback already treats
+  Moreton Bay's turbid water.
+
+- **v16.7 (4 Jul 2026, build 2026.07.04a — small temporary diagnostic, flagged for removal):**
+  **Answered v16.6's open question by direct code read: the 25,000-point cap is per single CSV
+  parse, not the total merged store** — the `MAXP=25000` thinning loop (index.html ~line 2817)
+  runs on the just-parsed `pts` array *before* the merge prompt, and the persisted `imported`
+  array is only ever appended to, never re-thinned. So the 8-way split-import path is viable:
+  each ~23,500-point chunk dodges the cap entirely and all 188,855 points survive at full 25 m
+  resolution. Also verified the auto-thin algorithm while in there (it's spatial grid-bucketing
+  at ~13 m start, coarsening ×1.6 until under cap — not random drop; one point per bucket wins,
+  which answers v16.6's "undocumented algorithm" caution: simulated in Node against the real CSV,
+  it lands at 18,875 points / ~547 KB). **But split-import total = 5.34 MB of localStorage**
+  (simulated with the app's exact parse/merge semantics, not estimated), and iOS home-screen
+  web apps get their own storage container with a quota that can't be assumed — so the real
+  gate is measured headroom, not the cap. **Shipped build 2026.07.04a to measure it:**
+  `storage_check.html` (repo root, temporary) — on-page phone-readable diagnostic: standalone-
+  container YES/NO check (`navigator.standalone`), per-key localStorage byte table, button-
+  triggered fill-test (1 MB chunks to a throwaway `__quota_test__` key, 30 MB cap, cleaned up in
+  a `finally`), `navigator.storage.estimate()`, and a verdict line against the 5.34 MB full-res
+  import with 2× margin (Brisbane River will need the same store later). Plus one plain
+  same-origin anchor in index.html's info block ("Storage check (temporary)" — no `target=_blank`,
+  so it stays inside the home-screen container). `saveImp()` failure path also checked for the
+  split-import scenario: quota failure alerts but doesn't corrupt — each chunk's `setItem` is
+  all-or-nothing, so a failure on chunk N leaves chunks 1..N−1 persisted; the only loss risk is
+  closing the app before re-trying (in-memory merge isn't re-saved). Leaflet block byte-identical
+  (md5 cab0fd0f0d88d5ae473c6a6812dba859), both script blocks `node --check` clean, `zoneAt()` +
+  green-zone drag safeguard confirmed intact. **REMOVAL FLAGGED: both `storage_check.html` and
+  the index.html anchor come out in a later build once the import decision is made.**
+  **Next:** Aaron runs the storage check on the phone (from the home-screen app, confirm the
+  YES on section 0) → verdict decides: ≥2× margin → 8-way split import at full resolution;
+  tight/no → auto-thinned single import (18,875 pts, ~547 KB). Then Brisbane River AOI order.
+
+- **v16.6 (4 Jul 2026, planning-chat review — no code shipped):** Reviewed the v16.5 output.
+  Point count, elevation range, sign convention, and coverage-delta math all check out — no
+  errors found, the "100% negative = dries-only" empirical proof is a sound way to confirm the
+  ground-only limitation rather than just asserting it. **Propagated the Noosa Head correction**
+  from v16.5 into the item 15 living spec (was still calling it a Secondary Port in the "current
+  status" text, not just the superseded changelog line — now consistent throughout: Noosa Head is
+  a Standard Port, same as Mooloolaba, no offset math needed for either).
+  **On the 188,855-point / 25,000-cap decision, flagged as open in v16.5:** don't default straight
+  to a coarser re-export — that's real resolution loss (25m → roughly 70m grid to clear the cap
+  comfortably: 188,855 ÷ 25,000 ≈ 7.55×, and cell count scales with the square of grid size, so
+  √7.55 ≈ 2.75× → 25m × 2.75 ≈ 69m, rounded up to ~70–75m for margin — coarse enough to blur
+  individual rock-platform/sandbank boundaries). **Cheaper first step: check whether the app's
+  25,000-point cap applies per single CSV import or to the total merged `localStorage` array.**
+  If per-import: split the 188,855-point CSV into ~8 files (~23,500 pts each, comfortably under
+  cap) and import sequentially with MERGE — every point survives at full 25m resolution, and the
+  cap-triggered auto-thin (whose actual algorithm — random vs spatial — is undocumented anywhere
+  in this repo) never even fires, so its quality stops mattering. Only if the cap applies to the
+  total store does a deliberate coarser re-export become the right move (better to control the
+  thinning yourself than trust an unverified algorithm on a fishing-safety-adjacent dataset).
+  **Also flagged, not urgent:** the ~128 GB of raw LiDAR sitting in `data/raw/` is confirmed
+  disposable per the existing policy (Sunshine Coast CSV is validated) — safe to delete now and
+  free the disk space; the 3 old rejected EOMAP zips sitting alongside the new data in the same
+  `Sunshine-Coast/` folder are also safe to clear out, no further use.
+  **Next:** Claude Code check — per-import or total-store cap? — then either the 8-way split
+  import (no data loss) or a ~70–75m re-export (fallback). Brisbane River AOI still needs
+  ordering (mouth→Mt Crosby Weir, separate draw, not started). Gold Coast stays parked.
+
+- **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
+  both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
+  `woongarra_imported_v1`** — verified by direct code read (`exportBackup()` line 2225,
+  `importBackup()` lines 2244–2246), not inferred from variable naming; the `imported` array
+  exports and merge-restores on the same tier as photos/profiles. Supersedes the v16.2 "CSV may be
+  the only durable backup" caution — a `version:2` export now covers depth data too; raw processed
+  CSVs remain worth keeping short-term for re-derivation, but that's convenience, not necessity.
+  **ELVIS Bathymetry (3 m) datum confirmed genuinely unconfirmable via any headless route** — the
+  portal is a pure Angular SPA (no fetchable metadata, every path probed returned the same empty
+  shell) and no ICSM/CKAN catalogue record exists for this specific product. Downgraded to a
+  manual-order handoff — check the datum field on ELVIS's own product/layer info panel before
+  submitting the order; not a Claude Code task. **Next:** manual ELVIS datum check (in-browser,
+  before ordering); then tighten the Sunshine Coast + Brisbane River AOIs under the confirmed
+  ~10,000-tile order cap (per v16.2) and download; once both land, chain into the depth
+  clip/AHD→LAT-convert/CSV-export/import data-processing pass. Separately, **2b wiring** (zoning/FHA/
+  tides only, depth deferred) is a clean inline build ready to go now — `data/great_sandy_zones_2026.geojson`
+  and `data/fha_se_qld_2026.geojson` are validated and sitting in the repo, Mooloolaba is confirmed
+  as the tide port.
+
+- **v16.3 (3 Jul 2026, planning + data-prep only — no code shipped, no `index.html` change):**
+  Completed the zone/FHA/closure/tide-port investigation that stalled in v16.2. **Pulled + validated
+  Great Sandy zones (104 features) and statewide FHA (72 unique declared areas) from the live QLD
+  ArcGIS service**, clipped FHA to a SE QLD extent (35 features / 26 plans, incl. Maroochy FHA-008 and
+  Noosa River FHA-051 for 2b), matched output schema to what's already shipped in `index.html`
+  (cross-checked `zid`/`name`/`plan` values directly against the live file, not assumed), wrote
+  `data/great_sandy_zones_2026.geojson` + `data/fha_se_qld_2026.geojson`, validated with a script
+  (geometry validity, schema completeness, `notake` correctness, duplicate-id check) — 0 errors.
+  Confirmed in passing that the Great Sandy zones already shipped in `index.html` match this live
+  pull exactly (not stale). **Brisbane River: no zone-style closure** — point-in-polygon tested
+  against all 74 Moreton zones (zero hits) and cross-checked the full 72-entry statewide FHA list
+  (no Brisbane River entry) — the app's existing "outside marine-park zoning" default is confirmed
+  correct there, not assumed. Separately noted (different mechanism, not wired, not zone-style): the
+  Fisheries Regulation 2008 has standard weir-buffer closures at Mt Crosby Weir/Old Mt Crosby
+  Weir/Wivenhoe Dam and lists the river under the commercial-netting closed-waters schedule — neither
+  affects recreational line fishing or `zoneAt()`. **Sunshine Coast tide port: Mooloolaba confirmed**
+  as a BOM/NTC Standard Port (own harmonic prediction, 2026+2027 PDFs published, no offset math) — the
+  pick for 2b, same pattern as Burnett Heads/Brisbane Bar; Noosa Head is a Secondary Port (offset not
+  yet sourced, not blocking, parallel to how Redcliffe was added after Brisbane Bar in 2a). **Next:**
+  the zoning/FHA/tide-port data is now ready for a 2b wiring build (merge `great_sandy_zones_2026`
+  confirms current, add `fha_se_qld_2026` as the first FHA layer, source Mooloolaba's 2026 H/L table
+  into a `MOOLOOLABA_TIDES_2026` embed same as Brisbane Bar's) — still gated on the Maroochy/Noosa
+  bathy-LiDAR depth half (ELVIS order, per the v16.2 status) if depth is wanted in the same pass, but
+  zoning/FHA/tides no longer need to wait for that. Brisbane River depth (ELVIS, tidal-reach-bounded)
+  remains open per v16.2.
+
+- **v16.2 (3 Jul 2026, planning only — no code shipped):** Resolved the 2 Jul Claude Code session
+  that appeared to hang: stalled after task 1 of 4 (Great Sandy zones fetch in-flight) when Aaron
+  switched devices, near-certainly a missed permission prompt rather than a crash — fetch/validate
+  only, nothing at risk, resumes cleanly on a new device via toolchain reinstall + fresh clone + the
+  same instruction (confirms the repo-holds-state design works as intended). Corrected two stale
+  pending items: "6a — badge unlock celebrations" doesn't exist anywhere in the roadmap (badges/item
+  6 shipped complete in v16, certificates only — dropped from pending); the stale `v21 · 14 Jun`
+  version-label bug was already fixed in the same v16 build (dropped from pending). **ELVIS back up
+  — product and order-limit findings:** QLD Government **Bathymetry (3 m)** confirmed as the correct
+  product (finer than the 5 m previously assumed); **DEM is the wrong product type** for underwater
+  depth regardless of resolution — don't substitute it for Bathymetry; Point Clouds (AHD) stay a
+  gap-filling fallback only. **Order cap confirmed at ~10,000 tiles** — a Noosa→Bribie AOI (950
+  Bathymetry-3m tiles) cleared it but only covers Sunshine Coast, not the Brisbane River mouth; a
+  wider Brisbane-River-or-below AOI hit ~17,000 tiles and needs tightening (bathymetry-only, single
+  resolution, bounded to the tidal reach actually fished) before it will submit. Repo now split
+  `data/raw/sunshine_coast/` and `data/raw/brisbane_river/` (gitignored) ahead of data landing.
+  **Depth-data retention policy set:** raw LiDAR disposable once clipped/converted and the CSV is
+  confirmed imported and rendering; the processed CSV itself must be kept — **unconfirmed** whether
+  `version:2` export/import actually carries `woongarra_imported_v1`, so the CSV may be the only
+  durable backup until that's checked. **Added Hold item:** national-scale coverage (QLD-wide + NT +
+  WA + partial NSW), explicitly sequenced behind all remaining SEQ regions, architecture spike
+  required regardless of priority. **Added backlog item 6b:** wildlife/sighting badges.
+  **Correction made within this same revision:** 6b initially failed to cross-reference
+  `guya_species_qld_v3.md`, which already contains the bush wildlife list (echidna, kangaroo, goanna,
+  blue-tongue, etc., seeded 14 Jun) and a rare/special + local-hero badge tier — none of that was
+  lost, it was just never duplicated into the roadmap file by design (the roadmap's own line always
+  said the species seed lives in that file, not here). 6b is corrected to reference the existing
+  spec explicitly and scope itself to what's actually new: a phased common→rare unlock rollout,
+  additive to the existing rare/special tier, not a replacement for it. Reuses the existing
+  `captive` flag (item 4) to separate wild-tally badges from zoo/aquarium sightings; blocked until
+  the sightings store (item 4/5) ships. Badge-unlock *presentation* styling (a popup/toast at the
+  unlock moment) was raised by Aaron but explicitly deferred — not yet spec'd. **Next:** resume the
+  stalled zone/FHA/Brisbane-River-closure/tide-port investigation on Aaron's next Claude Code session
+  (same instruction, clean device); once Sunshine Coast + Brisbane River LiDAR AOIs both clear the
+  tile cap, chain straight into the depth clip/convert/import data-processing pass; 14b DEA
+  Intertidal and 4c+ remain the clean inline builds if a coding session is wanted before the
+  data-processing work lands.
+
+- **v16.1 (2 Jul 2026, planning only — no code shipped):** Workflow migration to Claude Code CLI
+  executed (CLAUDE.md + settings.json + roadmap committed to the repo; this project now
+  planning-only). index.html re-verified by direct file read: 178 zones confirmed present, header
+  text flagged stale (still says "Woongarra Coast · Great Sandy MP", no Moreton mention — cosmetic).
+  Depth-import architecture clarified from source: localStorage-based, generic CSV import already
+  built, not an index.html concern — reframes all future multi-region depth work as data-prep, not
+  builds. 2b zoning/FHA reclassified from "needs a data run" to **Claude-Code-fetchable now** (live
+  ArcGIS REST service found, no QSpatial order needed) — 2b's depth half (Maroochy/Noosa LiDAR)
+  confirmed still manual-order-only, no shortcut found. Brisbane scope clarified as
+  river+Pine+bay — bay/Pine already covered by the existing Moreton embed; river itself is the
+  only open item (zone-closure check pending, depth pending on ELVIS). See the status block above
+  the changelog for full detail. **Next:** greenlight the 2b zoning/FHA GeoJSON pull in Claude
+  Code (data-prep only, no index.html change); check Brisbane River for any zone-style closure;
+  check Sunshine Coast tide port sourcing; Aaron to re-attempt the ELVIS order for Brisbane River +
+  Sunshine Coast LiDAR once the portal's dataset-search error clears.
 
 - **v16 (28 Jun 2026):** **shipped item 6 — Badges / achievements (build 2026.06.28b).** One feature,
   one build. A self-contained top-level IIFE spliced before the app's closing `</script>`; reads the

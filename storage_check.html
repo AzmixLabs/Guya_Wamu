@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Guya — Storage check (temporary)</title>
+<style>
+  body{margin:0;padding:18px 16px 40px;background:#0b1620;color:#dce8ee;font-family:-apple-system,system-ui,sans-serif;font-size:17px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#7d95a3;font-size:13px;margin-bottom:18px}
+  .sec{background:#122230;border:1px solid #23394a;border-radius:10px;padding:14px 14px 12px;margin-bottom:14px}
+  .lbl{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#6f8794;margin-bottom:8px}
+  .big{font-size:34px;font-weight:700;margin:4px 0}
+  .yes{color:#4ec9b0}.no{color:#e0655f}.warn{color:#e5b567}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td{padding:3px 0;border-bottom:1px solid #1c2f3e;word-break:break-all}
+  td:last-child{text-align:right;white-space:nowrap;padding-left:10px;font-variant-numeric:tabular-nums}
+  .tot{font-weight:700;font-size:16px}
+  .dim{color:#7d95a3;font-size:13px;line-height:1.45;margin-top:8px}
+  .verdict{font-size:19px;font-weight:600;line-height:1.4}
+  a.back{display:block;text-align:center;margin-top:22px;padding:14px;background:#1b3242;border:1px solid #2c4a60;border-radius:10px;color:#8fd4c4;font-size:17px;text-decoration:none;font-weight:600}
+  #s2run{width:100%;padding:13px;font-size:16px;border-radius:8px;border:1px solid #2c4a60;background:#1b3242;color:#dce8ee;font-weight:600}
+</style>
+</head>
+<body>
+<h1>Storage check</h1>
+<div class="sub">Temporary diagnostic — remove after the import decision. Read-only on all app data.</div>
+
+<div class="sec"><div class="lbl">0 · Container check</div>
+  <div id="s0" class="big">…</div>
+  <div class="dim" id="s0note"></div>
+</div>
+
+<div class="sec"><div class="lbl">1 · Current localStorage usage</div>
+  <table id="s1"></table>
+</div>
+
+<div class="sec"><div class="lbl">2 · Fill-test — real remaining headroom</div>
+  <button id="s2run">Run fill-test (writes then deletes a throwaway key)</button>
+  <div id="s2" class="big" style="display:none">…</div>
+  <div class="dim" id="s2note"></div>
+</div>
+
+<div class="sec"><div class="lbl">3 · navigator.storage.estimate()</div>
+  <div id="s3" style="font-size:18px">…</div>
+  <div class="dim">Browser-reported figure for this container — covers localStorage + IndexedDB (photos, offline tiles) together, so it reads higher than section 1 alone.</div>
+</div>
+
+<div class="sec"><div class="lbl">Verdict — full-res Sunshine Coast import (5.34 MB)</div>
+  <div id="verdict" class="verdict warn">Run the fill-test above first.</div>
+  <div class="dim">"Fits with 2× margin" = measured headroom ≥ 10.68 MB, so the 5.34 MB import lands with at least the same amount free again — Brisbane River data will need this same store later.</div>
+</div>
+
+<a class="back" href="index.html">← Back to Guya</a>
+
+<script>
+(function(){
+  var MB = 1024*1024;
+  var NEED = 5.34; // MB, full-res Sunshine Coast imported-array JSON (ASCII chars)
+
+  /* --- Section 0: container check --- */
+  var standalone = (typeof navigator.standalone !== 'undefined') ? navigator.standalone
+                 : (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  var s0 = document.getElementById('s0');
+  if (standalone) { s0.textContent = 'YES — home-screen app'; s0.className = 'big yes'; }
+  else { s0.textContent = 'NO — browser tab'; s0.className = 'big no'; }
+  document.getElementById('s0note').textContent = standalone
+    ? 'You are inside Guya’s own storage container. Numbers below are the real ones for the app.'
+    : 'This is NOT the home-screen container — open Guya from the home-screen icon and tap the storage-check link there, or these numbers measure the wrong store.';
+
+  /* --- Section 1: per-key usage (read-only) --- */
+  var tbl = document.getElementById('s1');
+  var total = 0, rows = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    var v = localStorage.getItem(k) || '';
+    /* chars ≈ UTF-8 bytes for this app's ASCII-dominant JSON; same unit as the fill-test */
+    var bytes = k.length + v.length;
+    total += bytes; rows.push([k, bytes]);
+  }
+  rows.sort(function(a,b){ return b[1]-a[1]; });
+  var html = '';
+  for (var j = 0; j < rows.length; j++)
+    html += '<tr><td>' + rows[j][0].replace(/</g,'&lt;') + '</td><td>' + (rows[j][1]/1024).toFixed(1) + ' KB</td></tr>';
+  html += '<tr class="tot"><td>TOTAL (' + rows.length + ' keys)</td><td>' + (total/1024).toFixed(1) + ' KB · ' + (total/MB).toFixed(2) + ' MB</td></tr>';
+  tbl.innerHTML = html || '<tr><td>(localStorage is empty)</td><td>0 KB</td></tr>';
+
+  /* --- Section 3: estimate() --- */
+  var s3 = document.getElementById('s3');
+  if (navigator.storage && navigator.storage.estimate) {
+    navigator.storage.estimate().then(function(est){
+      s3.textContent = 'usage ' + (est.usage/MB).toFixed(2) + ' MB of quota ' + (est.quota/MB).toFixed(1) + ' MB';
+    }).catch(function(){ s3.textContent = 'estimate() failed on this browser.'; });
+  } else s3.textContent = 'Not supported on this browser.';
+
+  /* --- Section 2: fill-test (button-triggered; ~seconds of synchronous work) --- */
+  document.getElementById('s2run').onclick = function(){
+    var btn = this; btn.disabled = true; btn.textContent = 'Running…';
+    var out = document.getElementById('s2'); out.style.display = 'block';
+    setTimeout(function(){
+      var KEY = '__quota_test__', CAP = 30, chunk = new Array(MB + 1).join('x');
+      var filled = '', achieved = 0, capped = false;
+      try {
+        localStorage.removeItem(KEY);
+        while (achieved < CAP) {
+          filled += chunk;
+          localStorage.setItem(KEY, filled); /* throws when it no longer fits */
+          achieved = filled.length / MB;
+        }
+        capped = true;
+      } catch (e) { /* QuotaExceededError expected — `achieved` holds the last size that DID fit */ }
+      finally { try { localStorage.removeItem(KEY); } catch (e2) {} filled = null; }
+
+      out.textContent = (capped ? '≥ ' : '~') + achieved.toFixed(1) + ' MB headroom';
+      out.className = 'big ' + (achieved >= 2*NEED ? 'yes' : (achieved >= NEED ? 'warn' : 'no'));
+      document.getElementById('s2note').textContent = capped
+        ? 'Stopped at the 30 MB safety cap without hitting quota — real headroom is at least this.'
+        : 'setItem threw past this point — this is the real remaining headroom in this container right now, on top of existing app data. Test key deleted.';
+      btn.textContent = 'Run again';
+      btn.disabled = false;
+
+      var v = document.getElementById('verdict');
+      var after = achieved - NEED;
+      if (achieved >= 2*NEED) {
+        v.className = 'verdict yes';
+        v.textContent = 'YES — 5.34 MB fits with ≥ 2× margin. ~' + after.toFixed(1) + ' MB' + (capped ? '+' : '') + ' would remain after the import.';
+      } else if (achieved >= NEED) {
+        v.className = 'verdict warn';
+        v.textContent = 'FITS BUT TIGHT — under 2× margin. Only ~' + after.toFixed(1) + ' MB would remain; Brisbane River data would not fit later. Use the auto-thinned import (0.55 MB) instead.';
+      } else {
+        v.className = 'verdict no';
+        v.textContent = 'NO — full-res import does not fit (' + achieved.toFixed(1) + ' MB headroom < 5.34 MB needed). Use the auto-thinned single import (0.55 MB).';
+      }
+    }, 60);
+  };
+})();
+</script>
+</body>
+</html>
