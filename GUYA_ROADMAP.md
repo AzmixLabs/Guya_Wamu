@@ -1,13 +1,54 @@
 # Guya — Feature Backlog & Roadmap
-*v16.12 · 5 Jul 2026 — anomaly resolved (real zones, no bug); Brisbane River/Bremer/Redland
-intertidal-ground CSV processed and exported*
+*v16.19 · 5 Jul 2026 — build 2026.07.05a shipped: Sunshine Coast 2b wiring (zoning freshness
+confirmed, 27-feature FHA merge, Mooloolaba tides sourced + column-aware parsed, outside-zoning
+message fixed). Separately still open: the Brighton depth-data-quality issue (v16.16–v16.18) —
+a survey-classifier fault (open water mislabelled as dry ground) confirmed SYSTEMIC across BOTH
+the Brisbane River and Sunshine Coast deliveries (~13.6 km² / 192 tiles at artifact scale).
+Both the held Brisbane River CSV and the already-phone-imported Sunshine Coast CSV are
+affected; neither is safe to import/trust as-is. A meaningful audit gap remains — Sunshine
+Coast's dominant vintage groups are still unchecked. This build did not touch depth data.*
 
 Personal / family land-based fishing **+ nature field-log** tool. Single self-contained HTML
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.04a *(storage_check.html diagnostic page + temporary in-app link — see changelog v16.7)*
-**Next session:** anomaly RESOLVED (v16.12 — MNP03/MNP08 are real legislated no-take zones, no bug, nothing patched; git confirmed NO 2b wiring build has run — zoning/FHA wiring still open). Brisbane River UNPAUSED and DONE: `data/brisbane_river_intertidal_ground_v1.csv` (209,540 pts) exported, awaiting phone import (same auto-thin single-pass route as Sunshine Coast per v16.10). Recommended next job: **2b wiring build** (zoning/FHA/tides — data validated since v16.3) or import the Brisbane CSV; pending cleanup: raw LiDAR in `data/raw/` disposable once the Brisbane CSV renders correctly; `storage_check.html` + its index.html link still flagged for removal. Gold Coast stays parked. — *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
+**Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
+
+**Next session — priority order:**
+1. **Close the depth-data audit gap.** `Sunshine_Coast_2022/2014/2008` and `Noosa_2022/2015` —
+   the dominant vintage covering most of the Sunshine Coast delivery's actual area (~666 tiles) —
+   have only been spot-sampled (12 tiles, 3 hits = 25%), which is not a clean result, not a
+   confirmation. Full audit of these groups, plus a density-only secondary test on the three
+   2009-vintage groups that are structurally untestable by the class-9-adjacency method
+   (`Brisbane_2009`, `Redland_2009`, SC `MoretonBay_2009` — 370 tiles). **Fable 5/Opus 4.8,
+   checkpoint/resume required** (600+ tiles). See v16.18.
+2. **Design + build the drop-mask re-export**, once item 1 closes the scope. Per-cell density
+   threshold derived from `data/raw/_inventory/audit_results.json` (already has the per-cell
+   counts). Drop flagged points rather than reclassify — geometry alone can't tell a real drying
+   flat from mislabelled water at the same elevation (see v16.18 qualification 3). Applies to:
+   Brisbane_2014/2019, Redland_2014/2022, Pine River strays, SC MoretonBay_2014/2018, plus
+   whatever item 1 adds.
+3. **Re-export both CSVs**; validate against known controls — Brighton, Sandgate, Shorncliffe,
+   Redland bayside, Deception Bay/Beachmere, Golden Beach/Pumicestone, Currimundi (all surfaced
+   during the v16.18 audit) — confirm artifact zones read "no data," and spot-check that real
+   flats nearby weren't wholesale gutted by the drop-mask.
+4. **Re-import.** Brisbane River to phone — fresh, first import, same single-pass auto-thin route
+   as before, still held pending the above. **Sunshine Coast needs a REPLACE of the existing phone
+   data, not a MERGE** — the already-imported CSV contains the artifact and MERGE cannot remove
+   points already present. Flag this explicitly when it's run; it's a different operation from
+   every import done so far.
+5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
+   to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
+   incidentally during the v16.17 diagnostic.
+6. `git remote -v` check — still outstanding; the repo-rename notice has now fired twice without
+   the actual local remote ever being confirmed, only the URL/icon behaviour.
+7. Confirm `fishhabitat_bundaberg_region.geojson` — committed but unrecorded anywhere, origin
+   unclear.
+8. 2b wiring build (zoning/FHA/tides) — data validated since v16.3, no blocker, independent of
+   all of the above; can slot in any time.
+9. Gold Coast stays parked.
+
+*(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
 builds have moved to **Claude Code CLI**, running locally against the `AzmixLabs/Guya` repo
 (`D:\Claude Code` on Aaron's machine) — `CLAUDE.md`, `.claude/settings.json`, and this roadmap are
@@ -573,16 +614,23 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
       file as the first FHA layer, source Mooloolaba's day-by-day 2026 H/L into a
       `MOOLOOLABA_TIDES_2026` embed. Bathy-LiDAR depth ingest remains the separate, meatier piece
       tracked in v16.2.
-      **STATUS UPDATE (v16.9–v16.11, 4 Jul):** the depth half is now DONE — the intertidal-ground CSV
-      (`sunshine_coast_intertidal_ground_v1.csv`, 188,855 points) has been imported to Aaron's phone
-      as a single-pass, auto-thinned import (~18,875 points / ~547 KB, ~79 m effective resolution —
-      the phone's real `localStorage` headroom, measured at ~4.0 MB, doesn't support the full-
-      resolution multi-chunk alternative; see v16.9 for the fill-test result and v16.6/v16.9 for the
-      thinning-algorithm confirmation). **Whether the zoning/FHA/tides wiring build described above
-      has actually been run is now UNCONFIRMED** — a visual anomaly surfaced on the live map (v16.11)
-      that could indicate a wiring build happened silently (with a bug) or could be unrelated; a
-      git-history check is queued to settle this before assuming either way. Do not re-attempt the
-      wiring build until that's resolved — see the top-of-file status block and v16.11.
+      **STATUS UPDATE (v16.9–v16.11, 4 Jul):** the depth half is now DONE (import-wise) — the
+      intertidal-ground CSV (`sunshine_coast_intertidal_ground_v1.csv`, 188,855 points) has been
+      imported to Aaron's phone as a single-pass, auto-thinned import (~18,875 points / ~547 KB,
+      ~79 m effective resolution — the phone's real `localStorage` headroom, measured at ~4.0 MB,
+      doesn't support the full-resolution multi-chunk alternative; see v16.9 for the fill-test
+      result and v16.6/v16.9 for the thinning-algorithm confirmation). **RESOLVED (v16.12):** no
+      2b zoning/FHA/tides wiring build was ever run — `ZONES.features` counts exactly 178 (v14
+      state); the v16.11 visual anomaly was unrelated (real, correctly-rendering offshore MNP
+      zones, not a wiring artefact). 2b wiring remains open, unblocked, ready any time.
+      **CORRECTION (v16.17–v16.18, 5 Jul):** separately from the wiring question, the imported
+      intertidal-ground CSV itself is confirmed to contain the same open-water misclassification
+      artifact found in the Brisbane River delivery — ~2.7 km² across the MoretonBay_2014/2018
+      subset (Beachmere/Deception Bay/Pumicestone), plus an unresolved audit gap over the
+      dominant Sunshine Coast vintage groups. Treat the already-imported depth data as unreliable
+      in open-water areas until a masked re-export lands, and note the phone-side fix will need a
+      **REPLACE** of the existing import, not a MERGE — see the top-of-file status block and
+      v16.18.
     - **Data-prep workbench:** **QGIS** turns the official source into app-ready GeoJSON — download the
       **QSpatial** 2019 zoning + FHA (SHP / FGDB), clip to the home extent, reproject **GDA94 → WGS84**,
       **simplify vertices** (keep the single-file size sane), export GeoJSON for `zoneAt()`. QSpatial =
@@ -624,6 +672,15 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
   best-bets species boosting and throw `ReferenceError`s. **Do not remove.** (The 2a wiring build
   re-confirmed this against the actual JS and correctly declined the cleanup; the "orphaned" label that
   rode from v7 → v13.1 was simply wrong.)
+- **New (v16.15, 5 Jul 2026): confirm `fishhabitat_bundaberg_region.geojson`.** Surfaced during the
+  5 Jul git safety-net commit — committed to the repo but not recorded anywhere in this roadmap or
+  the project brief. Origin and purpose unclear; worth a quick check on what it is and whether it
+  belongs before it's forgotten again.
+- **Standing (v16.15, 5 Jul 2026): confirm the git remote.** The repo-rename notice
+  (`AzmixLabs/Guya` → `Guya_Wamu`) has now fired twice (v16.7 and the 5 Jul manual commit) without a
+  `git remote -v` check ever confirming the local remote actually points somewhere correct — only
+  that the GitHub Pages URL/phone icon kept working. Low urgency, but resolve it properly rather
+  than dismissing a repeat warning a third time.
 
 ---
 
@@ -933,6 +990,192 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
 
   **Next (pre-v16.12 list, still-open items only):** Brisbane CSV phone import; 2b wiring
   build; Gold Coast stays parked.
+
+- **v16.16 (5 Jul 2026, planning — depth-data-quality issue OPENED, diagnostic queued, no code
+  shipped, nothing patched):** Aaron flagged real-world inaccuracy in the Sunshine Coast intertidal
+  layer while reviewing the Bramble Bay / Brighton foreshore area (screenshots: a "West Banks"
+  HPZ10 popup reading "dries ≈ 0.7 m ... data 23 m away" next to visibly patchy checkerboard
+  coverage; a "Bramble Bay" MNP13 popup reading "dries ≈ 1.4 m ... data 49 m away" sitting right
+  next to a "no survey data here" label a short distance away). **Two separate concerns raised,
+  kept distinct:**
+  (1) **"Half the coast is missing" — largely EXPECTED, not a bug, per already-recorded facts.**
+  The Sunshine Coast/Moreton-tail CSV is topographic NIR, ground-only (v16.5) — it only captures
+  elevation where dry ground was actually visible at flight time, thinned ~10× on import
+  (~79 m effective grid spacing across the whole multi-hundred-km delivery, v16.9). Patchy,
+  checkerboard, "no survey data here" gaps are the structurally expected shape of this data type,
+  not evidence of a processing fault — this is also the direct answer to **"why didn't Moreton/
+  Sunshine Coast get bathymetric data like Bargara?"**: Bargara/Woongarra's shading comes from
+  genuine clear-water bathymetric LiDAR; Moreton Bay's water is too turbid for laser bathymetry to
+  read at all (an ICESat-2 satellite-laser study found over half the bay too sediment-laden — see
+  the "Home-water depth reality" note under item 15/14b, recorded 19 Jun 2026) — the topographic
+  ground-only layer was always the fallback, not a downgrade of a bathymetric build that was
+  skipped.
+  (2) **A specific false "dries" reading ~600 m off Brighton foreshore — NOT yet explained,
+  genuinely worth investigating.** Aaron's on-the-water knowledge is that this location does not
+  dry at any tide — it's water, not a bank. A ground-classified LiDAR point reading "dries" at a
+  location known to be permanently submerged is a different class of problem than sparse coverage:
+  either a misclassified return (wave/glare/foam read as ground), a stale/superseded-vintage point
+  that no longer reflects the seabed at that location, or a wrong per-point tidal offset. **The
+  vintage-dedup hypothesis floated as a possible cause is RULED OUT** — Aaron confirmed the
+  original Sunshine Coast pipeline used the same newest-vintage-wins dedup later applied to
+  Brisbane River (v16.12), so a missing dedup step is not the explanation, and the same pattern is
+  confirmed present in both datasets. **No diagnostic has been run yet on this specific issue** —
+  queued for the next Claude Code session (Sonnet — inspection + a handful of point-checks, not a
+  batch job): identify the actual source point(s) near Brighton, their originating tile/vintage,
+  classification, and applied AHD→LAT offset, and check whether the render/interpolation logic
+  (`nearestDepthPoint`/`idwDepthAt`) is assuming Woongarra-density point spacing over data that's
+  now ~79 m apart. **Do not patch until this reports back** — same diagnostic-first discipline as
+  the v16.11→v16.12 anomaly investigation.
+
+- **v16.15 (5 Jul 2026, git safety-net commit, done manually via shell — outside a Claude Code
+  session, no code shipped):** Aaron ran `git add`/`commit`/`push` directly (commit `581e88f`)
+  to close an exposure separate from the v16.12 anomaly work: the Sunshine Coast intertidal CSV
+  and several 2a source files had never been added to git, sitting disk-only with zero redundancy.
+  **Newly tracked:** the two 2b zoning/FHA GeoJSONs (`great_sandy_zones_2026.geojson`,
+  `fha_se_qld_2026.geojson`), the Sunshine Coast intertidal-ground CSV, and five previously-
+  untracked root files (`brisbane_bar_tides_2026.json`, `build_mb.py`, `validate_moreton_zones.py`,
+  `moreton_zones_2019.geojson`, `fishhabitat_bundaberg_region.geojson`) — 8 files, 189,360
+  insertions. **Confirmed safe first:** `data/raw/` is properly gitignored, so the commit picked up
+  only the small baked outputs, not the 128 GB+ of raw LiDAR sitting alongside them. **Deliberately
+  left out:** `GUYA_ROADMAP.md` (roadmap sync stays a separate manual habit) and
+  `guya_species_qld_v3.md` (by design — project knowledge only, never the repo). **This commit
+  predates and is separate from Claude Code's own `66331d8`** (Brisbane CSV + this roadmap's
+  v16.12 entry) — the two commits are not duplicates, both are real and both are on `main`. **Two
+  things flagged, still open (see Cleanup):** the repo-rename notice (`Guya` → `Guya_Wamu`) fired
+  again during this push, the second occurrence without a `git remote -v` check ever confirming the
+  actual local remote (only the URL/icon behaviour was checked, twice); and
+  `fishhabitat_bundaberg_region.geojson` is unrecorded anywhere in this roadmap or the project
+  brief — origin and purpose unconfirmed.
+
+- **v16.17 (5 Jul 2026, diagnostic only — no code shipped, no patch applied):** Diagnosed the
+  false "dries" reading opened in v16.16 near Brighton foreshore (~600 m offshore, Bramble Bay).
+  **Verdict: misclassification, confirmed at the raw-point level — not an offset bug, not a
+  render/interpolation bug.** Premise correction first: the flagged point is **not** in the
+  Sunshine Coast CSV — that file's coverage ends at lat −27.077, ~25 km north of Brighton. Every
+  point near the target is from `brisbane_river_intertidal_ground_v1.csv` (the Pine River-area
+  tiles from the v16.12 run); the vintage-dedup rule-out from v16.16 carries over unchanged, and
+  the Sunshine Coast offset-bucket question turned out to be moot for this specific point.
+  **Source:** 18 points within 150 m of the target, all in a tight −0.83..−0.91 m band, sourced
+  from `Brisbane_2019_Prj`. **Classification (raw zips checked directly):** 93,987 class-2
+  "ground" points at −0.68..−0.15 m AHD sit at ~2,238 pts/cell — the same fused/misclassified
+  signature as the v16.12 CBD artifact (4,180 pts/cell), far too dense for real aerial-NIR ground
+  returns 600 m out in open, turbid Bramble Bay. The giveaway: 23,354 class-9 "water" points sit
+  interleaved in the same bbox at the same elevation band (−0.73..−0.12 m, mean −0.35). Class-2
+  and class-9 here are the same physical surface — the water surface at flight time — with most
+  of the swath mislabelled "ground." **Why the v16.12 −1.6 m floor didn't catch it:** that floor
+  kills fake riverbed *below* LAT; this is fake dry bank sitting *inside* the legitimate
+  intertidal band, indistinguishable by elevation alone. **Offset: correctly applied, not the
+  cause.** The Brisbane pipeline carries offsets per survey group, not by latitude bucket — this
+  cell correctly got Brisbane Bar 1.32 m via `Brisbane_2019_Prj` (the correct port for Bramble
+  Bay). Arithmetic confirmed: cell median z ≈ −0.45 → −(−0.45) − 1.32 = −0.87, matching the CSV
+  value exactly. The Sunshine Coast latitude-bucket offset function never touched this point.
+  **Render/interpolation: working as designed, not the cause.** `idwDepthAt()` found the artifact
+  sheet at 99 m and IDW-blended values that are all ≈ −0.85 anyway; the popup's "data 99 m away"
+  disclosure is honest. Interpolation is faithfully reporting bad source data, not reaching
+  wrongly. **Secondary UI finding, not patched:** the "dries" popup branch omits the "low
+  confidence" tag the depth-popup branch already applies past 80 m — a dries reading at 99 m
+  currently reads more confidently than an equivalent depth reading would. **Cluster check —
+  systemic across Bramble Bay open water, not one bad point:** the same pattern confirmed off
+  Sandgate (90/90 points), Shorncliffe pier (39/39), and partially at Pine River mouth outer
+  (mixed real flat + artifact). **Consequence:** the Brisbane River CSV's readings seaward of the
+  Brighton–Shorncliffe foreshore are untrustworthy as shipped; a masked re-export is needed before
+  import. Scope of the fault beyond this one survey group/bay was unknown at this point — a full
+  audit was commissioned next (v16.18). Nothing patched.
+
+- **v16.18 (5 Jul 2026, diagnostic only — no code shipped, no patch applied):** Full-scope audit
+  of the v16.17 misclassification fault across **both** deliveries. **All 1,375 tiles checked,
+  zero read errors.** Confirmed the fault is **systemic**, not confined to `Brisbane_2019_Prj`/
+  Bramble Bay — it recurs in every post-2009 vintage in both deliveries: Brisbane 2014 (38/222
+  tiles, 2.28 km²) and 2019 (45/240, 5.45 km²), Redland 2014 (22/59, 1.18 km²) and 2022 (31/77,
+  1.83 km²), Pine River strays (1/9, 0.03 km²), and — new — the **Sunshine Coast delivery's
+  MoretonBay 2014 (33/99, 1.92 km²) and 2018 (19/102, 0.77 km²) subsets**. **~13.6 km² total at
+  artifact scale across 192 tiles** (figures reconciled against the per-group table). **The
+  Sunshine Coast CSV — already imported to Aaron's phone via MERGE (v16.10) — is confirmed also
+  affected**, not just Brisbane River. Example cross-check coordinates surfaced: Brisbane River
+  mouth flats (−27.359, 153.143; −27.473, 153.198), Redland bayside (−27.459, 153.235; −27.514,
+  153.268), Deception Bay/Beachmere (−27.041, 153.119), Golden Beach/Pumicestone (−26.986,
+  153.068), Currimundi (−26.639, 153.079). Densities run 1,500–14,800 pts/cell with class-2/
+  class-9 medians within centimetres — same fingerprint as Brighton throughout.
+  **Major gap, not yet closed:** `Sunshine_Coast_2022/2014/2008` and `Noosa_2022/2015` — the
+  **dominant vintage covering most of the Sunshine Coast delivery's actual area** (~666 tiles) —
+  were only spot-sampled at 12 tiles, hitting 3/12 (25%). This is not a clean result for the bulk
+  of the SC CSV; a full audit is required before the SC fix can be considered scoped.
+  **Qualifications:** (1) **Ipswich/Bremer (185 tiles) is genuinely clean** — 0 artifact-scale,
+  consistent with a narrow river corridor having no broad open-water sheet to mislabel. (2) **370
+  tiles (Brisbane_2009, Redland_2009, SC MoretonBay_2009) are untestable by class-9-adjacency, not
+  confirmed clean** — pre-2009-era classifiers carried no water class at all, so there's no
+  co-location signal to catch; reported as unverified. A density-only secondary test (the same
+  method that originally caught the v16.12 CBD artifact) can still run on these. (3) **Not every
+  flagged cell is necessarily wrong** — artifact-scale areas coincide with locations that also
+  have genuine drying flats (Redland bayside, Pine mouth, Beachmere, Pumicestone); water pooled on
+  a real flat legitimately co-locates with exposed ground at the same elevation. Geometry alone
+  can't adjudicate truth on a tidal flat — a re-export fix must **drop** flagged points rather
+  than attempt to reclassify them, per the app's existing no-data-beats-wrong-data discipline
+  (accepted tradeoff: some real flat coverage lost alongside the artifact).
+  **Consequence:** both CSVs need a masked re-export before being trusted. Brisbane River import
+  stays held. **Sunshine Coast's phone data needs correcting too** — the fix will require a
+  **REPLACE** of the SC-region import, not a MERGE (MERGE can't remove already-present bad
+  points) — a first for this app's import history. Full per-tile results in
+  `data/raw/_inventory/audit_results.json` (gitignored scratch), held for the fix decision.
+  Nothing patched, masked, or re-exported.
+
+- **v16.19 (5 Jul 2026, build 2026.07.05a — 2b wiring: zoning/FHA/tides, depth untouched):**
+  Shipped the Sunshine Coast zoning/FHA/tides wiring build, scoped explicitly separate from the
+  v16.16–v16.18 depth-data-quality issue (no CSV import/export touched, `woongarra_imported_v1`
+  untouched, Brisbane River import stays held pending that fix).
+  **Zone freshness check (confirmation, not a merge):** `data/great_sandy_zones_2026.geojson`
+  (104 features) vs the Great-Sandy-origin subset already in `ZONES.features` — zid/name sets
+  identical, zt/notake identical for all 104, zero property drift. Geometry differs in vertex
+  count only (shipped is the already-simplified ~20 m version; the new pull is higher-resolution
+  raw) — bounding boxes match, same real zones. **No changes made**, exactly the expected result.
+  **FHA merge:** `data/fha_se_qld_2026.geojson` has 35 features but **8 collide exactly** with the
+  already-shipped Woongarra `FHA` store (same plan+name+mgmt key — Baffle Creek, Beelbi, Burrum,
+  Elliott River, Kinkuna, Kolan River — geometry differs by the same simplification-vs-raw
+  pattern as the zones). Merged only the **27 genuinely new** features (additive, existing 8
+  left untouched) — `FHA` now holds 35 total, including Maroochy (FHA-008, both mgmt variants)
+  and Noosa River Rev.2 (FHA-051, both variants).
+  **Mooloolaba tides — sourced and parsed from scratch, not copied from anywhere:** downloaded
+  the official MSQ *Queensland Tide Tables 2026* (193 pages, all QLD standard ports) via
+  WebFetch (direct `curl` was blocked by MSQ's anti-scraping page), located Mooloolaba's 3 pages
+  (Jan–Apr/May–Aug/Sep–Dec), and column-aware parsed using `pdfplumber` word-level x-coordinates
+  — necessary because the table packs **8 sub-columns per page** (4 months × 2 half-month
+  blocks) with **3 or 4 tide events per day**, exactly the multi-column trap that caused the
+  Brisbane Bar Jan-1 misread this convention was named after. Validated before trusting it:
+  353/353 weekday cross-checks matched (remaining 12 rows had no weekday marker to check, not
+  assumed correct), all 365 dates present with none missing/duplicated, every day within the
+  valid 3–4 event range, strictly increasing times within each day, H/L assigned by continuous
+  alternation (physically a semidiurnal tide can't have two highs in a row) with **zero**
+  alternation violations across 1,410 events. **External cross-check: parsed max height 2.22 m
+  vs the independently-published Mooloolaba HAT of 2.21 m** (MSQ Semidiurnal Tidal Planes,
+  sourced separately in v16.5) — near-exact match, strong evidence the parse is sound.
+  `MOOLOOLABA_TIDES_2026` embedded in the same shape as `BURNETT_TIDES_2026`/
+  `BRISBANE_TIDES_2026`, added to `PORTS`. **Correction propagated:** Mooloolaba and Noosa Head
+  are both Standard Ports (own harmonic prediction) per the official table — no offset math for
+  either; Noosa Head itself stays a deliberate fast-follow, not part of this build.
+  **Outside-zoning message fixed** (`zoneTag()`, was the only place any "no zone match" text
+  existed at all): now reads *"outside marine-park zoning — general fisheries rules + FHAs
+  still apply, confirm via Qld Fishing 2.0"* instead of the old bare *"outside mapped zones —
+  verify yourself"* — the old text never mentioned FHAs or the general-rules-still-apply point,
+  a real safety-layer gap now closed. **Note:** FHA data is merged but still not rendered as a
+  map layer or point-in-polygon lookup (same as the Woongarra FHA entries before it) — this
+  build only fixed the static disclaimer text, not a location-aware FHA check.
+  **Validation:** both script blocks `node --check` clean; Leaflet block byte-identical (md5
+  `cab0fd0f0d88d5ae473c6a6812dba859`, unchanged since v16.7); `zoneAt()` still most-protective
+  (`ORDER=["MNP","CPZ","HPZ","GUZ"]`, unmodified) — not touched by any of this build's edits, so
+  no regression risk; green-zone drag safeguard (`nz.notake` alert on dragend) intact.
+  `nearestPort()` live-tested in Node against the actual embedded data: Woongarra/Bargara →
+  Burnett Heads, Redcliffe → Brisbane Bar (no regression), Mooloolaba/Maroochydore/Noosa Heads
+  → Mooloolaba — all 5 pass. **Also confirmed in passing (housekeeping, no action taken):**
+  `git remote -v` still points at `github.com/AzmixLabs/Guya.git` — unchanged despite the
+  "repository moved to Guya_Wamu" notice seen on every push since v16.7; and
+  `fishhabitat_bundaberg_region.geojson` (root, origin previously unrecorded) is confirmed
+  byte-identical to the currently-shipped Woongarra `FHA` store — it's that store's raw source
+  file, not a mystery file.
+  **Next:** the depth-data-quality fix (v16.16–v16.18) is the real open item — masked re-export
+  of both CSVs, REPLACE (not MERGE) for Sunshine Coast's phone data, Brisbane River import stays
+  held until then. Separately: an actual FHA rendering layer (polygon + popup, like `zoneLayer`)
+  is still a future build, not done here. Noosa Head tide port remains a ready-whenever
+  fast-follow. Gold Coast stays parked.
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
