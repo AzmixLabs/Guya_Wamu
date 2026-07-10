@@ -1,4 +1,14 @@
 # Guya — Feature Backlog & Roadmap
+*v16.23 · 11 Jul 2026 — drop-mask DESIGN PHASE COMPLETE for item 2 (read-only analysis + one
+metadata fix; NOTHING masked, dropped, or re-exported). Headline corrected: artifact scale is
+**296 tiles / 19.98 km²**, not 302/20.30 — `audit_results.json` carried 14 byte-identical
+duplicate HIT entries (pre-dating v16.21, from overlapping delivery zips in the
+MoretonBay_2014/2018 Pumicestone block), 6 of which double-counted the headline; deduplicated
+with backup. Masking SCOPE: **hybrid RECOMMENDED, PENDING AARON'S FINAL SIGN-OFF — not yet
+locked in** — cell-level masking on post-2009 vintages only (where class-9 adjacency confirms
+the fault): **1,184 tiles / 48,194 flagged cells / 30.12 km²**; the three 2009-vintage groups
+(53 flagged tiles / 0.21 km²) stay unmasked as unconfirmed. See changelog v16.23.*
+
 *v16.22 · 10 Jul 2026 — documentation-only correction, no code/data/audit changes: (1) Brisbane
 River import status was stale — that CSV is not "held"; it was already imported to Aaron's phone
 via MERGE (same route as Sunshine Coast), so BOTH regions carry the artifact on-phone and BOTH
@@ -10,7 +20,7 @@ samples; 544 + 363 = 907 as stated). See changelog v16.22.*
 class-9-adjacency audit of the Sunshine Coast dominant-vintage groups plus a density-only
 secondary test on the three 2009 vintages — 907 tiles this pass, zero read errors. Headline
 revision: the classifier-fault footprint is **~20.3 km² / 302 tiles at artifact scale** (was
-~13.6 km² / 192 in v16.18) — the SC 2022/2014/2008 + Noosa groups add 110 artifact-scale tiles
+~13.6 km² / 192 in v16.18; corrected to 296 / 19.98 in v16.23 — duplicate-entry fix) — the SC 2022/2014/2008 + Noosa groups add 110 artifact-scale tiles
 / +6.69 km²; the 2009 vintages add ZERO at artifact scale (effectively clean — the fault is
 post-2009 only). Current build remains 2026.07.05a. Both the Brisbane River and Sunshine Coast
 CSVs — each already phone-imported via MERGE (see v16.22 correction) — remain unsafe to trust
@@ -22,27 +32,36 @@ file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pa
 
 **Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. Priority list below synced to that build in v16.20 — no code shipped in v16.20. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
 
-**Next-session note (10 Jul 2026):** build 2026.07.05a unchanged; v16.21 closed the depth-audit
-gap (diagnostic only — new headline: 302 tiles / 20.3 km² at artifact scale, per-tile results in
-`data/raw/_inventory/audit_results.json`). Recommended next job: **item 2 — drop-mask re-export
-design** (now unblocked, scope final). Pending cleanup: `storage_check.html` + its in-app link
-(v16.7); `data/raw/_inventory/gap_checkpoint.json` is completed-run scratch, safe to delete.
+**Next-session note (11 Jul 2026):** build 2026.07.05a unchanged; v16.23 completed the drop-mask
+design phase (corrected headline: 296 tiles / 19.98 km² at artifact scale; hybrid scope
+recommended at 1,184 tiles / 30.12 km², pending Aaron's sign-off). Recommended next job:
+**Aaron confirms the mask scope (A / B / hybrid), then the masking build** (item 2 build half,
+then items 3–4: re-export + validate against controls, REPLACE re-imports both regions). Pending
+cleanup: `storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json` is completed-run
+scratch, safe to delete.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
    (556 total incl. the 12 v16.18 spot samples; count corrected from "652" in v16.22)
    by class-9-adjacency (SunshineCoast_2008 carries class 9 after all, so no fallback needed) and
    all three 2009-vintage groups (363 unique tiles) by the density-only secondary test. Zero read
-   errors. Artifact-scale total revised 192 tiles / 13.6 km² → **302 tiles / 20.3 km²**; the 2009
+   errors. Artifact-scale total revised 192 tiles / 13.6 km² → **302 tiles / 20.3 km²**
+   (corrected to **296 / 19.98 km²** in v16.23 — duplicate-entry fix); the 2009
    vintages contributed zero. Per-tile results merged append-only into
    `data/raw/_inventory/audit_results.json`. See changelog v16.21.
-2. **Design + build the drop-mask re-export**, once item 1 closes the scope. Per-cell density
-   threshold derived from `data/raw/_inventory/audit_results.json` (already has the per-cell
-   counts). Drop flagged points rather than reclassify — geometry alone can't tell a real drying
-   flat from mislabelled water at the same elevation (see v16.18 qualification 3). Applies to:
-   Brisbane_2014/2019, Redland_2014/2022, Pine River strays, SC MoretonBay_2014/2018, plus the
-   110 artifact-scale tiles v16.21 added across Sunshine_Coast_2022/2014/2008 + Noosa_2022/2015
-   (2009 vintages: zero at artifact scale, no mask needed).
+2. **Drop-mask re-export — DESIGN DONE (v16.23), BUILD pending Aaron's scope sign-off.** The
+   scoping report + control-location check ran 11 Jul 2026 (read-only, nothing masked). Three
+   options were costed on the deduplicated audit data: **Option A** (artifact-scale tiles only,
+   296 tiles / 19.98 km²) — least coverage loss but leaves the same fault unmasked in 941
+   sub-threshold tiles, including Brighton itself, the fault's origin site; **Option B**
+   (every flagged cell everywhere, 1,237 tiles / 30.34 km²) — fully consistent with
+   no-data-beats-wrong-data but sweeps in the weak-evidence 2009-vintage flags; **hybrid
+   (RECOMMENDED, pending confirmation)** — cell-level masking on post-2009 vintages only,
+   **1,184 tiles / 48,194 cells / 30.12 km²**, with the three 2009-vintage groups (53 flagged
+   tiles / 0.21 km², weak density-only signal, no class-9 corroboration possible) left unmasked
+   as unconfirmed. Drop flagged points rather than reclassify — geometry alone can't tell a real
+   drying flat from mislabelled water at the same elevation (v16.18 qualification 3). Build
+   starts only after Aaron picks the scope.
 3. **Re-export both CSVs**; validate against known controls — Brighton, Sandgate, Shorncliffe,
    Redland bayside, Deception Bay/Beachmere, Golden Beach/Pumicestone, Currimundi (all surfaced
    during the v16.18 audit) — confirm artifact zones read "no data," and spot-check that real
@@ -1269,6 +1288,39 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   907, matching the "907 tiles audited this pass" figure already in the file. The per-survey
   table and all km²/artifact-scale figures were already correct — only the stated Group A total
   was wrong.
+
+- **v16.23 (11 Jul 2026, design phase + metadata fix — no code shipped, NOTHING MASKED, DROPPED,
+  OR RE-EXPORTED — diagnosis and scoping only):** Drop-mask re-export design phase (item 2)
+  completed as a read-only analysis over `audit_results.json` (Sonnet). **Duplicate-entry fix:**
+  the file carried 380 duplicate tile names — 366 are the legitimate two-method record on
+  2009-vintage tiles (class-9-adjacency `clean_by_absence` + the real `density_only` verdict,
+  left untouched) — but 14 tiles had two byte-identical HIT entries, inherited from overlapping
+  delivery zips in the original 1,375-entry audit (all 14 in the MoretonBay_2014/Moreton_Bay_2018
+  Pumicestone block). Six of those sat at artifact scale and double-counted the headline.
+  Deduplicated (backup `audit_results.pre_dedupe.bak.json`, same pattern as the merge backup);
+  **corrected headline: 296 tiles / 19.98 km² at artifact scale** (was reported 302 / 20.30 in
+  v16.21/v16.22). No verdicts changed, no re-scoring — exact-duplicate removal only.
+  **Scope options costed (post-dedupe):** Option A — mask flagged cells only in artifact-scale
+  tiles: 296 tiles / 31,971 cells / 19.98 km². Option B — mask every flagged cell everywhere:
+  1,237 tiles / 48,537 cells / 30.34 km² (+10.36 km² over A). **Hybrid — RECOMMENDED, pending
+  Aaron's final sign-off:** cell-level masking on post-2009 vintages only, where class-9
+  adjacency independently confirms the fault: **1,184 tiles / 48,194 cells / 30.12 km²**, with
+  the three 2009-vintage groups excluded (53 flagged tiles / 343 cells / 0.21 km² left unmasked,
+  flagged as unconfirmed). **Control-location check:** every one of the seven v16.18 control
+  locations has at least one vintage clearing Option A's threshold, but four have vintages that
+  would stay UNMASKED under Option A — most damningly **Brighton itself, the fault's origin site
+  (31/32 flagged cells in Brisbane_2014/2019, both under the 50-cell line)**, plus
+  Shorncliffe (2019 vintage), Golden Beach/Pumicestone (MoretonBay_2014 + SC_2008), and
+  Currimundi (SC_2014 + SC_2008). Option A would therefore fail item 3's validation bar as
+  written; Option B and the hybrid pass it. **Group B evidence-strength finding:** the 53 flagged
+  2009-vintage tiles are a weak signal — median max-density 1,615 pts/cell vs 7,036 for confirmed
+  artifact tiles, clustered in a tight band right at the 1,500 calibration floor, median 3
+  cells/tile, and structurally no class-9 co-location check is possible on these vintages. At
+  least as consistent with dense real low-band ground (ramps, revetments) as with the fault at
+  small scale — hence the hybrid's exclusion of them as unconfirmed rather than either masked or
+  cleared. The ≥50-cell "artifact scale" line was always a reporting threshold for delivery-wide
+  scope, not a per-cell trust decision — the masking scope is therefore a fresh decision, not an
+  inheritance. **Build starts only after Aaron picks A / B / hybrid.**
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
