@@ -1,13 +1,20 @@
 # Guya — Feature Backlog & Roadmap
+*v16.22 · 10 Jul 2026 — documentation-only correction, no code/data/audit changes: (1) Brisbane
+River import status was stale — that CSV is not "held"; it was already imported to Aaron's phone
+via MERGE (same route as Sunshine Coast), so BOTH regions carry the artifact on-phone and BOTH
+need a REPLACE re-import (priority item 4 updated accordingly). (2) Fixed a Group A tile-count
+typo in the v16.21 text: 652 → 556 total SC/Noosa tiles (544 newly audited + 12 v16.18 spot
+samples; 544 + 363 = 907 as stated). See changelog v16.22.*
+
 *v16.21 · 10 Jul 2026 — depth-audit gap CLOSED (diagnostic only, no code shipped): full
 class-9-adjacency audit of the Sunshine Coast dominant-vintage groups plus a density-only
 secondary test on the three 2009 vintages — 907 tiles this pass, zero read errors. Headline
 revision: the classifier-fault footprint is **~20.3 km² / 302 tiles at artifact scale** (was
 ~13.6 km² / 192 in v16.18) — the SC 2022/2014/2008 + Noosa groups add 110 artifact-scale tiles
 / +6.69 km²; the 2009 vintages add ZERO at artifact scale (effectively clean — the fault is
-post-2009 only). Current build remains 2026.07.05a. Both the held Brisbane River CSV and the
-already-phone-imported Sunshine Coast CSV remain unsafe to import/trust as-is; the drop-mask
-re-export (item 2) is now fully scoped and unblocked. See changelog v16.21.*
+post-2009 only). Current build remains 2026.07.05a. Both the Brisbane River and Sunshine Coast
+CSVs — each already phone-imported via MERGE (see v16.22 correction) — remain unsafe to trust
+as-is; the drop-mask re-export (item 2) is now fully scoped and unblocked. See changelog v16.21.*
 
 Personal / family land-based fishing **+ nature field-log** tool. Single self-contained HTML
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
@@ -22,7 +29,8 @@ design** (now unblocked, scope final). Pending cleanup: `storage_check.html` + i
 (v16.7); `data/raw/_inventory/gap_checkpoint.json` is completed-run scratch, safe to delete.
 
 **Next session — priority order:**
-1. **Close the depth-data audit gap — DONE (v16.21).** All 652 remaining SC/Noosa tiles audited
+1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
+   (556 total incl. the 12 v16.18 spot samples; count corrected from "652" in v16.22)
    by class-9-adjacency (SunshineCoast_2008 carries class 9 after all, so no fallback needed) and
    all three 2009-vintage groups (363 unique tiles) by the density-only secondary test. Zero read
    errors. Artifact-scale total revised 192 tiles / 13.6 km² → **302 tiles / 20.3 km²**; the 2009
@@ -39,11 +47,11 @@ design** (now unblocked, scope final). Pending cleanup: `storage_check.html` + i
    Redland bayside, Deception Bay/Beachmere, Golden Beach/Pumicestone, Currimundi (all surfaced
    during the v16.18 audit) — confirm artifact zones read "no data," and spot-check that real
    flats nearby weren't wholesale gutted by the drop-mask.
-4. **Re-import.** Brisbane River to phone — fresh, first import, same single-pass auto-thin route
-   as before, still held pending the above. **Sunshine Coast needs a REPLACE of the existing phone
-   data, not a MERGE** — the already-imported CSV contains the artifact and MERGE cannot remove
-   points already present. Flag this explicitly when it's run; it's a different operation from
-   every import done so far.
+4. **Re-import — REPLACE required for BOTH regions, not a fresh first import for Brisbane
+   River.** Brisbane River and Sunshine Coast phone data are both already imported (both via
+   MERGE) and both confirmed to carry the classifier-fault artifact. Neither can be corrected by
+   another MERGE — MERGE cannot remove points already present. Flag explicitly when run; a first
+   for this app's import history on both fronts.
 5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
    to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
    incidentally during the v16.17 diagnostic.
@@ -1214,8 +1222,9 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   internal consistency.
 
 - **v16.21 (10 Jul 2026, diagnostic only — no code shipped, no patch applied):** Closed the
-  v16.18 audit gap (priority item 1). **907 tiles audited this pass — 652 Group A (SC/Noosa
-  post-2009 vintages) + 363 unique Group B (2009 vintages; 7 of the 370 manifest entries were
+  v16.18 audit gap (priority item 1). **907 tiles audited this pass — 544 Group A (SC/Noosa
+  post-2009 vintages; 556 total incl. the 12 v16.18 spot samples — count corrected from "652" in
+  v16.22) + 363 unique Group B (2009 vintages; 7 of the 370 manifest entries were
   duplicate tile names across overlapping delivery zips, as were 110 within Group A) — zero read
   errors**, checkpoint/resume exercised for real mid-run. Group A method/thresholds identical to
   v16.17–v16.18 (25 m cells, ≥20 class-9 + ≥100 class-2 pts, medians within 0.5 m; "artifact
@@ -1241,6 +1250,25 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   byte-identical after merge). Tooling: `_inventory/audit_gap.py` + `merge_gap.py` (gitignored
   scratch, kept for the item-2 mask design). Item 2 (drop-mask re-export) is now fully scoped and
   unblocked. Nothing patched, masked, dropped, or re-exported; no raw tiles deleted.
+
+- **v16.22 (10 Jul 2026, documentation-only — no code shipped, no data or audit changes):**
+  Correction pass over the v16.21 text; nothing re-audited, nothing patched. **(1) Brisbane River
+  import status corrected — it was stale/wrong:** the roadmap still described the Brisbane River
+  CSV (`data/brisbane_river_intertidal_ground_v1.csv`) as "held" pending the drop-mask fix, with
+  its eventual phone import billed as a fresh first import. Aaron has confirmed directly that the
+  CSV was already imported to his phone via MERGE — the same route as the Sunshine Coast import.
+  (That update was meant to land as its own changelog entry but was superseded by the v16.21
+  audit-gap session before being committed.) Now reflected in the banner and priority item 4:
+  BOTH regions' phone data carry the classifier-fault artifact and BOTH require a REPLACE
+  re-import — MERGE cannot remove points already present. **(2) Group A tile-count typo fixed:**
+  priority item 1 and the v16.21 changelog entry said "652" Group A tiles — a leftover
+  pre-deduplication manifest count from the audit session. Verified directly against
+  `data/raw/_inventory/audit_results.json`: **556 total Group A entries** (Sunshine_Coast_2022
+  159 + SunshineCoast_2014 164 + SunshineCoast_2008 167 + Noosa_2022 38 + Noosa_2015 28), of
+  which 544 were newly audited in v16.21 and 12 were the v16.18 spot sample; 544 + 363 Group B =
+  907, matching the "907 tiles audited this pass" figure already in the file. The per-survey
+  table and all km²/artifact-scale figures were already correct — only the stated Group A total
+  was wrong.
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
