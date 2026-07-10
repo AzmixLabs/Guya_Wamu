@@ -1,33 +1,40 @@
 # Guya — Feature Backlog & Roadmap
-*v16.19 · 5 Jul 2026 — build 2026.07.05a shipped: Sunshine Coast 2b wiring (zoning freshness
-confirmed, 27-feature FHA merge, Mooloolaba tides sourced + column-aware parsed, outside-zoning
-message fixed). Separately still open: the Brighton depth-data-quality issue (v16.16–v16.18) —
-a survey-classifier fault (open water mislabelled as dry ground) confirmed SYSTEMIC across BOTH
-the Brisbane River and Sunshine Coast deliveries (~13.6 km² / 192 tiles at artifact scale).
-Both the held Brisbane River CSV and the already-phone-imported Sunshine Coast CSV are
-affected; neither is safe to import/trust as-is. A meaningful audit gap remains — Sunshine
-Coast's dominant vintage groups are still unchecked. This build did not touch depth data.*
+*v16.21 · 10 Jul 2026 — depth-audit gap CLOSED (diagnostic only, no code shipped): full
+class-9-adjacency audit of the Sunshine Coast dominant-vintage groups plus a density-only
+secondary test on the three 2009 vintages — 907 tiles this pass, zero read errors. Headline
+revision: the classifier-fault footprint is **~20.3 km² / 302 tiles at artifact scale** (was
+~13.6 km² / 192 in v16.18) — the SC 2022/2014/2008 + Noosa groups add 110 artifact-scale tiles
+/ +6.69 km²; the 2009 vintages add ZERO at artifact scale (effectively clean — the fault is
+post-2009 only). Current build remains 2026.07.05a. Both the held Brisbane River CSV and the
+already-phone-imported Sunshine Coast CSV remain unsafe to import/trust as-is; the drop-mask
+re-export (item 2) is now fully scoped and unblocked. See changelog v16.21.*
 
 Personal / family land-based fishing **+ nature field-log** tool. Single self-contained HTML
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
+**Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. Priority list below synced to that build in v16.20 — no code shipped in v16.20. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
+
+**Next-session note (10 Jul 2026):** build 2026.07.05a unchanged; v16.21 closed the depth-audit
+gap (diagnostic only — new headline: 302 tiles / 20.3 km² at artifact scale, per-tile results in
+`data/raw/_inventory/audit_results.json`). Recommended next job: **item 2 — drop-mask re-export
+design** (now unblocked, scope final). Pending cleanup: `storage_check.html` + its in-app link
+(v16.7); `data/raw/_inventory/gap_checkpoint.json` is completed-run scratch, safe to delete.
 
 **Next session — priority order:**
-1. **Close the depth-data audit gap.** `Sunshine_Coast_2022/2014/2008` and `Noosa_2022/2015` —
-   the dominant vintage covering most of the Sunshine Coast delivery's actual area (~666 tiles) —
-   have only been spot-sampled (12 tiles, 3 hits = 25%), which is not a clean result, not a
-   confirmation. Full audit of these groups, plus a density-only secondary test on the three
-   2009-vintage groups that are structurally untestable by the class-9-adjacency method
-   (`Brisbane_2009`, `Redland_2009`, SC `MoretonBay_2009` — 370 tiles). **Fable 5/Opus 4.8,
-   checkpoint/resume required** (600+ tiles). See v16.18.
+1. **Close the depth-data audit gap — DONE (v16.21).** All 652 remaining SC/Noosa tiles audited
+   by class-9-adjacency (SunshineCoast_2008 carries class 9 after all, so no fallback needed) and
+   all three 2009-vintage groups (363 unique tiles) by the density-only secondary test. Zero read
+   errors. Artifact-scale total revised 192 tiles / 13.6 km² → **302 tiles / 20.3 km²**; the 2009
+   vintages contributed zero. Per-tile results merged append-only into
+   `data/raw/_inventory/audit_results.json`. See changelog v16.21.
 2. **Design + build the drop-mask re-export**, once item 1 closes the scope. Per-cell density
    threshold derived from `data/raw/_inventory/audit_results.json` (already has the per-cell
    counts). Drop flagged points rather than reclassify — geometry alone can't tell a real drying
    flat from mislabelled water at the same elevation (see v16.18 qualification 3). Applies to:
-   Brisbane_2014/2019, Redland_2014/2022, Pine River strays, SC MoretonBay_2014/2018, plus
-   whatever item 1 adds.
+   Brisbane_2014/2019, Redland_2014/2022, Pine River strays, SC MoretonBay_2014/2018, plus the
+   110 artifact-scale tiles v16.21 added across Sunshine_Coast_2022/2014/2008 + Noosa_2022/2015
+   (2009 vintages: zero at artifact scale, no mask needed).
 3. **Re-export both CSVs**; validate against known controls — Brighton, Sandgate, Shorncliffe,
    Redland bayside, Deception Bay/Beachmere, Golden Beach/Pumicestone, Currimundi (all surfaced
    during the v16.18 audit) — confirm artifact zones read "no data," and spot-check that real
@@ -40,13 +47,24 @@ file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pa
 5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
    to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
    incidentally during the v16.17 diagnostic.
-6. `git remote -v` check — still outstanding; the repo-rename notice has now fired twice without
-   the actual local remote ever being confirmed, only the URL/icon behaviour.
-7. Confirm `fishhabitat_bundaberg_region.geojson` — committed but unrecorded anywhere, origin
-   unclear.
-8. 2b wiring build (zoning/FHA/tides) — data validated since v16.3, no blocker, independent of
-   all of the above; can slot in any time.
-9. Gold Coast stays parked.
+6. `git remote -v` check — DONE (v16.19): still points at `AzmixLabs/Guya.git`, unchanged
+   despite the repeated "repository moved to Guya_Wamu" notice. **What's left is a decision, not
+   a check:** confirm on github.com whether the repo was actually renamed server-side, then
+   either rename the local remote to match or confirm nothing changed — once, deliberately —
+   rather than letting the notice fire a third time on an unverified redirect (the same class of
+   risk already flagged for the phone's home-screen icon in v16.7/v16.15).
+7. Confirm `fishhabitat_bundaberg_region.geojson` — RESOLVED (v16.19): confirmed byte-identical
+   to the already-shipped Woongarra FHA store. It's that store's raw source file, not an
+   unrelated file. No action needed.
+8. 2b wiring build (zoning/FHA/tides) — SHIPPED (v16.19, build 2026.07.05a).
+9. **New (surfaced by v16.19):** FHA data (35 features, merged into the store) has no rendered
+   map layer or point-in-polygon lookup — same gap as the pre-existing Woongarra FHA entries,
+   just newly visible now that Maroochy/Noosa are in the same store. Independent, no dependency
+   on the depth-audit work.
+10. Noosa Head tide port — ready-whenever fast-follow. Own Standard Port, no offset math needed
+    (confirmed v16.5, re-confirmed v16.19) — same pattern as Redcliffe following Brisbane Bar in
+    2a. Cheap, not urgent.
+11. Gold Coast stays parked.
 
 *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
@@ -1176,6 +1194,53 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   held until then. Separately: an actual FHA rendering layer (polygon + popup, like `zoneLayer`)
   is still a future build, not done here. Noosa Head tide port remains a ready-whenever
   fast-follow. Gold Coast stays parked.
+
+- **v16.20 (5 Jul 2026, planning-chat correction — no code shipped, no `index.html` change):**
+  Caught and fixed a staleness bug in this file itself: the "Next session — priority order" list
+  near the top still showed items 6 (`git remote -v` check), 7 (`fishhabitat_bundaberg_region.geojson`
+  origin), and 8 (2b wiring build) as open, even though the v16.19 build resolved or shipped all
+  three the same day. Left uncorrected, the next planning or build session would have re-checked
+  settled items off a stale list — the same class of drift this file's own "roadmap discipline"
+  principle exists to prevent. **Fixed:** items 6–8 now marked done/resolved/shipped with a
+  one-line pointer to v16.19. **Split out a real open item that v16.19 only surfaced in passing:**
+  the git remote check (item 6) confirms the *local* remote is unchanged, but doesn't resolve
+  *whether GitHub renamed the repo server-side* — that's a decision Aaron still needs to make
+  (check github.com directly; align remote + Pages URL + phone home-screen icon deliberately if
+  so, rather than relying on an unverified redirect indefinitely). **Added new item 9:** FHA data
+  (35 features) is merged into the store but has no rendered map layer or point-in-polygon
+  lookup — noted as a footnote in v16.19's own entry but not previously billed as its own backlog
+  line; now it is. **Renumbered:** Noosa Head fast-follow → item 10, Gold Coast → item 11.
+  **No architecture, code, or data changed** — this entry only corrects the roadmap's own
+  internal consistency.
+
+- **v16.21 (10 Jul 2026, diagnostic only — no code shipped, no patch applied):** Closed the
+  v16.18 audit gap (priority item 1). **907 tiles audited this pass — 652 Group A (SC/Noosa
+  post-2009 vintages) + 363 unique Group B (2009 vintages; 7 of the 370 manifest entries were
+  duplicate tile names across overlapping delivery zips, as were 110 within Group A) — zero read
+  errors**, checkpoint/resume exercised for real mid-run. Group A method/thresholds identical to
+  v16.17–v16.18 (25 m cells, ≥20 class-9 + ≥100 class-2 pts, medians within 0.5 m; "artifact
+  scale" = ≥50 suspect cells — the filter that exactly reproduces v16.18's 192-tile/13.61 km²
+  figure). Incidental method note: `SunshineCoast_2008_LGA` carries class 9 after all, so it was
+  audited by the full adjacency method, not a fallback. **Group A — the dominant SC vintages are
+  heavily affected:** 435/556 tiles raw-HIT (incl. the 12 v16.18 spot samples), **113 at artifact
+  scale / 6.85 km²** (Sunshine_Coast_2022 52 tiles/3.16 km², SunshineCoast_2014 39/2.54,
+  SunshineCoast_2008 12/0.49, Noosa_2022 6/0.42, Noosa_2015 4/0.24), densities to 27,898 pts/cell,
+  same class-2/class-9 co-location fingerprint as Brighton throughout — worst around
+  Maroochydore/Mudjimba, Coolum–Peregian, and the Caloundra/Pumicestone shore. **Group B
+  (density-only secondary test):** calibrated on 9 sample tiles first — 2009 deliveries carry
+  classes {2,6,10} (no class 9, confirmed structurally untestable by adjacency); legitimate
+  low-band ground tops out ~1,064 pts/cell, so the flag threshold was set at ≥1,500 pts/cell (the
+  confirmed v16.17–v16.18 artifact floor) at cell-median z ≤ +1.5 m AHD. Result: 53/363 tiles
+  carry isolated suspect cells (max 31 cells/tile, max density 2,227) but **zero tiles reach
+  artifact scale — the 2009 vintages are effectively clean**; the broad water-sheet artifact
+  simply does not occur pre-2009, consistent with a post-2009 classifier fault. **Headline
+  revision: ~13.6 km² / 192 tiles (v16.18) → ~20.3 km² / 302 tiles at artifact scale** (+110
+  tiles / +6.69 km², all from the SC/Noosa groups). Per-tile results appended to
+  `data/raw/_inventory/audit_results.json` (append-only; new entries tagged `method`/`group`;
+  pre-merge backup `audit_results.pre_gap.bak.json`; the existing 1,375 entries verified
+  byte-identical after merge). Tooling: `_inventory/audit_gap.py` + `merge_gap.py` (gitignored
+  scratch, kept for the item-2 mask design). Item 2 (drop-mask re-export) is now fully scoped and
+  unblocked. Nothing patched, masked, dropped, or re-exported; no raw tiles deleted.
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
