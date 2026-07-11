@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.06a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.07a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.06a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.07a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1998,10 +1998,13 @@ function buildShade(){
           if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
       if(!den){AL[i0]=0;continue;}
       const distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0));
-      /* Paint where there's water. Coast: inside a legislated zone polygon (mA). River/estuary
-         lies OUTSIDE the marine-park polygons, so also accept cells with nearby subtidal sounding
-         support (nearD>=0). Cosmetic paint-mask only - independent of zoneAt()/legality. */
-      const maskA=Math.max(mA,(nearD>=0&&near<=R1)?1:0);
+      /* Paint where there's water. Coast: inside a legislated zone polygon (mA). River/estuary,
+         and any stretch outside the marine-park's zoned extent (e.g. Mooloolaba-Noosa, north of
+         the Caloundra boundary), lies OUTSIDE the polygons, so also accept cells within R1 of
+         ANY nearby sample - a dries reading is just as much evidence of real intertidal/coastal
+         ground here as a genuine sounding; distance (near<=R1), not depth sign, is what bounds
+         this. Cosmetic paint-mask only - independent of zoneAt()/legality. */
+      const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
       FD[i0]=num/den;AL[i0]=distA*maskA;}}
   /* smooth the field: dense survey imports make raw IDW near-nearest-neighbour, which is far too
@@ -2161,9 +2164,10 @@ function openDepthRead(latlng,prefixHTML){
 }
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   const r=idwDepthAt(e.latlng.lat,e.latlng.lng);
-  /* water = inside a legislated zone polygon (coast) OR subtidal sounding support within 120 m
-     (river/estuary, which lies outside the marine-park polygons). Paint/read rule, not legality. */
-  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.nearD>=0&&r.near<=120)))return;
+  /* water = inside a legislated zone polygon (coast) OR ANY sample - dries or sounding - within
+     120 m (river/estuary and areas outside the marine-park's zoned extent, e.g. Mooloolaba-Noosa
+     north of Caloundra). Paint/read rule, not legality - mirrors buildShade()'s maskA. */
+  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.near<=120)))return;
   const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
   const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
   if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
@@ -2178,8 +2182,9 @@ function findDeepest(lat0,lng0){
     const la=lat0+dy/mLat,lo=lng0+dx/mLng;
     const r=idwDepthAt(la,lo);
     if(!r||r.near>80)continue;
-    /* water = zone polygon (coast) OR subtidal sounding support (river/estuary). Read rule, not legality. */
-    if(!(inWaterFast(shadeMaskFeats(),la,lo)||r.nearD>=0))continue;
+    /* water = zone polygon (coast) OR any nearby sample - dries or sounding (river/estuary and
+       areas outside the marine-park's zoned extent). Read rule, not legality. */
+    if(!(inWaterFast(shadeMaskFeats(),la,lo)||r.near<=80))continue;
     if(!best||r.d>best.d)best={la:la,lo:lo,d:r.d,near:r.near};}}
   if(!best){alert('No surveyed water within 100 m of that point.');return;}
   if(!chanLayer)chanLayer=L.layerGroup().addTo(map);
@@ -2225,7 +2230,7 @@ function buildAutoContours(){
       for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=sIx[i3+':'+j3];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
-      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||nearD>=0))?1:0;}}
+      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))?1:0;}}
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
   if(mxD<=mnD)return;
@@ -2861,9 +2866,9 @@ renderContours();
     let r=null,inZ=false;
     try{inZ=inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng);
       r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
-    /* show over zone water (coast) OR where there's subtidal sounding support within 120 m
-       (river/estuary, outside the marine-park polygons) - mirrors the depth-shading paint rule */
-    if(!(inZ||(r&&r.nearD>=0&&r.near<=120))){el.style.display='none';return;}
+    /* show over zone water (coast) OR any sample - dries or sounding - within 120 m (river/estuary
+       and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint rule */
+    if(!(inZ||(r&&r.near<=120))){el.style.display='none';return;}
     if(!r||r.near>150){el.textContent='no survey data here';}
     else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d)+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}

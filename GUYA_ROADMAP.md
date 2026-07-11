@@ -1,4 +1,26 @@
 # Guya — Feature Backlog & Roadmap
+*v16.25 · 12 Jul 2026 — build 2026.07.07a: FIX SHIPPED for the shading/tap-read coverage gap
+north of Caloundra (independently diagnosed, separate subsystem and separate incident from
+v16.24.1/v16.24.2's storage bug — do not conflate). Root cause: the cosmetic paint/read mask
+required either a legislated marine-park zone polygon OR a nearby sample with a genuine
+underwater sounding (depth ≥ 0); Moreton Bay MP zoning stops at Caloundra (no polygon for
+Mooloolaba→Noosa), and this dataset's imported points are almost entirely "dries" (negative
+depth), so neither condition could fire along that whole stretch, at any array size. **Fix:
+dropped the depth-sign requirement — the existing distance bound (within ~80–120 m of a real
+sample, depending on the call site) is sufficient evidence of real coastal/intertidal ground on
+its own, regardless of whether the nearest sample is a dries reading or a sounding.** Applied
+identically across **all five** call sites sharing this exact gate (the investigation named two —
+`buildShade()`'s shading paint and the tap-to-read click handler — but the same duplicated
+condition also gated `findDeepest()`, `buildAutoContours()`, and the desktop hover-readout;
+fixing only two would have left the other three silently broken at Coolum and inconsistent with
+the two that were fixed). Confirmed by direct test-data lookup: the reported Coolum point
+(−26.554413, 153.095149, depth −5.63) is 0 m from itself in the dataset → now passes the
+distance gate; a control point 8.7 km inland is correctly still excluded by distance alone,
+confirming the sign check was never load-bearing for protecting against painting over unrelated
+dry land. `zoneAt()` (legal zone determination) is untouched and confirmed separate from this
+cosmetic mask — same file, same line, unchanged. Both script blocks pass `node --check`; Leaflet
+block confirmed byte-identical. See changelog v16.25.*
+
 *v16.24.2 · 12 Jul 2026 — build 2026.07.06a: FIX SHIPPED for the v16.24.1 incident, item 4
 UNBLOCKED. Root cause (from the prior read-only investigation) was structural, not a scale/data
 bug: all imported depths lived in one unscoped `woongarra_imported_v1` array with no per-region
@@ -74,26 +96,28 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.06a *(v16.24.2: dataset-scoped "Imported depths" storage, fixing the
-v16.24.1 REPLACE/MERGE data-loss incident. 2b wiring — zoning/FHA/tides — see changelog v16.19.
-`storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present
-and still flagged for removal.)*
+**Current build:** 2026.07.07a *(v16.25: fixed the shading/tap-read coverage gap north of
+Caloundra — dropped the depth-sign requirement on the cosmetic paint/read mask's distance-bounded
+fallback, across all five call sites sharing that gate. v16.24.2: dataset-scoped "Imported
+depths" storage, fixing the v16.24.1 REPLACE/MERGE data-loss incident — a separate subsystem,
+separate incident, do not conflate the two fixes. 2b wiring — zoning/FHA/tides — see changelog
+v16.19. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still
+present and still flagged for removal.)*
 
-**Next-session note (12 Jul 2026, post-fix):** build 2026.07.06a shipped — item 4 UNBLOCKED.
-**Recommended next job: Aaron runs the small-file test plan below** (synthetic CSV REPLACE +
-MERGE, then a backup export/restore round-trip) before re-attempting the real Brisbane
-River/Sunshine Coast v2 REPLACE — this exercises the fixed, region-scoped path safely; per the
-backup-file analysis during the investigation, the 55,660-pt on-device dataset already looks
-correctly distributed across all three regions, so this is about proving the path is safe going
-forward, not recovering anything currently missing. Separately unresolved (independent issue,
-not touched by this fix): depth shading/tap-read silently renders nothing for imported points
-north of Caloundra (Mooloolaba→Noosa), because the paint mask requires either a legislated
-zone polygon or a genuine underwater sounding, and this stretch has neither — see the dedicated
-investigation for the fix proposal (relax the fallback to accept nearby dries points, or add a
-coastline mask independent of the marine-park polygons). Item 5 (dries-popup low-confidence
-tag) remains available as an independent small build. Pending cleanup: `storage_check.html` +
-its in-app link (v16.7); `gap_checkpoint.json`/`hybrid_checkpoint.json` are completed-run
-scratch, safe to delete; v1 depth CSVs stay until Aaron confirms the re-import.
+**Next-session note (12 Jul 2026, post-fix):** build 2026.07.07a shipped — item 4 UNBLOCKED
+(storage fix, v16.24.2) and the shading/tap-read coverage gap north of Caloundra is CLOSED
+(v16.25) — both independent of each other. **Recommended next job: Aaron runs the small-file
+test plan** (changelog v16.24.2: synthetic CSV REPLACE + MERGE, then a backup export/restore
+round-trip) before re-attempting the real Brisbane River/Sunshine Coast v2 REPLACE — this
+exercises the fixed, region-scoped path safely; per the backup-file analysis during the storage
+investigation, the 55,660-pt on-device dataset already looks correctly distributed across all
+three regions, so this is about proving the path is safe going forward, not recovering anything
+currently missing. Once that's confirmed working, the Coolum-area (and broader Mooloolaba→Noosa)
+shading/tap-read should now work correctly on re-import too — worth a spot-check alongside the
+test plan, not a separate session. Item 5 (dries-popup low-confidence tag) remains available as
+an independent small build. Pending cleanup: `storage_check.html` + its in-app link (v16.7);
+`gap_checkpoint.json`/`hybrid_checkpoint.json` are completed-run scratch, safe to delete; v1
+depth CSVs stay until Aaron confirms the re-import.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
@@ -136,24 +160,34 @@ scratch, safe to delete; v1 depth CSVs stay until Aaron confirms the re-import.
 5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
    to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
    incidentally during the v16.17 diagnostic.
-6. `git remote -v` check — DONE (v16.19): still points at `AzmixLabs/Guya.git`, unchanged
+6. **Shading/tap-read coverage gap north of Caloundra — FIXED (v16.25).** Independently
+   diagnosed and shipped: Mooloolaba→Noosa had no legislated zone polygon AND this dataset's
+   points are almost entirely dries (negative depth), so the cosmetic paint/read mask's two
+   admission conditions could both fail simultaneously, at any array size, for any point in that
+   stretch — including Coolum, the reported test case. Fixed by dropping the depth-sign
+   requirement on the distance-bounded fallback (near/within ~80–120 m of any real sample is
+   sufficient evidence of coastal ground, dries or sounding) across all five call sites sharing
+   the gate: `buildShade()`, tap-to-read, `findDeepest()`, `buildAutoContours()`, and the desktop
+   hover-readout. `zoneAt()`/legal-zone logic untouched and confirmed separate. See changelog
+   v16.25.
+7. `git remote -v` check — DONE (v16.19): still points at `AzmixLabs/Guya.git`, unchanged
    despite the repeated "repository moved to Guya_Wamu" notice. **What's left is a decision, not
    a check:** confirm on github.com whether the repo was actually renamed server-side, then
    either rename the local remote to match or confirm nothing changed — once, deliberately —
    rather than letting the notice fire a third time on an unverified redirect (the same class of
    risk already flagged for the phone's home-screen icon in v16.7/v16.15).
-7. Confirm `fishhabitat_bundaberg_region.geojson` — RESOLVED (v16.19): confirmed byte-identical
+8. Confirm `fishhabitat_bundaberg_region.geojson` — RESOLVED (v16.19): confirmed byte-identical
    to the already-shipped Woongarra FHA store. It's that store's raw source file, not an
    unrelated file. No action needed.
-8. 2b wiring build (zoning/FHA/tides) — SHIPPED (v16.19, build 2026.07.05a).
-9. **New (surfaced by v16.19):** FHA data (35 features, merged into the store) has no rendered
+9. 2b wiring build (zoning/FHA/tides) — SHIPPED (v16.19, build 2026.07.05a).
+10. **New (surfaced by v16.19):** FHA data (35 features, merged into the store) has no rendered
    map layer or point-in-polygon lookup — same gap as the pre-existing Woongarra FHA entries,
    just newly visible now that Maroochy/Noosa are in the same store. Independent, no dependency
    on the depth-audit work.
-10. Noosa Head tide port — ready-whenever fast-follow. Own Standard Port, no offset math needed
+11. Noosa Head tide port — ready-whenever fast-follow. Own Standard Port, no offset math needed
     (confirmed v16.5, re-confirmed v16.19) — same pattern as Redcliffe following Brisbane Bar in
     2a. Cheap, not urgent.
-11. Gold Coast stays parked.
+12. Gold Coast stays parked.
 
 *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
@@ -1468,6 +1502,43 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   **Not addressed here — separate open item:** depth shading/tap-read still renders nothing for
   imported points north of Caloundra (confirmed zone-polygon-coverage gap, independently
   diagnosed, fix proposed but not built). Re-importing under this fix does not resolve that.
+
+- **v16.25 (12 Jul 2026, build 2026.07.07a — `index.html` code change, SEPARATE from v16.24.2,
+  do not conflate):** Fixed the shading/tap-read coverage gap north of Caloundra, following the
+  earlier independent read-only investigation. **Root cause, confirmed:** the cosmetic paint/read
+  mask (explicitly separate from `zoneAt()`/legal-zone logic per its own long-standing code
+  comment) required either a legislated marine-park zone polygon OR a nearby sample with a
+  genuine underwater sounding (depth ≥ 0, i.e. NOT "dries"). Moreton Bay MP zoning stops at
+  Caloundra, so Mooloolaba/Maroochydore/Coolum/Peregian/Noosa have no zone polygon at all; and
+  this dataset's imported points are almost entirely dries (negative depth — LiDAR ground returns
+  by construction). With neither admission path available, shading and tap-read produced nothing
+  for any point along that whole stretch, at any array size — structural, not scale-related, and
+  predating the recent storage incident entirely (would have failed identically on the original
+  v1 Sunshine Coast import too). **Fix:** dropped the depth-sign requirement from the
+  distance-bounded fallback — being within the existing radius (R1=120 m for shading/tap-read,
+  80 m for `findDeepest()`) of ANY real sample, dries or sounding, is now sufficient evidence of
+  real coastal/intertidal ground. The distance bound alone was already doing the real work of
+  excluding unrelated dry land; the sign check added a gap without adding real protection.
+  **Scope widened beyond the original investigation's two named sites:** `buildShade()`'s maskA
+  and the tap-to-read click handler were the two call sites the investigation examined, but the
+  identical duplicated gate (same condition, same comment lineage — "mirrors the depth-shading
+  paint rule") also existed in three more places: `findDeepest()` ("Deepest within 100 m"),
+  `buildAutoContours()`, and the desktop mouse-hover readout. Fixing only the two named sites
+  would have left these three silently broken at Coolum while the other two worked — a worse,
+  inconsistent state than the original uniform failure. All five were fixed identically, restoring
+  the consistency the five already had with each other before this change. **Verification:**
+  confirmed against the real dataset (not simulated) — the reported Coolum point (−26.554413,
+  153.095149, depth −5.63) is 0 m from itself in `sunshine_coast_intertidal_ground_v2.csv`, so it
+  now clears the distance gate; a control point 8.7 km inland (clearly dry hinterland, no nearby
+  survey coverage) is correctly still excluded by distance alone, confirming the sign check was
+  never load-bearing for that protection. Both script blocks pass `node --check`; the inlined
+  Leaflet block reconfirmed byte-identical to HEAD. `zoneAt()` untouched (single unrelated
+  function, confirmed by direct read) — the legal-zone-call invariant is unaffected. Build bumped
+  2026.07.06a → **2026.07.07a**. **Not addressed here:** the storage-scoping fix (v16.24.2) and
+  the on-phone test plan it specifies remain the gating step before any real CSV re-import; this
+  rendering fix takes effect on whatever data is already/eventually on-device, no import required
+  to see it working, but should be spot-checked in the same phone session as the v16.24.2 test
+  plan rather than treated as its own separate on-phone verification pass.
 
 - **v16.24 (11 Jul 2026, data-processing build — no `index.html` change, no import performed):**
   Drop-mask BUILD shipped for the v16.23 hybrid scope (items 2+3 closed; Aaron's sign-off came
