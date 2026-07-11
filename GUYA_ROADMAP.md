@@ -1,4 +1,16 @@
 # Guya — Feature Backlog & Roadmap
+*v16.24 · 11 Jul 2026 — drop-mask BUILD COMPLETE (items 2+3 DONE; PATH 2 halved-job: raw-LiDAR
+mask re-scan + CSV-level drop, NOT a full pipeline re-export). All 1,184 hybrid-scope tiles
+re-scanned with the exact v16.17–v16.21 method — 48,194 flagged cells recovered, **per-tile
+counts matched audit_results.json 1,184/1,184 (zero mismatches)**, spot-check 28/28 tiles /
+84/84 stored example coordinates. Mask = 44,427 unique 25 m cells (multi-vintage overlaps
+collapse). **v2 CSVs written alongside v1 (v1 kept): Brisbane River 209,540 → 189,187
+(−20,353 pts); Sunshine Coast 188,855 → 168,461 (−20,394 pts).** Zero v2 points remain inside
+any mask cell. All ten control locations PASS — flagged cells read "no data," control tiles
+retain 76–1,236 surviving points each (adjacent real flats trimmed, not gutted). 2009-vintage
+points untouched per the hybrid scope. **Phone data UNCHANGED — item 4 (REPLACE re-import,
+both regions) is the remaining manual step, Aaron only.** See changelog v16.24.*
+
 *v16.23 · 11 Jul 2026 — drop-mask DESIGN PHASE COMPLETE for item 2 (read-only analysis + one
 metadata fix; NOTHING masked, dropped, or re-exported). Headline corrected: artifact scale is
 **296 tiles / 19.98 km²**, not 302/20.30 — `audit_results.json` carried 14 byte-identical
@@ -32,13 +44,13 @@ file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pa
 
 **Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. Priority list below synced to that build in v16.20 — no code shipped in v16.20. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
 
-**Next-session note (11 Jul 2026):** build 2026.07.05a unchanged; v16.23 completed the drop-mask
-design phase (corrected headline: 296 tiles / 19.98 km² at artifact scale; hybrid scope
-recommended at 1,184 tiles / 30.12 km², pending Aaron's sign-off). Recommended next job:
-**Aaron confirms the mask scope (A / B / hybrid), then the masking build** (item 2 build half,
-then items 3–4: re-export + validate against controls, REPLACE re-imports both regions). Pending
-cleanup: `storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json` is completed-run
-scratch, safe to delete.
+**Next-session note (11 Jul 2026, post-build):** build 2026.07.05a unchanged; v16.24 shipped the
+drop-mask build (items 2+3 DONE — v2 CSVs in repo, all ten controls PASS). Recommended next job:
+**item 4 — Aaron's manual REPLACE re-import of both regions from the v2 CSVs** (NOT a MERGE;
+see item 4). After that: item 5 (dries-popup low-confidence tag) is the cheapest open build.
+Pending cleanup: `storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json` and
+`hybrid_checkpoint.json` are completed-run scratch, safe to delete; v1 CSVs stay until Aaron
+confirms the re-import.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
@@ -49,7 +61,10 @@ scratch, safe to delete.
    (corrected to **296 / 19.98 km²** in v16.23 — duplicate-entry fix); the 2009
    vintages contributed zero. Per-tile results merged append-only into
    `data/raw/_inventory/audit_results.json`. See changelog v16.21.
-2. **Drop-mask re-export — DESIGN DONE (v16.23), BUILD pending Aaron's scope sign-off.** The
+2. **Drop-mask re-export — DONE (v16.24: design v16.23 + build 11 Jul 2026, hybrid scope as
+   signed off).** PATH 2 halved-job: mask re-scanned from raw LiDAR (1,184 tiles, zero count
+   mismatches vs the audit), then applied at CSV level — no full pipeline re-export needed.
+   See changelog v16.24. *(Design history follows:)* The
    scoping report + control-location check ran 11 Jul 2026 (read-only, nothing masked). Three
    options were costed on the deduplicated audit data: **Option A** (artifact-scale tiles only,
    296 tiles / 19.98 km²) — least coverage loss but leaves the same fault unmasked in 941
@@ -62,10 +77,11 @@ scratch, safe to delete.
    as unconfirmed. Drop flagged points rather than reclassify — geometry alone can't tell a real
    drying flat from mislabelled water at the same elevation (v16.18 qualification 3). Build
    starts only after Aaron picks the scope.
-3. **Re-export both CSVs**; validate against known controls — Brighton, Sandgate, Shorncliffe,
-   Redland bayside, Deception Bay/Beachmere, Golden Beach/Pumicestone, Currimundi (all surfaced
-   during the v16.18 audit) — confirm artifact zones read "no data," and spot-check that real
-   flats nearby weren't wholesale gutted by the drop-mask.
+3. **Re-export both CSVs + control validation — DONE (v16.24).** v2 CSVs written
+   (`brisbane_river_intertidal_ground_v2.csv` 189,187 pts, `sunshine_coast_intertidal_ground_v2.csv`
+   168,461 pts; v1 files kept for audit trail until the re-import is confirmed). All ten control
+   locations PASS — every previously-flagged vintage reads "no data" in its flagged cells, and
+   every control tile retains real nearby coverage (76–1,236 points). See changelog v16.24.
 4. **Re-import — REPLACE required for BOTH regions, not a fresh first import for Brisbane
    River.** Brisbane River and Sunshine Coast phone data are both already imported (both via
    MERGE) and both confirmed to carry the classifier-fault artifact. Neither can be corrected by
@@ -1321,6 +1337,41 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   cleared. The ≥50-cell "artifact scale" line was always a reporting threshold for delivery-wide
   scope, not a per-cell trust decision — the masking scope is therefore a fresh decision, not an
   inheritance. **Build starts only after Aaron picks A / B / hybrid.**
+
+- **v16.24 (11 Jul 2026, data-processing build — no `index.html` change, no import performed):**
+  Drop-mask BUILD shipped for the v16.23 hybrid scope (items 2+3 closed; Aaron's sign-off came
+  as the PATH 2 go-ahead). **Why PATH 2:** `audit_results.json` stores only per-tile counts plus
+  3 example coordinates (3,529 of 48,537 flagged cells), and the export-pipeline scratch
+  (`merged_cells.json` etc.) is class-2-only — flagged-cell geography was not recoverable, so the
+  mask was re-derived from raw LiDAR. **Halved job, not a full re-export:** because the v1 CSVs
+  are unthinned one-point-per-25 m-cell exports, only removal was needed — re-scan raw tiles for
+  flagged-cell keys, drop v1 points falling in those cells, keep everything else; the AHD→LAT
+  pipeline was not re-run. **Grid definition (load-bearing):** 25 m cells anchored at the
+  projection origin (cx = floor(E/25), cy = floor(N/25)) in each tile's NATIVE CRS — EPSG:28356
+  (GDA94/MGA56) pre-2022 vintages, EPSG:7856 (GDA2020/MGA56) 2022–23; keys are (epsg, cx, cy)
+  and never compared across CRSs (~1.8 m grid shift between datums). **Re-scan:** all 1,184
+  hybrid-scope tiles, exact v16.17–v16.21 method/thresholds (25 m, ≥20 class-9 + ≥100 class-2,
+  medians ≤0.5 m), extract-and-discard per tile (~1 GB transient, 681 GB free at start), wall
+  91 min (PID 13488), checkpoint/resume + progress-every-25 discipline, smoke test first
+  including an injected-mismatch test that the cross-validator correctly caught. **Verification:
+  48,194 flagged cells recovered; per-tile counts matched audit_results.json 1,184/1,184 (zero
+  mismatches); spot-check 28 tiles across all 14 survey groups — 84/84 stored example
+  coordinates present in the re-scan cell sets.** Mask = 44,427 unique cells after multi-vintage
+  overlap collapse (scratch: `_inventory/hybrid_mask_cells.json`, gitignored). **Applied:**
+  Brisbane River 209,540 → 189,187 (−20,353 pts); Sunshine Coast 188,855 → 168,461 (−20,394 pts);
+  total −40,747 pts vs 44,427 mask cells (fewer points than cells is expected — not every flagged
+  cell had a surviving exported point). Post-check: ZERO v2 points remain inside any mask cell,
+  either region. 2009-vintage points untouched (mask built only from post-2009 tiles, so the
+  exclusion holds by construction — a 2009-sourced CSV point can't sit in a flagged cell's
+  newest-wins slot anyway). **Control validation — all ten PASS** (per-tile check: flagged cells
+  → 0 points in v2, rest of tile survives): Brighton 133→76 tile pts (both vintages' artifact
+  cells emptied — the fault's origin site is finally masked), Sandgate 836→579, Shorncliffe
+  589→470, Brisbane R. mouth #1 1,593→962, #2 1,385→1,028, Redland bayside #1 744→460,
+  #2 1,014→778, Deception Bay/Beachmere 397→311, Golden Beach/Pumicestone 1,484→1,236 (all five
+  overlapping vintages emptied), Currimundi 1,104→1,031. **Files: v2 CSVs committed alongside the
+  kept v1s** (v1 stays until Aaron confirms re-import). **Phone data UNCHANGED — nothing
+  imported. Item 4 (manual REPLACE re-import, both regions, NOT MERGE) is the remaining step and
+  is Aaron's alone.**
 
 - **v16.4 (3 Jul 2026, verification only — no code shipped, no `index.html` change):** Resolved
   both open validation items flagged in v16.3. **`version:2` export/import confirmed to carry
