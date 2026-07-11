@@ -1,4 +1,36 @@
 # Guya — Feature Backlog & Roadmap
+*v16.24.2 · 12 Jul 2026 — build 2026.07.06a: FIX SHIPPED for the v16.24.1 incident, item 4
+UNBLOCKED. Root cause (from the prior read-only investigation) was structural, not a scale/data
+bug: all imported depths lived in one unscoped `woongarra_imported_v1` array with no per-region
+tag, so REPLACE unconditionally wiped the whole store — the second REPLACE (Sunshine Coast)
+overwrote the just-imported Brisbane River data, and Bargara/Woongarra was collateral damage
+from the very first REPLACE. **Shipped: dataset-scoped storage** (`woongarra_imported_v2`,
+per-region datasets, legacy array migrated in as a tagged "legacy/unknown" dataset — nothing
+dropped); **REPLACE/MERGE now scoped to the selected region only**; the blind `confirm()`
+OK=replace/cancel=merge dialog is **retired** in favour of explicit Replace/Merge buttons per
+region, plus a visible per-region dataset list with individual remove; **backup restore is now a
+true full replace** of the imported-depths store (was silently merge-only); **verified writes**
+(read-back + count-check) surface a **persistent in-panel error**, replacing two previously
+silent `catch(e){}` blocks; **one-step rollback snapshot** before every REPLACE/remove/restore,
+with an in-panel Undo button. The 25,000-point auto-thin logic is untouched. Both script blocks
+pass `node --check`; the inlined Leaflet block confirmed byte-identical; `zoneAt()` and the
+green-zone drag safeguard confirmed intact. **Rendering/interpolation (the separate, independently
+diagnosed zone-coverage gap north of Caloundra) is NOT touched by this build.** See changelog
+v16.24.2 for the on-phone test plan before the real v2 CSV re-import.*
+
+*v16.24.1 · 11 Jul 2026 — INCIDENT, item 4 BLOCKED (planning-chat log, no code shipped, no
+data changed): Aaron's first REPLACE attempt (v2 CSVs, both regions) on phone produced no
+depths for Brisbane River or Sunshine Coast — AND wiped Bargara/Woongarra depths, a
+pre-existing dataset never touched by this import. Strong evidence the "Imported depths"
+store is a single unscoped bucket across ALL regions, not partitioned per-region — REPLACE
+had never been exercised in this app before this attempt. A follow-up MERGE also produced no
+depths (cause unconfirmed). Aaron restored his pre-import `version:2` backup; spots
+confirmed recovered, Bargara status pending his confirmation. **Item 4 is BLOCKED — no
+further phone-side REPLACE/MERGE attempts until a Claude Code investigation (read-only code
+review of the import path + v2 CSV validation) reports a root cause.** v2 CSVs themselves are
+unaffected by this — the v16.24 build output stands, only the phone-side import is blocked.
+See changelog v16.24.1.*
+
 *v16.24 · 11 Jul 2026 — drop-mask BUILD COMPLETE (items 2+3 DONE; PATH 2 halved-job: raw-LiDAR
 mask re-scan + CSV-level drop, NOT a full pipeline re-export). All 1,184 hybrid-scope tiles
 re-scanned with the exact v16.17–v16.21 method — 48,194 flagged cells recovered, **per-tile
@@ -42,15 +74,26 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.05a *(2b wiring: zoning/FHA/tides — see changelog v16.19. Priority list below synced to that build in v16.20 — no code shipped in v16.20. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present and still flagged for removal.)*
+**Current build:** 2026.07.06a *(v16.24.2: dataset-scoped "Imported depths" storage, fixing the
+v16.24.1 REPLACE/MERGE data-loss incident. 2b wiring — zoning/FHA/tides — see changelog v16.19.
+`storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still present
+and still flagged for removal.)*
 
-**Next-session note (11 Jul 2026, post-build):** build 2026.07.05a unchanged; v16.24 shipped the
-drop-mask build (items 2+3 DONE — v2 CSVs in repo, all ten controls PASS). Recommended next job:
-**item 4 — Aaron's manual REPLACE re-import of both regions from the v2 CSVs** (NOT a MERGE;
-see item 4). After that: item 5 (dries-popup low-confidence tag) is the cheapest open build.
-Pending cleanup: `storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json` and
-`hybrid_checkpoint.json` are completed-run scratch, safe to delete; v1 CSVs stay until Aaron
-confirms the re-import.
+**Next-session note (12 Jul 2026, post-fix):** build 2026.07.06a shipped — item 4 UNBLOCKED.
+**Recommended next job: Aaron runs the small-file test plan below** (synthetic CSV REPLACE +
+MERGE, then a backup export/restore round-trip) before re-attempting the real Brisbane
+River/Sunshine Coast v2 REPLACE — this exercises the fixed, region-scoped path safely; per the
+backup-file analysis during the investigation, the 55,660-pt on-device dataset already looks
+correctly distributed across all three regions, so this is about proving the path is safe going
+forward, not recovering anything currently missing. Separately unresolved (independent issue,
+not touched by this fix): depth shading/tap-read silently renders nothing for imported points
+north of Caloundra (Mooloolaba→Noosa), because the paint mask requires either a legislated
+zone polygon or a genuine underwater sounding, and this stretch has neither — see the dedicated
+investigation for the fix proposal (relax the fallback to accept nearby dries points, or add a
+coastline mask independent of the marine-park polygons). Item 5 (dries-popup low-confidence
+tag) remains available as an independent small build. Pending cleanup: `storage_check.html` +
+its in-app link (v16.7); `gap_checkpoint.json`/`hybrid_checkpoint.json` are completed-run
+scratch, safe to delete; v1 depth CSVs stay until Aaron confirms the re-import.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
@@ -82,11 +125,14 @@ confirms the re-import.
    168,461 pts; v1 files kept for audit trail until the re-import is confirmed). All ten control
    locations PASS — every previously-flagged vintage reads "no data" in its flagged cells, and
    every control tile retains real nearby coverage (76–1,236 points). See changelog v16.24.
-4. **Re-import — REPLACE required for BOTH regions, not a fresh first import for Brisbane
-   River.** Brisbane River and Sunshine Coast phone data are both already imported (both via
-   MERGE) and both confirmed to carry the classifier-fault artifact. Neither can be corrected by
-   another MERGE — MERGE cannot remove points already present. Flag explicitly when run; a first
-   for this app's import history on both fronts.
+4. **Re-import — UNBLOCKED (v16.24.2 fix shipped).** The v16.24.1 incident's root cause was
+   confirmed structural (unscoped shared store) and fixed: "Imported depths" is now dataset-scoped
+   per region, REPLACE/MERGE only ever touch the targeted region, restore is a true full replace,
+   writes are verified with a persistent error surface, and one-step rollback covers every
+   destructive action. **Run the small-file test plan (changelog v16.24.2) before re-attempting
+   the real Brisbane River/Sunshine Coast v2 REPLACE.** Still explicitly a REPLACE for both
+   regions, not a fresh first import — that fact from v16.22 is unchanged, only the storage
+   mechanics under it are fixed.
 5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
    to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
    incidentally during the v16.17 diagnostic.
@@ -1337,6 +1383,91 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   cleared. The ≥50-cell "artifact scale" line was always a reporting threshold for delivery-wide
   scope, not a per-cell trust decision — the masking scope is therefore a fresh decision, not an
   inheritance. **Build starts only after Aaron picks A / B / hybrid.**
+
+- **v16.24.1 (11 Jul 2026, INCIDENT — planning-chat log, no code shipped, no data changed):**
+  Aaron attempted item 4 (REPLACE import of `brisbane_river_intertidal_ground_v2.csv`, then
+  `sunshine_coast_intertidal_ground_v2.csv`) on his phone, home-screen app. After restarting:
+  no depths visible for either region, AND Bargara/Woongarra depths — a separate, pre-existing
+  dataset not part of this import — were also gone. This is the key diagnostic signal: nothing
+  in this session's work should have touched Bargara, so its disappearance points at the
+  "Imported depths" store being a single unscoped bucket across all regions rather than
+  partitioned per-region, meaning REPLACE cleared everything it touches, not just the targeted
+  region's slice. A follow-up MERGE of the same v2 files also produced no visible depths —
+  cause unconfirmed (could be a v2-file-specific parsing issue, or leftover bad state from the
+  failed REPLACE; not yet distinguished). Aaron restored his pre-import `version:2` backup —
+  spots confirmed recovered; Bargara/Woongarra recovery unconfirmed as of this entry. **No
+  code or data changed this session** — this is an incident log plus a block on further
+  action. **v16.24's build output (the v2 CSVs) is not implicated** — the failure is in the
+  phone-side import mechanism, not the data produced by the build. Item 4 marked BLOCKED.
+  Next job: a read-only Claude Code investigation of the import/REPLACE/MERGE code path in
+  `index.html`, plus a structural check of the v2 CSVs against v1 (which imported successfully
+  at a comparable scale previously) — report and fix proposal only, no phone-side retry until
+  that lands.
+
+- **v16.24.2 (12 Jul 2026, build 2026.07.06a — `index.html` code change, item 4 UNBLOCKED):**
+  Fix shipped for the v16.24.1 incident, following the read-only investigation's confirmed root
+  cause: every region's imported depths lived in one flat array under one localStorage key
+  (`woongarra_imported_v1`), no per-point region tag; REPLACE unconditionally set that whole
+  array to `[]` before writing the new file. Sequential REPLACE of two regional files can only
+  ever leave the last file's data — this explains both Bargara/Woongarra's loss (first REPLACE)
+  and Brisbane River's loss (second REPLACE wiped it). The SC v2 file/follow-up MERGEs producing
+  nothing remains a separate, unconfirmed device-side question (see the investigation's report)
+  — not something a code fix can resolve retroactively, and orthogonal to this session's change.
+  **Shipped:**
+  — **Dataset-scoped storage** (`woongarra_imported_v2`): `{datasets:{region:{region,label,
+  importedAt,points}}}`, one slot per region. The old flat `woongarra_imported_v1` array is
+  migrated in as a tagged `legacy_unknown` dataset on first load if no v2 store exists yet —
+  never dropped, never silently merged into a region it wasn't confirmed to belong to (per the
+  investigation, the 55,660-pt legacy blob is presumed to span Bargara/Brisbane River/Sunshine
+  Coast from the backup analysis, but that's unverified by code, hence the "legacy/unknown" tag
+  rather than guessing a split). The legacy v1 key itself is left in place, untouched.
+  — **REPLACE/MERGE scoped to one region.** A region selector (Bargara/Woongarra, Brisbane
+  River, Sunshine Coast, or a free-text "Other…") targets every import; REPLACE now clears only
+  `datasets[region]`, never the whole store.
+  — **Blind `confirm()` OK=replace/Cancel=merge dialog retired.** Replaced with two explicit,
+  always-visible buttons ("Replace this region" / "Merge into this region") plus a persistent
+  per-region dataset list (label, point count, imported-date, individual ✕ remove) in the panel
+  — Aaron can see and control every region's state without a destructive dialog making the call.
+  — **Backup restore is now a true full replace** of the imported-depths store (previously
+  silently merge-only, confirmed by code-read in the investigation — a restore could add backup
+  points but never remove ones already in memory). Restoring a `datasets`-shaped backup replaces
+  the whole store with exactly its contents; restoring an older flat-`imported`-shaped backup
+  wraps it as one dataset and still fully replaces, never merges.
+  — **Verified writes.** Every `localStorage.setItem` for imported data is followed by a
+  read-back + point-count check; on mismatch a **persistent in-panel error** (`#imp-save-err`,
+  red-bordered, stays until the next successful save) fires instead of a transient `alert()`.
+  This closes both previously-silent `catch(e){}` blocks the investigation found (the metadata
+  write, and — the important one — the backup-restore path's `setItem`).
+  — **One-step rollback.** Every REPLACE, per-region remove, "Clear ALL regions," and backup
+  restore snapshots the pre-action store to `woongarra_imported_rollback_v1` first; an "↩ Undo
+  last replace/remove" button appears whenever a snapshot exists and restores it verified.
+  — **Untouched per explicit scope:** the 25,000-point grid-bucket auto-thin logic (proven
+  correct on the real v2 files during the investigation); `depthSamples()` and the entire
+  shading/tap-read/IDW pipeline (that's the separate, independently-diagnosed zone-coverage gap
+  — not a storage issue, not addressed by this fix); the inlined Leaflet block (confirmed
+  byte-identical to HEAD); `zoneAt()` and the pins-lock drag safeguard (confirmed intact).
+  **Verification:** both script blocks pass `node --check`. Build bumped 2026.07.05a →
+  **2026.07.06a**.
+  **On-phone test plan before the real re-import (mandatory, small-file first):**
+  1. Build a synthetic CSV of a few dozen `lat,lng,depth` points. REPLACE it into a test region
+     (e.g. "Other…" tagged `smoketest`) — confirm the panel's dataset list shows exactly that
+     count, and that Bargara/Brisbane River/Sunshine Coast counts in the list are all unchanged.
+  2. MERGE a second small synthetic file into the same test region — confirm the count increases
+     by the new file's unique-point count only, other regions still untouched.
+  3. Remove the test region's dataset via its ✕ button; confirm it disappears from the list and
+     the total count drops accordingly.
+  4. Export a `version:2` backup, then restore it immediately — confirm the total imported-point
+     count is unchanged (restore must not inflate it) and no persistent error appears in the
+     panel.
+  5. Only after 1–4 all pass: re-attempt the real REPLACE of `brisbane_river_intertidal_ground_v2.csv`
+     into "Brisbane River," then `sunshine_coast_intertidal_ground_v2.csv` into "Sunshine Coast" —
+     both still genuine REPLACE operations (v1 data is on-phone and must go), but now scoped so
+     neither touches the other region or Bargara/Woongarra. Confirm the dataset list shows the
+     expected ~20,791 / ~17,924-point-scale counts (per the v2 files' actual auto-thinned size)
+     and no persistent error banner.
+  **Not addressed here — separate open item:** depth shading/tap-read still renders nothing for
+  imported points north of Caloundra (confirmed zone-polygon-coverage gap, independently
+  diagnosed, fix proposed but not built). Re-importing under this fix does not resolve that.
 
 - **v16.24 (11 Jul 2026, data-processing build — no `index.html` change, no import performed):**
   Drop-mask BUILD shipped for the v16.23 hybrid scope (items 2+3 closed; Aaron's sign-off came
