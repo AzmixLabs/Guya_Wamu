@@ -2003,7 +2003,13 @@ function buildShade(){
          the Caloundra boundary), lies OUTSIDE the polygons, so also accept cells within R1 of
          ANY nearby sample - a dries reading is just as much evidence of real intertidal/coastal
          ground here as a genuine sounding; distance (near<=R1), not depth sign, is what bounds
-         this. Cosmetic paint-mask only - independent of zoneAt()/legality. */
+         this. Cosmetic paint-mask only - independent of zoneAt()/legality.
+         NOTE: distA below independently zeroes AL whenever near>=R1, so mA can no longer change
+         the painted result either way - near<R1 already forces maskA=1 unconditionally, near>=R1
+         already forces AL=0 via distA regardless of mA. inWaterFast()'s zone check is fully
+         dominated by distance here now (unlike tap-read/hover-readout, which keep a separate
+         150m fallback where zone status still matters). Left in place - harmless, and removing
+         mA here would be a separate cleanup, not part of this fix. */
       const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
       FD[i0]=num/den;AL[i0]=distA*maskA;}}
@@ -2183,7 +2189,10 @@ function findDeepest(lat0,lng0){
     const r=idwDepthAt(la,lo);
     if(!r||r.near>80)continue;
     /* water = zone polygon (coast) OR any nearby sample - dries or sounding (river/estuary and
-       areas outside the marine-park's zoned extent). Read rule, not legality. */
+       areas outside the marine-park's zoned extent). Read rule, not legality.
+       NOTE: r.near<=80 is already guaranteed by the r.near>80 guard above, so inWaterFast() can
+       never be the deciding branch here - deliberate, not accidental dead code: this function has
+       no meaningful "deepest nearby" reading without a genuinely close sample, zone or no zone. */
     if(!(inWaterFast(shadeMaskFeats(),la,lo)||r.near<=80))continue;
     if(!best||r.d>best.d)best={la:la,lo:lo,d:r.d,near:r.near};}}
   if(!best){alert('No surveyed water within 100 m of that point.');return;}
@@ -2230,6 +2239,9 @@ function buildAutoContours(){
       for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=sIx[i3+':'+j3];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+      /* NOTE: near<=R1 is already required by the outer &&near<=R1 just left of this OR, so
+         inWaterFast() can never be the deciding branch here - deliberate, same reasoning as
+         findDeepest(): a contour needs a genuinely nearby sample regardless of zone. */
       const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))?1:0;}}
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
