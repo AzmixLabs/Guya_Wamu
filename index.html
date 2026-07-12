@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.07a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.08a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.07a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.08a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1163,7 +1163,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="font-size:10px;color:var(--ink-dim);margin-top:5px;line-height:1.35">Depths must be metres below <b>LAT</b> (negative = dries). If your file is AHD heights, leave it — ask the build chat to convert. Offset is added to every depth on import. <span id="imp-count">0</span> points loaded across all regions. <span id="imp-status"></span></div>
       <div id="imp-save-err" style="display:none;margin-top:6px;padding:5px 7px;border:1px solid #ff5d5d;border-radius:6px;color:#ff9d9d;font-size:10.5px;line-height:1.35"></div>
       <div class="dp-list" id="imp-ds-list" style="margin-top:8px"></div>
-      <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="imp-undo" style="display:none">↩ Undo last replace/remove</button><button class="dp-btn" id="imp-clear">Clear ALL regions</button></div>
+      <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="imp-undo" style="display:none">↩ Undo last replace/merge/remove</button><button class="dp-btn" id="imp-clear">Clear ALL regions</button></div>
     </div>
     <div class="blk"><div class="lbl">Zone legend (2024 plan)</div><div class="legend" id="legend"></div></div>
     <div class="blk"><div class="lbl">Safety — crocodiles</div>
@@ -2069,7 +2069,9 @@ document.getElementById('shade-toggle').onchange=e=>{shadeOn=e.target.checked;
   if(shadeOn&&nPt<3){alert('No depth data yet \u2014 add 3+ soundings, label a contour, or import a survey CSV (Imported depths section).');}
   buildShade();};
 /* ---- interpolated depth anywhere (depth points + contour vertices), shared by slope tool & tap-to-read ---- */
-const IMP_DS_KEY='woongarra_imported_v2',IMP_ROLLBACK_KEY='woongarra_imported_rollback_v1';
+const IMP_DS_KEY='woongarra_imported_v2',IMP_RECEIPT_KEY='woongarra_imported_receipt',IMP_RB2_PREFIX='woongarra_imported_rollback_v2:';
+/* the whole-store v1 rollback slot is superseded by region-scoped rollback_v2 — reclaim its ~2.17 MB */
+try{localStorage.removeItem('woongarra_imported_rollback_v1');}catch(e){}
 let datasets={};
 try{const raw=JSON.parse(localStorage.getItem(IMP_DS_KEY));if(raw&&raw.datasets&&typeof raw.datasets==='object')datasets=raw.datasets;}catch(e){datasets={};}
 if(!Object.keys(datasets).length){try{
@@ -2090,25 +2092,55 @@ rebuildImportedFlat();
 function countDsPts(dsObj){let n=0;Object.keys(dsObj).forEach(function(k){const ds=dsObj[k];if(ds&&Array.isArray(ds.points))n+=ds.points.length;});return n;}
 function showImpError(msg){const el=document.getElementById('imp-save-err');if(el){el.textContent='⚠ '+msg;el.style.display='block';}}
 function clearImpError(){const el=document.getElementById('imp-save-err');if(el){el.textContent='';el.style.display='none';}}
+function dsCountMap(dsObj){const m={};Object.keys(dsObj).forEach(function(k){const ds=dsObj[k];m[k]=(ds&&Array.isArray(ds.points))?ds.points.length:0;});return m;}
 function saveDatasetsVerified(){const want=countDsPts(datasets);
   try{localStorage.setItem(IMP_DS_KEY,JSON.stringify({datasets:datasets}));
-    let got=-1;try{const back=JSON.parse(localStorage.getItem(IMP_DS_KEY));got=(back&&back.datasets)?countDsPts(back.datasets):-1;}catch(e2){got=-1;}
+    let got=-1,backDs=null;try{const back=JSON.parse(localStorage.getItem(IMP_DS_KEY));if(back&&back.datasets){backDs=back.datasets;got=countDsPts(backDs);}}catch(e2){got=-1;}
     if(got!==want){showImpError('Save did not verify — expected '+want+' point(s) in storage, found '+got+'. Try again or clear a region’s data.');return false;}
+    /* durability receipt: on iOS WebKit this same-session read-back is served from the in-memory
+       storage area and cannot see an async flush-to-disk failure — record per-region counts now,
+       re-check them against what actually loads on next boot */
+    try{localStorage.setItem(IMP_RECEIPT_KEY,JSON.stringify({v:1,counts:dsCountMap(backDs||datasets),savedAt:new Date().toISOString()}));}
+    catch(e3){try{localStorage.removeItem(IMP_RECEIPT_KEY);}catch(e4){}} /* stale receipt would false-alarm on boot */
     clearImpError();return true;
   }catch(e){showImpError('Storage write failed ('+(e&&e.message||'unknown error')+') — the imported set may be too large. Clear a region’s data or import a smaller file.');return false;}}
-function refreshImpUndoBtn(){const b=document.getElementById('imp-undo');if(b)b.style.display=(function(){try{return !!localStorage.getItem(IMP_ROLLBACK_KEY);}catch(e){return false;}})()?'inline-block':'none';}
-function snapshotImpRollback(){try{localStorage.setItem(IMP_ROLLBACK_KEY,JSON.stringify({at:new Date().toISOString(),datasets:datasets}));}catch(e){}refreshImpUndoBtn();}
-function undoLastImpReplace(){let snap=null;try{snap=JSON.parse(localStorage.getItem(IMP_ROLLBACK_KEY));}catch(e){}
-  if(!snap||!snap.datasets){alert('No undo snapshot available.');return;}
-  if(!confirm('Restore imported depths to how they were just before the last replace/remove? This undoes one step.'))return;
-  datasets=snap.datasets;rebuildImportedFlat();const ok=saveDatasetsVerified();
-  try{localStorage.removeItem(IMP_ROLLBACK_KEY);}catch(e){}
+function impRbKey(region){return IMP_RB2_PREFIX+region;}
+function anyImpSnapshot(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(IMP_RB2_PREFIX)===0)return true;}}catch(e){}return false;}
+function refreshImpUndoBtn(){const b=document.getElementById('imp-undo');if(b)b.style.display=anyImpSnapshot()?'inline-block':'none';}
+function snapshotImpRegion(region){/* call BEFORE mutating datasets[region] — one slot per region,
+  most-recent-action wins; dataset:null records "region did not exist", so Undo deletes it.
+  On write failure remove any stale slot so Undo can never restore the wrong prior state. */
+  try{localStorage.setItem(impRbKey(region),JSON.stringify({at:new Date().toISOString(),region:region,dataset:datasets[region]||null}));}
+  catch(e){try{localStorage.removeItem(impRbKey(region));}catch(e2){}}
+  refreshImpUndoBtn();}
+function latestImpSnapshot(){let best=null;
+  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!k||k.indexOf(IMP_RB2_PREFIX)!==0)continue;
+    try{const s=JSON.parse(localStorage.getItem(k));if(s&&s.region&&s.at&&(!best||s.at>best.at))best=s;}catch(e2){}}}catch(e){}
+  return best;}
+function undoLastImpReplace(){const snap=latestImpSnapshot();
+  if(!snap){alert('No undo snapshot available.');return;}
+  const lbl=(snap.dataset&&snap.dataset.label)||regionLabel(snap.region);
+  if(!confirm('Restore "'+lbl+'" imported depths to how they were just before the last replace/merge/remove? Other regions are untouched.'))return;
+  if(snap.dataset&&Array.isArray(snap.dataset.points))datasets[snap.region]=snap.dataset;else delete datasets[snap.region];
+  rebuildImportedFlat();const ok=saveDatasetsVerified();
+  try{localStorage.removeItem(impRbKey(snap.region));}catch(e){}
   refreshImpUndoBtn();if(typeof refreshImpPanel==='function')refreshImpPanel();if(typeof refreshDatasetList==='function')refreshDatasetList();buildShade();
   alert(ok?'Restored.':'Restored in memory, but save verification failed — see the warning above.');}
 function regionLabel(key){const known={woongarra:'Bargara / Woongarra',brisbane_river:'Brisbane River',sunshine_coast:'Sunshine Coast',legacy_unknown:'Legacy import (pre-region-tagging)'};
   if(known[key])return known[key];
   if(datasets[key]&&datasets[key].label)return datasets[key].label;
   return key;}
+/* boot-time durability check (v16.38 Fix A): compare the last verified save's receipt against
+   what actually loaded from disk — the only point a silent flush-to-disk failure becomes visible.
+   Banner is persistent (same #imp-save-err slot); it clears on the next successful save, and if
+   that save doesn't reach disk either, the next boot raises it again. */
+(function(){let rec=null;try{rec=JSON.parse(localStorage.getItem(IMP_RECEIPT_KEY));}catch(e){}
+  if(!rec||!rec.counts||typeof rec.counts!=='object')return;
+  const now=dsCountMap(datasets),bad=[];
+  Object.keys(rec.counts).forEach(function(k){if((now[k]||0)!==rec.counts[k])bad.push(regionLabel(k)+': expected '+rec.counts[k]+' pt(s), found '+(now[k]||0));});
+  Object.keys(now).forEach(function(k){if(!(k in rec.counts)&&now[k])bad.push(regionLabel(k)+': '+now[k]+' pt(s) not in the last verified save');});
+  if(bad.length)showImpError('Last import didn’t survive a restart — re-import required. Storage kept an older state ('+bad.join('; ')+').');
+})();
 function refreshImpPanel(){const cnt=document.getElementById('imp-count');if(cnt)cnt.textContent=imported.length;}
 function refreshDatasetList(){const list=document.getElementById('imp-ds-list');if(!list)return;list.innerHTML='';
   const keys=Object.keys(datasets);
@@ -2117,7 +2149,7 @@ function refreshDatasetList(){const list=document.getElementById('imp-ds-list');
     const row=document.createElement('div');row.className='dp-item';
     row.innerHTML='<span class="d" style="min-width:auto">'+ds.points.length+'pt</span><span class="n">'+htmlEsc(ds.label||k)+' · '+htmlEsc(ds.importedAt||'unknown')+'</span><button class="x" data-ds="'+htmlEsc(k)+'">✕</button>';
     row.querySelector('.x').onclick=function(){if(!confirm('Remove all '+ds.points.length+' imported point(s) for '+(ds.label||k)+'?'))return;
-      snapshotImpRollback();delete datasets[k];rebuildImportedFlat();saveDatasetsVerified();refreshDatasetList();refreshImpPanel();buildShade();};
+      snapshotImpRegion(k);delete datasets[k];rebuildImportedFlat();saveDatasetsVerified();refreshDatasetList();refreshImpPanel();buildShade();};
     list.appendChild(row);});}
 function depthSamples(){const s=[];
   points.forEach(p=>{if(p.depth!==''&&p.depth!=null)s.push({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)});});
@@ -2329,7 +2361,10 @@ function importBackup(file){
           importedAt:new Date().toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),points:pts}}:{};
       }
       if(newDatasets){
-        snapshotImpRollback();
+        /* restore replaces the whole store, so snapshot every region it touches (old ∪ new);
+           Undo then reverts them one region per press, newest slot first */
+        const affected={};Object.keys(datasets).forEach(function(k){affected[k]=1;});Object.keys(newDatasets).forEach(function(k){affected[k]=1;});
+        Object.keys(affected).forEach(snapshotImpRegion);
         datasets=newDatasets;rebuildImportedFlat();
         const ok=saveDatasetsVerified();
         if(typeof refreshImpPanel==='function')refreshImpPanel();
@@ -2935,8 +2970,8 @@ renderContours();
       const region=currentRegionKey(),label=currentRegionDisplayLabel(region),action=pendingAction;
       const when=new Date().toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
       let added=0,ds;
+      snapshotImpRegion(region); /* one-step undo for this region only — covers REPLACE and MERGE */
       if(action==='replace'){
-        snapshotImpRollback(); /* one-step undo before this region's slice is cleared */
         ds=datasets[region]={region:region,label:label,importedAt:when,points:pts.slice()};
         added=pts.length;
       }else{
@@ -2959,7 +2994,7 @@ renderContours();
     r.readAsText(f);};
   if(clr)clr.onclick=function(){const total=imported.length;if(!total)return;
     if(!confirm('Remove ALL '+total+' imported depth points across every region? Your own soundings and contours are untouched.'))return;
-    snapshotImpRollback();datasets={};rebuildImportedFlat();saveDatasetsVerified();
+    Object.keys(datasets).forEach(snapshotImpRegion);/* Undo restores one region per press */datasets={};rebuildImportedFlat();saveDatasetsVerified();
     try{localStorage.removeItem('woongarra_imported_meta_v1');}catch(e6){}
     refreshImpPanel();refreshDatasetList();buildShade();if(st)st.textContent='Cleared all regions.';};
   refreshImpPanel();refreshDatasetList();refreshImpUndoBtn();})();

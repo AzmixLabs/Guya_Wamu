@@ -1,4 +1,139 @@
 # Guya — Feature Backlog & Roadmap
+*v16.39 · 12 Jul 2026 — v16.38 fix SHIPPED (build 2026.07.08a): boot-time durability receipt
+(Fix A) + region-scoped rollback (the region-scoped half of Fix B), per the v16.38 diagnosis
+(iOS WebKit same-session read-back can never detect an async flush-to-disk failure).
+**Fix A:** after every save that passes the existing read-back+count-check,
+`saveDatasetsVerified()` now writes `woongarra_imported_receipt` — a per-region point-count map
++ savedAt, ~100–150 B, counted from the read-back itself. On boot the receipt is compared
+against the actually-loaded `woongarra_imported_v2`; any divergence (count mismatch, or a
+region present that the last verified save never had) raises a persistent banner in the
+existing `#imp-save-err` slot: "Last import didn't survive a restart — re-import required
+(…per-region detail…)". The banner clears on the next verified save and re-raises on the next
+boot if that save didn't reach disk either. If the receipt write itself fails synchronously,
+the key is removed so a stale receipt can't false-alarm. **Known blind spot, accepted:** if the
+store write AND the receipt write both fail to flush (app kill before any flush), boot sees a
+consistent older pair and cannot alarm — the receipt is tiny and written after the big store
+write, so the quota-pressure case (big write dies, small one survives) is the one it catches;
+the v16.38 interim force-close/reopen protocol therefore stays in effect regardless.
+**Region-scoped rollback:** `snapshotImpRollback()` (whole-store, single shared slot) replaced
+by `snapshotImpRegion(region)` writing per-region slots `woongarra_imported_rollback_v2:<key>`
+holding {at, region, dataset|null} — null records "region didn't exist," so Undo deletes it.
+Transient import cost drops from (store + whole-store copy) to (store + one region copy),
+freeing the ~1.5 MB headroom v16.38 predicted. MERGE now snapshots (previously it had NO undo
+coverage); ✕-remove and REPLACE snapshot their one region; Clear-ALL and backup-restore
+snapshot every affected region (old ∪ new keys for restore), and Undo restores ONE region per
+press, newest slot first — repeated presses walk back a whole-store operation region by region.
+On a snapshot write failure the region's stale slot is deleted so Undo can never restore a
+wrong prior state (a latent flaw the old single-slot code shared). Undo button relabelled
+"↩ Undo last replace/merge/remove"; its confirm names the region and states others are
+untouched. **Dead `woongarra_imported_rollback_v1` is removed at boot — ~2.17 MB reclaimed**,
+closing that cleanup item. Out of scope, untouched: IndexedDB migration (still queued), 25k
+auto-thin, zoneAt()/zones/tides. **Validation:** both script blocks pass `node --check`;
+inlined Leaflet byte-identical to HEAD; zoneAt() most-protective ordering and the green-zone
+dragend re-check confirmed intact; synthetic Node VM harness executed the REAL code slice from
+index.html against a controllable localStorage stub — (1) REPLACE wrote a matching <200 B
+receipt that booted clean on simulated reload, (2) a simulated flush failure (store write
+evaporated, receipt survived) raised the banner naming the lost region, cleared on re-save, and
+stayed clear once durable, (3) MERGE now leaves a pre-merge snapshot, (4) Undo reverted only
+the target region (others byte-untouched) and the dataset:null path removed a region whose
+first REPLACE was undone, (5) rollback_v1 gone at boot with no remaining references. **On-phone
+durability is NOT yet verified — by definition it can't be from inside one session; that's what
+the receipt exists to prove on next boot.** Next: re-import Sunshine Coast v2, then Maroochy
+Noosa v2 appgrade, one at a time, each verified with a genuine force-close/reopen.*
+
+*v16.38 · 12 Jul 2026 — read-only investigation CLOSED, correcting v16.35–v16.37's diagnosis,
+no code shipped: root cause of the SC/Maroochy-Noosa disappearance confirmed via direct code
+read (index.html:2093–2098). **The verified-write safeguard is not broken at the API level** —
+it does a genuine fresh `getItem` + re-parse, not a comparison against cached in-memory state.
+**The blindness is one layer deeper: on iOS WebKit, a same-session read-back is served from the
+browser's in-memory storage area and can never detect a write that fails to reach disk.**
+`setItem` applies synchronously in-memory; the flush to disk is async and can silently fail
+under storage pressure or an app kill before flush — verification passes, no error banner,
+and the write evaporates on next real reopen. This is exactly the observed pattern: two
+"successful," banner-free writes (SC REPLACE, Maroochy Noosa MERGE) that both reverted on a
+genuine close/reopen, while `storage_check.html`'s reading (2,174.1 KB, matching legacy+Brisbane
+River exactly) was accurate throughout — **the v16.36/v16.37 conclusions that (a) storage_check
+was bfcache-stale and (b) Sunshine Coast's data was overwritten under the wrong region key are
+both SUPERSEDED and wrong; nothing was overwritten, the writes never durably existed in the
+first place.** REPLACE and MERGE share one write/verify code path (confirmed no separate MERGE
+verification branch); quota-error handling is correct and not silently swallowed on the
+synchronous path — this failure is specifically the *asynchronous* durability gap, not a caught
+exception. **Retroactive implication: v16.28's "confirmed good" Sunshine Coast REPLACE is now
+presumed subject to the same blindness and plausibly never survived past that session either**
+— item 4 downgraded from DONE to UNCONFIRMED pending a real close/reopen-verified re-import.
+The v16.27 synthetic test's claim is narrowed to region-scoping + banner plumbing only; it
+never tested durability, since its own assertion ran in the same session as the write.
+**Fix proposed (build pending, sequencing decided by Aaron/Claude below):**
+(A) boot-time durability receipt — a small `<200 B` second key written after every verified
+save, checked against the real loaded store on next boot, surfacing a persistent "your last
+import didn't survive a restart" banner on mismatch;
+(B) root-cause relief — region-scoped rollback (frees ~1.5 MB of transient headroom per import,
+folding in the previously-proposed v16.36 fix) plus dropping the now-confirmed-dead
+`woongarra_imported_rollback_v1`; structural end-state flagged for a future session: move
+imported datasets to IndexedDB, whose transaction commit is a real durability signal and whose
+quota is far larger — not urgent, queued as a new backlog item, not a blocker;
+(C) interim manual protocol, zero-cost, effective immediately: after any import, force-close
+and reopen the app and re-check dataset row counts before trusting the result — same-session
+confirmation is now known to be meaningless under storage pressure;
+(D) this changelog entry itself is the roadmap correction called for.
+**Decision: build (A) + region-scoped rollback from (B) together in one session** — both touch
+the same REPLACE/MERGE code path, and (A) alone would still leave the quota-pressure trigger in
+place. **Decision: adopt (C) immediately, starting now, independent of the build** — it's free
+and closes the exact gap that caused today's confusion. **Decision: defer the IndexedDB
+migration** — real fix, not urgent enough to block re-establishing SC/Maroochy-Noosa on the
+current architecture. No phone-side action taken this session; `storage_check.html`'s
+reliability is reaffirmed, not removed from the plan.*
+
+*v16.37 · 12 Jul 2026 — planning correction (SUPERSEDED by v16.38, kept for the record): after
+Aaron force-closed and reopened the app and found only legacy + Brisbane River (76,454 pts)
+present, initially concluded `storage_check.html` had been serving a stale bfcache snapshot
+across three earlier reads that all showed identical `imported_v2`/`rollback_v1` byte counts
+despite the live panel showing different states in between. **This diagnosis was wrong** — see
+v16.38: storage_check was accurate throughout; the live panel's differing states were
+themselves never durably written. Backup exported at the 76,454-pt confirmed-durable baseline
+before the correct diagnosis landed — that backup remains valid and current.*
+
+*v16.36 · 12 Jul 2026 — planning, investigation + recovery attempt, no code shipped (SUPERSEDED
+in part by v16.38): read-only investigation of the v16.35 quota incident found the rollback
+snapshot mechanism (`snapshotImpRollback()`, index.html:2100) copies the entire `datasets`
+object on every REPLACE/✕-remove/Clear-ALL/backup-restore (MERGE alone takes no snapshot),
+sharing one slot overwritten by whichever operation runs next — explaining why the quota
+squeeze happened (every import transiently costs ~2× its own size) and, at the time, appearing
+to explain a missing Sunshine Coast row as an overwrite-under-the-wrong-key. Region-scoped
+rollback fix proposed (`rollback_v2`, per-region snapshots, MERGE gains coverage). Aaron
+pressed Undo per the investigation's recovery suggestion; result (legacy + Brisbane River only,
+76,454 pts) didn't match the predicted restore, correctly flagged as inconsistent with the
+overwrite theory at the time — **this inconsistency was the first real signal the diagnosis was
+incomplete, resolved in v16.38.** Sunshine Coast and Maroochy Noosa were both re-imported this
+session and appeared to succeed (4-row panel, 113,557 pts, all correct counts) before a later
+close/reopen reverted them — see v16.38 for the actual mechanism.*
+
+*v16.35 · 12 Jul 2026 — INCIDENT, no code shipped, no data lost: first Maroochy/Noosa MERGE
+attempt (19,178-pt appgrade file, region field left blank) failed with a "quota exceeded"
+storage-write error, correctly surfaced by the v16.24.2 banner on this occasion. `storage_check.html`
+confirmed total container usage at 4,889.3 KB / 4.77 MB against a real ceiling implied by the
+v16.9 fill-test baseline — `woongarra_imported_v2` and `woongarra_imported_rollback_v1` sitting
+at near-identical size (~2,174 KB each) was the first evidence the rollback snapshot was
+whole-store, queued as v16.36's investigation. No phone-side action taken pending it.*
+
+*v16.34 · 12 Jul 2026 — Maroochy/Noosa import-thinning decision resolved, Claude Code data-processing
+session, no `index.html` change: chose controlled re-export over the app's own auto-thin (37.9×
+reduction from 946,877 pts was untested territory — largest previously validated ratio was
+10.01×, and the 26 MB source file was ~5× the largest single-pass CSV parse ever run on-phone).
+Built `data/maroochy_noosa_bathy_v2_appgrade.csv`: 180 m grid (deliberately sized for an
+18–20k-point output, well clear of the 25k cap), 19,178 pts, conditional per-cell selection
+rule reached after two iterations — signed-max lost dries-crest detail, flat `|depth|` flipped
+112 genuine nearshore shallow-water cells to false "dries" (rejected: for a shore angler, that's
+exactly the zone this dataset was sourced to serve). **Final rule:** any cell containing a
+submerged point keeps its deepest submerged reading (protects nearshore shallow water); pure-dries
+cells keep their most-exposed point. v1 (946,877 pts) kept untouched as the full-resolution
+archive; the 13 v1 boundary-edge rows on the exclusion-box line are dropped only inside the v2
+transform, not scrubbed from v1. **Region-tagging decision:** Maroochy/Noosa gets its own
+"Other…" region slot, distinct from Sunshine Coast's existing intertidal/ground slot — different
+data type (real bathymetry vs topographic-NIR), different confidence tier (moderate datum
+confidence per the Fugro report vs the classifier-fault-hardened intertidal pipeline), keeps
+future fixes independently scoped rather than conflated.*
+
 *v16.33 · 12 Jul 2026 — Maroochy/Noosa BATHYMETRY SHIPPED as data (no `index.html` change, build
 stays 2026.07.07a): `data/maroochy_noosa_bathy_v1.csv` — 946,877 rows, 25 m grid, LAT-referenced,
 depths −1.15…+42.48 m, 99.0% genuinely submerged — the project's first real depth data, from the
@@ -8,8 +143,7 @@ v16.33, which also records the v16.29–v16.32 read-only investigations that de-
 contents vs the wrong ISO metadata, vertical-datum resolution, Fugro classification legend, the
 Maroochy Wetland Sanctuary defect zone).*
 
-*(v16.28 summary follows:)*
-*planning session, no code shipped: item 4 CONFIRMED EXECUTED, plus a
+*v16.28 · 12 Jul 2026 — planning session, no code shipped: item 4 CONFIRMED EXECUTED, plus a
 depth-data-sourcing review that closes with no pipeline change. **Real Brisbane River +
 Sunshine Coast v2 REPLACE run by Aaron on-phone** (v2 CSVs from v16.24) — counts confirmed
 good, Bargara/Woongarra confirmed intact, no error banner. **Item 4 is now genuinely DONE**,
@@ -201,27 +335,38 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.07a — **confirmed live and deployed** (v16.26: GitHub Pages had
+**Current build:** 2026.07.08a — durability receipt + region-scoped rollback (v16.39), deploy
+pending on-phone confirmation. Previous confirmed-live build: 2026.07.07a (v16.26: GitHub Pages had
 silently stalled since Jul 5 on 7 unpushed local commits; fixed by correcting the local remote and
 pushing, confirmed via Actions run #86 and a direct on-phone build-string check). **Region-scoped
-REPLACE/MERGE confirmed safe against the legacy dataset by direct test (v16.27)** — see below.
-*(v16.25: fixed
+REPLACE/MERGE mutation logic confirmed correct by direct test (v16.27) — narrowed per v16.38:
+that test validated region-scoping and banner plumbing only, NOT write durability.** *(v16.25: fixed
 the shading/tap-read coverage gap north of Caloundra — dropped the depth-sign requirement on the
 cosmetic paint/read mask's distance-bounded fallback, across all five call sites sharing that gate.
 v16.24.2: dataset-scoped "Imported depths" storage, fixing the v16.24.1 REPLACE/MERGE data-loss
-incident — a separate subsystem, separate incident, do not conflate the two fixes. 2b wiring —
+incident — a separate subsystem, separate incident, do not conflate the two fixes. **v16.38: this
+mechanism's verified-write safeguard is known to give false confidence under storage
+pressure on iOS WebKit — the boot-time durability receipt + region-scoped rollback fix SHIPPED
+in v16.39, build 2026.07.08a.** 2b wiring —
 zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page + its temporary
-in-app link, from v16.7, are still present and still flagged for removal.)*
+in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
+reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (12 Jul 2026 PM, post-bathy-export):** build string unchanged at 2026.07.07a
-(no app code touched). Shipped `data/maroochy_noosa_bathy_v1.csv` (946,877 pts, 25 m grid, LAT
-datum, committed) via `data/raw/_inventory/bathy_pipeline.py` — full numbers and the baked-in
-source/datum/exclusion rules are in changelog v16.33. **Recommended next job: the import
-decision** — 947k rows is ~38× the 25k import cap, so either re-export a pre-thinned app-grade
-CSV (coarser grid, keep v1 as the archive) or confirm the app's import-time auto-thin survives a
-26 MB CSV parse on-phone before running it. Item 5 (low-confidence popup tag) still pending. New
-pending cleanup: `bathy_checkpoint.json` + `bathy_smoke.csv` (completed-run scratch) and the
-`_inspect/` sample folder under `data/raw/Bathymetric-LiDAR-Sunshine-Coast/` are safe to delete.
+**Next-session note (12 Jul 2026, post-v16.39 build):** build 2026.07.08a — durability receipt
++ region-scoped rollback_v2 shipped (changelog v16.39), synthetic tests green, on-phone
+durability NOT yet proven (structurally can't be from one session — the receipt proves it on
+next boot). **Item 4 remains UNCONFIRMED**; nothing beyond legacy + Brisbane River (76,454 pts,
+close/reopen-confirmed) is proven durable on Aaron's phone. **Recommended next job:** confirm
+2026.07.08a is live on-phone (check the build string after a real reload), then re-import
+Sunshine Coast v2 followed by Maroochy Noosa v2 appgrade, ONE at a time, each verified with a
+genuine force-close/reopen before the next — a boot with no red banner and correct row counts
+is the first real durability pass; the interim force-close protocol stays in effect regardless.
+Item 5 (low-confidence popup tag) still pending, unaffected. Pending cleanup:
+`bathy_checkpoint.json` + `bathy_smoke.csv` (completed-run scratch), the `_inspect/` sample
+folder under `data/raw/Bathymetric-LiDAR-Sunshine-Coast/`,
+`gap_checkpoint.json`/`hybrid_checkpoint.json`, `guya_species_qld_v3.md` (origin undecided).
+The `woongarra_imported_rollback_v1` cleanup item is CLOSED — v16.39 removes it at boot
+(~2.17 MB reclaimed on first run of the new build).
 
 **Previous note (12 Jul 2026, post-REPLACE):** build 2026.07.07a is confirmed live and item 4
 is DONE — the real Brisbane River + Sunshine Coast v2 REPLACE ran successfully, counts good,
@@ -317,17 +462,17 @@ standalone decision.
 13. **New (v16.26):** `guya_species_qld_v3.md` sits untracked in the repo (surfaced by `git status`
    during the deploy-incident fix) — origin and whether it belongs are undecided. Small, standalone,
    no dependency on anything above.
-14. **New (v16.28): Maroochy/Noosa real bathymetric LiDAR sourcing.** Target dataset identified:
-   "Bathymetric LiDAR for Sunshine Coast," data.qld.gov.au, CC BY 4.0 (2022), 5 m, genuine
-   green-laser bathymetric survey, 0–30 m depths, lower estuarine + offshore reaches of both the
-   Maroochy and Noosa Rivers specifically (not the whole Sunshine Coast). Already confirmed
-   (v16.1, 2 Jul) as manual-order-only via QSpatial, no bulk API — **Aaron's step**: place the
-   order via the dataset's QSpatial catalogue page. Once files land, Claude Code processes them
-   with the same clip/AHD→LAT-convert/CSV-export/import pipeline already used for the Point
-   Clouds work — likely its own region-scoped dataset (e.g. "Sunshine Coast — Maroochy/Noosa
-   Bathy") given it's a materially better source than the surrounding intertidal-only coverage.
-   Do not substitute ELVIS's "Bathymetry" bucket (EOMAP-derived, rejected twice already — see
-   v16.28) or Navionics (rejected, chart-art rule) for this.
+14. **Maroochy/Noosa real bathymetric LiDAR — PIPELINE SHIPPED (v16.33), import decision
+   pending.** Was: "New (v16.28) — target dataset identified, Aaron's step to order." Now:
+   order placed, delivery inspected, pipeline built and run. Corrections to the original
+   entry: the dataset is a 2011 Fugro LADS Mk 3 survey (delivered/published 2013, not 2022 —
+   that was the metadata record's last-update date, not the survey date); actual contents are
+   LAS 1.2 point clouds + XYZ, not the vector formats (SHP/TAB/FGDB/KMZ/GPKG) the ISO record
+   claimed. Output: `data/maroochy_noosa_bathy_v1.csv`, 946,877 rows, depths −1.15…+42.48 m
+   LAT, 99.0% genuinely submerged — full detail in changelog v16.33. **Remaining:** 947k rows
+   is ~38× the 25k phone import cap — thinning decision needed before this reaches the phone
+   (see next-session note). ELVIS's "Bathymetry" bucket and Navionics remain rejected for any
+   future depth sourcing (v16.28) — unaffected by this item's completion.
 
 *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
@@ -704,20 +849,23 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
     keep the wind/swell-exposure flags in view.
 
 > **Home-water depth reality (SE QLD / Moreton Bay), confirmed 19 Jun 2026, sourcing decided
-> 12 Jul 2026 (v16.28):** beyond the open coast this is a physics + coverage gap, not a missing
-> download. Turbid water defeats laser bathymetry — a satellite-laser (ICESat-2) study found >half
-> of Moreton Bay too sediment-laden to read — so the clear-water LiDAR that gave Woongarra its
-> shading can't be replicated up the Pine / Brisbane / Hays Inlet. National open bathy (GA
-> AusBathyTopo, 30/50/100 m) is coarse open-coast only; the one all-QLD-estuary composite (CSIRO
-> 5 m) fills gaps with **modelled** creek depth → out by the no-chart-art rule; hydro charts and
-> **Navionics are both rejected on the same rule** (chart-derived, not a verified survey — see
-> v16.28); ELVIS's own "Bathymetry" bucket is the EOMAP satellite product, rejected twice already
-> (v16.8, re-confirmed v16.28) — do not order from it. Realistic home-water depth = (a) **your own
-> sonar → GPX** (works in mud; already supported); (b) **real 5 m bathymetric LiDAR — genuine
-> green-laser survey, 0–30 m depths — exists specifically for the Maroochy/Noosa lower estuarine +
-> offshore reaches** ("Bathymetric LiDAR for Sunshine Coast," data.qld.gov.au, CC BY 4.0, 2022;
-> manual QSpatial order, see item 14) if extending north; (c) otherwise **no depth layer** —
-> spots / tides / zones / FHA / patterns all work without it. Don't bake modelled bathymetry.
+> 12 Jul 2026 (v16.28), Maroochy/Noosa SHIPPED 12 Jul 2026 (v16.33):** beyond the open coast
+> this is a physics + coverage gap, not a missing download. Turbid water defeats laser bathymetry — a
+> satellite-laser (ICESat-2) study found >half of Moreton Bay too sediment-laden to read — so the
+> clear-water LiDAR that gave Woongarra its shading can't be replicated up the Pine / Brisbane / Hays
+> Inlet. National open bathy (GA AusBathyTopo, 30/50/100 m) is coarse open-coast only; the one all-QLD-
+> estuary composite (CSIRO 5 m) fills gaps with **modelled** creek depth → out by the no-chart-art
+> rule; hydro charts and **Navionics are both rejected on the same rule** (chart-derived, not a
+> verified survey — see v16.28); ELVIS's own "Bathymetry" bucket is the EOMAP satellite product,
+> rejected twice already (v16.8, re-confirmed v16.28) — do not order from it. Realistic home-water
+> depth = (a) **your own sonar → GPX** (works in mud; already supported); (b) **real bathymetric
+> LiDAR for Maroochy/Noosa — DONE, not just sourced:** a 2011 Fugro LADS Mk 3 survey (QSpatial,
+> "Bathymetric LiDAR for Sunshine Coast," manual order, see item 14) has been processed into
+> `data/maroochy_noosa_bathy_v1.csv` — 946,877 points, −1.15…+42.48 m LAT, 99.0% genuinely
+> submerged (v16.33) — the project's first real depth data, not yet imported to the phone pending
+> a thinning decision; (c) otherwise **no depth layer** — spots / tides / zones / FHA / patterns
+> all work without it, and this remains true everywhere outside the Maroochy/Noosa footprint.
+> Don't bake modelled bathymetry.
 
 14b. **Intertidal flats & exposure — DEA Intertidal (EVALUATED 20 Jun 2026 → qualified GO, Exposure-only,
     gated on a confidence check).** Free (CC BY 4.0), satellite-derived intertidal product.
