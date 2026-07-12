@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.11a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.13a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.11a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.13a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2159,10 +2159,22 @@ function refreshDatasetList(){const list=document.getElementById('imp-ds-list');
     row.querySelector('.x').onclick=function(){if(!confirm('Remove all '+ds.points.length+' imported point(s) for '+(ds.label||k)+'?'))return;
       snapshotImpRegion(k);delete datasets[k];rebuildImportedFlat();saveDatasetsVerified();refreshDatasetList();refreshImpPanel();buildShade();};
     list.appendChild(row);});}
+/* v16.44 elevation-aware gate (Option A): a dries sample only counts as paint/read evidence
+   where its elevation estimate is above -HAT for the nearest port. Confirmed root cause
+   (v16.41): SC/BR intertidal exports carry supratidal ground (above HAT, genuinely dry) inside
+   a -3..+5m AHD band, and v16.25's distance-only fallback treated any such point as
+   coastal/intertidal evidence regardless of how far above the highest tide it sits. HAT comes
+   from PORTS[].hat (see below, sourced from the embedded tide tables); reuses nearestPort() -
+   the same coordinate-routing pattern tideHeightNow(lat,lng) already uses (v16.41), not a new
+   lookup mechanism. d is m below LAT, negative = dries (see waterNowText) - so "above -HAT"
+   means d>-HAT. This does not touch depth-sign logic, zoneAt(), or the distance falloff
+   (R0/R1/near<=80/120) at any of the five shared-gate call sites - it only removes disqualified
+   samples from the shared sample pool those call sites all draw from. */
 function depthSamples(){const s=[];
-  points.forEach(p=>{if(p.depth!==''&&p.depth!=null)s.push({lat:+p.lat,lng:+p.lng,d:parseFloat(p.depth)});});
-  if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
-  for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
+  const okHAT=(la,lo,d)=>d>-nearestPort({lat:la,lng:lo}).hat;
+  points.forEach(p=>{if(p.depth!==''&&p.depth!=null){const la=+p.lat,lo=+p.lng,d=parseFloat(p.depth);if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
+  if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){const la=c.pts[i][0],lo=c.pts[i][1];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
+  for(let i=0;i<imported.length;i++){const la=imported[i][0],lo=imported[i][1],d=imported[i][2];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}
   return s;}
 function tideHeightNow(lat,lng){try{
   /* tide table by nearest port to the queried POINT (not map centre) - PORTS[0]=Burnett Heads
@@ -2496,11 +2508,19 @@ const MOOLOOLABA_TIDES_2027={"2027-01-01":[["03:24",1.45,"H"],["09:16",0.8,"L"],
 Object.assign(MOOLOOLABA_TIDES_2026,MOOLOOLABA_TIDES_2027);/* one lookup spans 2026-2027 */
 /* Tide ports: pick the table by nearest legislated port to the map centre (no GPS).
    Redcliffe sits +0:00 off Brisbane Bar, so Brisbane Bar timing applies directly.
-   Mooloolaba/Maroochy/Noosa are also their own Standard Port, own harmonic prediction. */
+   Mooloolaba/Maroochy/Noosa are also their own Standard Port, own harmonic prediction.
+   hat = Highest Astronomical Tide proxy for the v16.44 elevation-aware gate (depthSamples()) -
+   deliberately the MAX height across BOTH embedded years (2026+2027), not the single-year max
+   and not a separately-sourced HAT constant, so the threshold never sits below real predicted
+   water: Mooloolaba's officially-published HAT is 2.21m (MSQ Semidiurnal Tidal Planes, v16.19)
+   yet the embedded table's own 2027 max is 2.24m - using the embedded max is the conservative
+   choice that protects HAT-adjacent intertidal ledges from being wrongly excluded. Burnett
+   Heads/Brisbane Bar have no separately-published HAT on record here, so the same embedded-max
+   method is used for all three ports for consistency. */
 const PORTS=[
-  {name:"Burnett Heads",lat:-24.7607,lng:152.4063,table:BURNETT_TIDES_2026},
-  {name:"Brisbane Bar",lat:-27.3667,lng:153.1667,table:BRISBANE_TIDES_2026},
-  {name:"Mooloolaba",lat:-26.6833,lng:153.1167,table:MOOLOOLABA_TIDES_2026}
+  {name:"Burnett Heads",lat:-24.7607,lng:152.4063,table:BURNETT_TIDES_2026,hat:3.70},
+  {name:"Brisbane Bar",lat:-27.3667,lng:153.1667,table:BRISBANE_TIDES_2026,hat:2.81},
+  {name:"Mooloolaba",lat:-26.6833,lng:153.1167,table:MOOLOOLABA_TIDES_2026,hat:2.24}
 ];
 function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:centre[1]}:(centre||{});if(cl.lat==null)return PORTS[0];const R=6371,toR=Math.PI/180,hv=(a,b,c,d)=>{const dy=(c-a)*toR,dx=(d-b)*toR,s=Math.sin(dy/2)**2+Math.cos(a*toR)*Math.cos(c*toR)*Math.sin(dx/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));};let best=PORTS[0],bd=Infinity;for(const p of PORTS){const d=hv(cl.lat,cl.lng,p.lat,p.lng);if(d<bd){bd=d;best=p;}}return best;}
 

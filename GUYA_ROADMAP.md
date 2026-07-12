@@ -1,4 +1,93 @@
 # Guya — Feature Backlog & Roadmap
+*v16.44 · 13 Jul 2026 — land-overpaint FIXED, Option A (elevation-aware gate), build
+2026.07.13a. Confirmed root cause (v16.41): SC/BR intertidal exports carry supratidal ground
+(above HAT, genuinely dry) inside a −3..+5 m AHD band, and v16.25's distance-only fallback
+treated any such point as coastal/intertidal evidence regardless of how far above the highest
+tide it sits. **Fix, applied at the single shared upstream gate (`depthSamples()`), not
+per-call-site:** each sample is now dropped from the shared sample pool unless `d>-HAT[port]`,
+where the port is picked via `nearestPort({lat,lng})` — the exact coordinate-routing pattern
+`tideHeightNow(lat,lng)` already uses (v16.41), reused rather than reinvented; `port_offset()`
+(Python-only, `export_csv.py`, AHD→LAT bake-time conversion) is a separate mechanism and was
+correctly left untouched. Because `depthSamples()` is the sole upstream source for
+`buildShade()`, `buildAutoContours()`, and `idwIndex()` (which itself feeds `idwDepthAt()`,
+consumed by tap-read `openDepthRead`, `findDeepest`, and the desktop hover-readout), all five
+v16.25 call sites — plus the slope/profile tool as a beneficial side effect — inherit the fix
+uniformly with zero per-site changes; none of R0/R1/near≤80/near≤120 or any depth-sign logic
+was touched. **HAT sourced conservatively, not guessed:** `PORTS[].hat` = the max height across
+BOTH embedded tide-table years (2026+2027) per port — Burnett Heads 3.70 m, Brisbane Bar 2.81 m,
+Mooloolaba 2.24 m. Deliberately the two-year embedded max rather than Mooloolaba's separately
+published HAT (2.21 m, MSQ Semidiurnal Tidal Planes) because the embedded max is *higher* —
+using it is the direction that protects HAT-adjacent intertidal ledges from wrongly dropping
+out. Optional dries colour ramp SKIPPED per session brief (adds real complexity to
+`depthColor()`, gate is the deliverable). **Validation, run against the real edited code slice
+via Node vm (not reimplemented) over the actual 113,557-pt on-phone dataset replica** (SC v2 +
+BR v2 + MN v2 appgrade, same load+thin loop as the v16.41/v16.43 diagnoses — replica count
+matches the phone-reported total exactly): **(a) known-dry probes** (Twin Waters GC, Sunshine
+Motorway, Bli Bli, Maroochydore CBD) — all four now EXCLUDED from the shared sample pool
+(correct); **(b) known-wet soundings** — MN d≥2m cohort (n=18,510) and all 9 v16.41
+stale-popup locations 100% unchanged/kept (correct); overall SC 59.9% / BR 61.8% of imported
+points now excluded as above-HAT (consistent with v16.41's blended 63%/74% estimate, the
+difference being per-port-exact HAT vs that entry's flat −2.2 m approximation). **(c)
+Bargara/Woongarra regression risk — flagged, not silently assumed clean:** the legacy Woongarra
+dataset (55,660 pts) exists only in Aaron's phone localStorage, not in this repo, so it cannot be
+numerically diffed offline. Two things ARE proven instead: a structural no-regression argument
+(the gate only ever *removes* points relative to the old code — any sample with d>−3.70 is
+byte-identically kept, so nothing already-included can newly disappear except genuinely
+above-HAT ground) and a synthetic boundary check at Bargara's coordinates (d=−2.90, matching the
+real Burnett tide reading recorded in v16.41, correctly KEPT; d=−3.70 exactly at HAT, correctly
+excluded per the strict `d>-HAT` inequality). **The real acceptance test is an on-phone check —
+tap the same Bargara rock platform pre/post-build and confirm the reading is unchanged — same
+pattern as v16.41/v16.43.1's tide-fix confirmation; queued, not yet run.** Both script blocks
+node --check PASS; Leaflet block byte-identical to HEAD; `zoneAt()` unchanged; green-zone
+dragend safeguard intact (7/7); both style blocks untouched; app-block diff scoped to exactly
+the two intended edits (depthSamples() + PORTS). Does NOT fix the unshaded river channel
+(topo LiDAR can't see mid-channel water — data-availability ceiling, out of scope) and knowingly
+leaves ~53–58% of the sub-HAT "messy tier" still painting (quantified in v16.43) — accepted, to
+be closed later if/when Option 3 rides in on a future SC/BR re-export.*
+
+*v16.43.1 · 13 Jul 2026 — planning note, no code shipped: on-phone confirmation of the v16.41
+tide-port fix (build `2026.07.11a`) COMPLETE. Build string confirmed correct across all
+screenshots. Sunshine Coast taps (Maroochydore-area, Twin Waters/Mudjimba) both showed a tide
++0.9 m offset — sane Mooloolaba-scale, arithmetic checks (4.1+0.9=5.0 m, 3.2+0.9=4.1 m),
+consistent with the fix and nothing like the old Burnett-style +3.2 m reading. Bargara/Woongarra
+(Elliott Heads) zone popup confirmed correct (CPZ07 Conservation Park); a follow-up water-depth
+tap (the first four screenshots only showed "dries"/exposed-sandbank readings there, which don't
+carry a tide offset and didn't actually test the fix) confirmed unchanged Burnett Heads-scale
+tide, closing that gap. **Item 1 is DONE — no further phone checks needed for v16.41/v16.42.**
+Noted in passing, not new: the land-overpaint bug is visibly present in the Sunshine Coast
+screenshots (green shading over dry paddocks near Sunshine Motorway) — already diagnosed
+(v16.41), unchanged, exactly what the Option A build addresses next.*
+
+*v16.43 · 13 Jul 2026 — Option 3 (real land/water mask) investigation spike complete,
+INVESTIGATION ONLY: no `index.html` change, nothing committed (scratch report in gitignored
+`data/raw/_landmask_spike/`), build string unchanged at `2026.07.11a`. Ground truth reused from
+the v16.41 diagnosis (diag1/diag2 load+thin replica, diag3 pilot bbox): confirmed-dry = 3,684
+above-HAT SC replica points, confirmed-wet = 7,981 MN soundings ≥2 m below LAT (incl. all 9
+stale-popup locations), messy tier = 1,513 sub-HAT ambiguous points. Scored two candidate
+sources + a hybrid across 13,178 pilot points: OSM alone (2.06% false-paint, 99.77% wet
+coverage kept), DEA WOfS alone (2.04%/99.75% at freq≥0.2), **STRICT-AND hybrid (0.79%
+false-paint, 99.74% coverage kept** — residual false-positives are beach-swash/suburban edge
+pixels). Every named dry probe reads land on both sources; all 9 stale-popup locations read
+water (≥0.97) on both — either source alone would have caught the v16.40/v16.41 incident.
+Defect-zone grid (Maroochy Wetland Sanctuary, 36 pts) reads correctly as land on both (OSM
+36/36, WOfS 34/36), confirming the mask catches the defect *class*, not just this instance.
+**Option A's known gap quantified:** 53–58% of the sub-HAT messy tier (~800–880 pilot points)
+reads dry-land under the mask — real coverage Option A will keep painting; an accepted,
+already-known limitation, not a reason to hold Option A back. Edge cases, reported not
+smoothed over: beach/swash is the one genuine friction point (WOfS nodata on surf pixels, OSM
+coastline sits at ~MHWS); OSM and WOfS fail in different places (canal estates/golf lakes vs.
+narrow mangrove creeks, ~0.25% of wet points) — the actual case for AND over either source
+alone. **Recommendation:** hybrid STRICT-AND mask, applied bake-time as a per-point tag in the
+v3 CSV export (zero `index.html` change) — but reaching the phone requires a full SC/BR v3
+re-export + re-import, the same churn as Option B, so **don't trigger this standalone** — ride
+it along with any future SC/BR re-export rather than running it alone while Option A holds.
+Runtime in-app alternative (polygon union + conjunct at the shared v16.25 gate) avoids
+re-import churn but adds 0.3–0.8 MB to the 2.1 MB single file. **Flag:** OSM is ODbL vs. the
+project's CC BY sources elsewhere — fine for personal use, noted for the record. Long-run
+discipline held (checkpoint/resume smoke-tested with a deliberate interrupt-and-resume, pid
+19716 full run: progress/1,000, checkpoint/2,000). `git status` clean, only the known
+`guya_species_qld_v3.md` untracked.*
+
 *v16.42 · 13 Jul 2026 — Brisbane Bar + Mooloolaba 2027 tide tables MERGED (build 2026.07.11a),
 closing v16.41.1's data chore (1) — from Jan 2027 those two ports' popups would have silently
 dropped tide text. **Source:** BoM NTC official per-port prediction PDFs
@@ -491,10 +580,14 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.11a — Brisbane Bar + Mooloolaba 2027 tide tables merged (v16.42),
-pure data addition, all three ports now span 2026–2027. Previous build 2026.07.10a (v16.41
-regional tide-port fix) was pushed and confirmed on `origin/main` (`cc2c2dd`); its on-phone
-confirmation is still pending: depth/tap popups now use the
+**Current build:** 2026.07.13a — land-overpaint FIXED, Option A elevation-aware gate (v16.44):
+dries samples above HAT no longer count as paint/read evidence at any of the five shared v16.25
+call sites; validated against the real 113,557-pt on-phone replica (all named dry probes now
+excluded, all wet soundings unaffected); on-phone confirmation still pending. Previous build
+2026.07.11a (v16.42, Brisbane Bar + Mooloolaba 2027 tide tables) is a pure data addition, all
+three ports now span 2026–2027, on-phone confirmed (v16.43.1). Build 2026.07.10a (v16.41
+regional tide-port fix) was pushed and confirmed on `origin/main` (`cc2c2dd`), on-phone confirmed
+(v16.43.1): depth/tap popups now use the
 nearest port's tide table (Burnett Heads / Brisbane Bar / Mooloolaba) instead of hardcoded
 Burnett Heads everywhere. Shading argument-ceiling fix (v16.40) **confirmed working on-phone**:
 tint now paints over Sunshine Coast, Brisbane River, and Maroochy Noosa. **Open incident
@@ -518,55 +611,48 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (13 Jul 2026, post-v16.42):** build 2026.07.11a — Brisbane Bar + Mooloolaba
-2027 tide tables merged (pure data addition, Burnett-pattern Object.assign, all validation
-PASS); v16.41.1's data chore (1) is CLOSED. **Recommended next job (small, do first): on-phone
-confirmation of the v16.41 tide fix** — check build string reads 2026.07.11a, tap
-Bargara/Woongarra (expect unchanged Burnett Heads reading), tap Sunshine
-Coast/Brisbane River (expect Mooloolaba/Brisbane Bar-scale ≤~2.2 m, not the old +3.0 m+ Burnett
-readings). **Then: scope and build the land-overpaint fix** — root cause is CONFIRMED (see
-v16.41 entry): intertidal-export samples sit ON dry land (−3..+5 m AHD band) and v16.25's
-any-sample-within-120 m gate paints them; tightening R1 is ruled out as a fix. Candidate
-directions, rough preference order: (A) elevation-aware gate (dries only qualify where
-the local estimate is above −HAT per port, `port_offset()`-style latitude buckets, optionally a
-dries colour ramp so exposed ground stops rendering as water-mint); (B) SC/BR v3 re-export with
-ELEV_MAX≈HAT (cleanest data, but re-import churn + loses legitimate above-HAT platform
-readings); (C) real land/water mask (heaviest, likely overkill). On-phone checks queued: fresh
-tap on the painted golf course must show the "dries ≈ …" branch (the "≈14.8 m/106 m" popup was
-almost certainly stale or manual-contour-influenced — verify). **One data chore still open, not
-urgent:** Noosa's Mooloolaba fallback is a stopgap, not the
-final answer — Noosa Head is on record as its own MSQ Standard Port and still needs its own
-wiring (its 2026+2027 BoM per-port PDFs exist at bom.gov.au/ntc/IDO59001/, TP021 — same
-source/parser as v16.42, so wiring it is now mostly mechanical). **New backlog item, not urgent:** Aaron wants the Maroochy Noosa "blobby" disc rendering
-(~23%-coverage discs, 180 m export grid vs 120 m paint radius) improved, not just accepted as
-expected-not-buggy (v16.40's framing) — needs its own scoping session once the land-overpaint
-bug is resolved; likely candidates are a larger/adaptive paint radius for sparse grids or a
-smoothing pass, either way keep it clearly separate from the land-overpaint fix so the two
-don't get conflated in one patch. While in the shading code, consider re-tagging the Maroochy
-Noosa dataset out of the free-text "custom" slot into a named region (cosmetic only — region
-keys have no functional effect, confirmed v16.40 investigation). Item 5 (low-confidence popup
-tag) still pending, unaffected. Pending cleanup: `bathy_checkpoint.json` + `bathy_smoke.csv`
-(completed-run scratch), the `_inspect/` sample folder under
+**Next-session note (13 Jul 2026, post-v16.44):** build 2026.07.13a — Option A land-overpaint fix
+SHIPPED, all offline validation PASS (see v16.44 entry). **Recommended next job (small, do
+first): the on-phone check this fix's own regression risk depends on** — tap a Bargara/Woongarra
+rock-platform reading pre-known and confirm it's numerically unchanged (the legacy Woongarra
+dataset isn't in this repo, so this is the only way to close that risk for real; a structural
+proof + a synthetic boundary check were run instead, see v16.44). Also worth a quick look while
+on-phone: the Sunshine Motorway/Twin Waters golf-course area that was visibly over-painted in the
+v16.43.1 screenshots should now show no shading (dry land, correctly excluded), and Coolum's
+genuine flats should still shade normally. **Option A's known residual gap is measured, not
+assumed:** the v16.43 spike puts it at 53–58% of the sub-HAT messy tier (~800–880 pilot points)
+still painting — an accepted tradeoff, to be closed later if/when **Option 3 (real land/water
+mask)** rides in on a future SC/BR re-export. Option 3 stays scored and ready but NOT an
+immediate build (v16.43): hybrid STRICT-AND (OSM ∧ WOfS freq≥0.2) scores 0.79% false-paint /
+99.74% wet coverage kept, but its bake-time integration needs a full SC/BR v3 re-export to reach
+the phone — don't run it standalone, ride it along with any future SC/BR re-export. Full
+findings: `data/raw/_landmask_spike/OPTION3_LANDMASK_SPIKE.md` (gitignored scratch — paste into a
+future delta if it needs to survive a re-clone). **One data chore still open, not urgent:** Noosa's
+Mooloolaba fallback is a stopgap, not the final answer — Noosa Head is on record as its own MSQ
+Standard Port and still needs its own wiring (its 2026+2027 BoM per-port PDFs exist at
+bom.gov.au/ntc/IDO59001/, TP021 — same source/parser as v16.42, so wiring it is now mostly
+mechanical). **Backlog item, not urgent:** Aaron wants the Maroochy Noosa "blobby" disc
+rendering (~23%-coverage discs, 180 m export grid vs 120 m paint radius) improved, not just
+accepted as expected-not-buggy (v16.40's framing) — needs its own scoping session once the
+land-overpaint bug is resolved; likely candidates are a larger/adaptive paint radius for sparse
+grids or a smoothing pass, either way keep it clearly separate from the land-overpaint fix so
+the two don't get conflated in one patch. While in the shading code, consider re-tagging the
+Maroochy Noosa dataset out of the free-text "custom" slot into a named region (cosmetic only —
+region keys have no functional effect, confirmed v16.40 investigation). Item 5 (low-confidence
+popup tag) still pending, unaffected. Pending cleanup: `bathy_checkpoint.json` +
+`bathy_smoke.csv` (completed-run scratch), the `_inspect/` sample folder under
 `data/raw/Bathymetric-LiDAR-Sunshine-Coast/`, `gap_checkpoint.json`/`hybrid_checkpoint.json`,
 `guya_species_qld_v3.md` (origin/purpose still undecided — untracked in repo since at least
-v16.26, unrelated to this session). The `woongarra_imported_rollback_v1` cleanup item
-is CLOSED — v16.39 removes it at boot (~2.17 MB reclaimed on first run).
+v16.26, unrelated to any recent session — repo remote itself is NOT an open question, see
+v16.26: `AzmixLabs/Guya_Wamu` is a pre-existing, intentional rename, already corrected locally,
+don't re-flag it). The `woongarra_imported_rollback_v1` cleanup item is CLOSED — v16.39 removes
+it at boot (~2.17 MB reclaimed on first run). `data/raw/_landmask_spike/` (v16.43's scratch) is
+gitignored and disposable — no action needed unless the spike report needs preserving elsewhere.
 
-**Previous note (12 Jul 2026, post-REPLACE):** build 2026.07.07a is confirmed live and item 4
-is DONE — the real Brisbane River + Sunshine Coast v2 REPLACE ran successfully, counts good,
-Bargara intact. The "dries everywhere" tap-read result Aaron then saw is confirmed expected, not
-a bug (v16.28) — no patch needed. **Recommended next job: item 5** (add the missing
-"low-confidence past 80 m" tag to the "dries" popup branch) — small, independent, and now
-actively relevant given daily use. **Separately, a data-sourcing decision was made (v16.28, no
-code):** pursue real bathymetric depth for Maroochy/Noosa via the "Bathymetric LiDAR for
-Sunshine Coast" dataset (data.qld.gov.au, CC BY 4.0, 5 m, 0–30 m depths) — manual QSpatial
-order, Aaron's step, same pattern as ELVIS (see new item 14). ELVIS's own "Bathymetry" bucket was
-re-checked and re-confirmed as the already-rejected EOMAP product — do not order from it.
-Navionics was proposed and rejected as a depth source — do not revisit. Pending cleanup:
-`storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json`/`hybrid_checkpoint.json` are
-completed-run scratch, safe to delete; v1 depth CSVs are now safe to drop (re-import confirmed);
-`guya_species_qld_v3.md` sits untracked in the repo (v16.26) — origin/purpose undecided, a small
-standalone decision.
+**Previous note (13 Jul 2026, post-v16.43):** build unchanged at 2026.07.11a — v16.43 was an
+investigation spike, no code shipped, scoring Option 3 as an eventual follow-up (see entry
+above). At this point on-phone confirmation of the v16.41 tide fix was still the recommended
+first job, ahead of the Option A build — superseded by v16.43.1, which closed it out.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
