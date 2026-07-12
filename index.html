@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.09a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.10a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.09a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.10a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2164,11 +2164,15 @@ function depthSamples(){const s=[];
   if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step)s.push({lat:c.pts[i][0],lng:c.pts[i][1],d:d});});
   for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
   return s;}
-function tideHeightNow(){try{
+function tideHeightNow(lat,lng){try{
+  /* tide table by nearest port to the queried POINT (not map centre) - PORTS[0]=Burnett Heads
+     stays the no-coords fallback (legacy behaviour). Noosa has no dedicated port yet; those
+     taps resolve to Mooloolaba for now. Brisbane Bar/Mooloolaba tables are 2026-only. */
+  const tbl=nearestPort((lat!=null&&lng!=null)?{lat:+lat,lng:+lng}:null).table;
   const now=new Date(Date.now()+10*3600000);
   const evs=[];
   for(let off=-1;off<=1;off++){const d=new Date(now);d.setUTCDate(d.getUTCDate()+off);
-    const k=d.toISOString().slice(0,10),arr=(typeof BURNETT_TIDES_2026!=='undefined')?BURNETT_TIDES_2026[k]:null;if(!arr)continue;
+    const k=d.toISOString().slice(0,10),arr=tbl?tbl[k]:null;if(!arr)continue;
     for(let i=0;i<arr.length;i++){const hm=arr[i][0].split(':');evs.push({t:off*24+(+hm[0])+(+hm[1])/60,h:arr[i][1]});}}
   if(evs.length<2)return null;
   const hNow=now.getUTCHours()+now.getUTCMinutes()/60;
@@ -2177,7 +2181,7 @@ function tideHeightNow(){try{
     const f=(hNow-evs[i].t)/(evs[i+1].t-evs[i].t);
     return evs[i].h+(evs[i+1].h-evs[i].h)*(1-Math.cos(Math.PI*f))/2;}}
   return null;}catch(e){return null;}}
-function waterNowText(d){const t=tideHeightNow();if(t==null)return '';
+function waterNowText(d,lat,lng){const t=tideHeightNow(lat,lng);if(t==null)return '';
   const wn=t+d; /* d is m below LAT (negative = dries); water over the point right now */
   if(d<-0.05)return wn>0.15?(' \u00b7 ~'+wn.toFixed(1)+' m over it now'):' \u00b7 exposed now';
   return ' \u00b7 now ~'+wn.toFixed(1)+' m water (tide +'+t.toFixed(1)+')';}
@@ -2202,7 +2206,7 @@ function openDepthRead(latlng,prefixHTML){
   if(!r||r.near>150){
     if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within 150 m here.</div>').openOn(map);
     return;}
-  const body=(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d)+' \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d)+(r.near>80?' \u00b7 low confidence':'')+'</span>'))+'<button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>';
+  const body=(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d,latlng.lat,latlng.lng)+' \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d,latlng.lat,latlng.lng)+(r.near>80?' \u00b7 low confidence':'')+'</span>'))+'<button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>';
   const cfg=prefixHTML?{maxWidth:300,minWidth:240}:{maxWidth:170,className:'depth-pop'};
   L.popup(cfg).setLatLng(latlng).setContent((prefixHTML||'')+'<div class="pop"><div class="kv" style="margin:0">'+body+'</div></div>').openOn(map);
   setTimeout(function(){const fb=document.getElementById('dp-find');if(!fb)return;
@@ -2240,7 +2244,7 @@ function findDeepest(lat0,lng0){
   const mk=L.circleMarker([best.la,best.lo],{radius:7,weight:2.5,color:'#7fe0ff',fillColor:'#062a4a',fillOpacity:0.95});
   mk.bindTooltip(best.d.toFixed(1)+' m',{permanent:true,direction:'top',offset:[0,-8],className:'mtip'});
   const dm=function(v,P,N){const h=v<0?N:P;v=Math.abs(v);const d=Math.floor(v);return d+'\u00b0'+((v-d)*60).toFixed(3)+'\u2032'+h;};
-  mk.bindPopup('<div class="pop"><div class="kv" style="margin:0"><b>Deepest nearby: \u2248 '+best.d.toFixed(1)+' m</b>'+waterNowText(best.d)+'<br><span style="font-size:10px">'+dm(best.la,'N','S')+' '+dm(best.lo,'E','W')+'</span><br><span style="font-size:9.5px;color:var(--ink-dim)">Use \u201c+ Add spot\u201d to keep it.</span><br><button class="lnk" id="ch-del" style="margin-top:5px">remove mark</button></div></div>');
+  mk.bindPopup('<div class="pop"><div class="kv" style="margin:0"><b>Deepest nearby: \u2248 '+best.d.toFixed(1)+' m</b>'+waterNowText(best.d,best.la,best.lo)+'<br><span style="font-size:10px">'+dm(best.la,'N','S')+' '+dm(best.lo,'E','W')+'</span><br><span style="font-size:9.5px;color:var(--ink-dim)">Use \u201c+ Add spot\u201d to keep it.</span><br><button class="lnk" id="ch-del" style="margin-top:5px">remove mark</button></div></div>');
   mk.on('popupopen',function(){setTimeout(function(){const d2=document.getElementById('ch-del');if(d2)d2.onclick=function(){chanLayer.removeLayer(mk);};},0);});
   chanLayer.addLayer(mk);
   mk.openPopup();
@@ -2925,7 +2929,7 @@ renderContours();
        and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint rule */
     if(!(inZ||(r&&r.near<=120))){el.style.display='none';return;}
     if(!r||r.near>150){el.textContent='no survey data here';}
-    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d)+rough;}
+    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d,e.latlng.lat,e.latlng.lng)+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
     el.style.display='block';});
   map.on('mouseout',function(){el.style.display='none';});

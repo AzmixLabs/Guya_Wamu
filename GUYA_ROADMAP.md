@@ -1,4 +1,81 @@
 # Guya — Feature Backlog & Roadmap
+*v16.41 · 12 Jul 2026 — tide-port bug FIXED (build 2026.07.10a) + land-overpaint ROOT CAUSE
+CONFIRMED (diagnosis only, that fix not yet scoped). **Tide fix:** `tideHeightNow()` hardcoded
+`BURNETT_TIDES_2026` regardless of location, so every depth popup outside Woongarra applied
+Burnett Heads tide — the "+3.2 m" on the Maroochy-area popup (Mooloolaba's real 2026 table tops
+out +2.22 m). Now `tideHeightNow(lat,lng)` selects the table via the pre-existing
+`nearestPort()`/`PORTS` helpers (already used by wind/best-bite, never by popups) against the
+QUERIED POINT, not map centre; `waterNowText(d,lat,lng)` passes the coordinate through at all
+three real call sites — tap-read `openDepthRead`, `findDeepest` popup, desktop hover readout
+(the session brief's "5 call sites" was the paint-gate list; shading/auto-contours never consume
+tide). No-coords calls fall back to PORTS[0]=Burnett Heads, matching legacy behaviour exactly.
+Noosa deliberately NOT given its own port (separate flagged item) — Noosa resolves to Mooloolaba
+for now. Brisbane Bar/Mooloolaba tables are 2026-only (no 2027 merge, unlike Burnett) — from Jan
+2027 non-Woongarra popups will drop the tide text rather than show a wrong one; data chore
+flagged. Validation: both blocks node --check pass; Leaflet byte-identical; zoneAt() + dragend
+safeguard intact; simulated taps — Bargara→Burnett Heads numerically identical to the old code
+(regression clean), Pinkenba/Redcliffe→Brisbane Bar, Maroochydore/Coolum/Noosa→Mooloolaba
+(+1.68 m at test time vs Burnett's concurrent +2.90 m; +3.2 is now unreachable there).
+**Land-overpaint diagnosis (read-only, validated against an exact on-phone dataset replica —
+import/thin loop reproduces the 113,557 count byte-for-byte): the R1=120 m halo hypothesis is
+DISPROVEN as the primary mechanism — the samples are ON the dry land itself.** The intertidal
+exports were built with a −3..+5 m AHD band (`process_tiles.py`, "land-based reachable band"),
+so 63% of on-phone SC points and 74% of BR points sit above HAT (>2.2 m above LAT) — golf
+courses, suburbs, motorway embankments sampled at ~87 m spacing, all painted by v16.25's
+any-sample-within-120 m rule. Tightening R1 cannot fix this (even R1=0 still paints). Scale:
+BR painted footprint is 79.3% certainly-dry (110.5 km²); SC 11.7% (46.8 km²: Maroochydore CBD,
+Bli Bli, Twin Waters/Mudjimba, Buddina, Pelican Waters clusters). The unshaded river channel is
+the same coin's other face: no mid-channel samples exist (topo LiDAR can't penetrate; only 62
+of 19,178 MN bathy points fall in the Maroochy corridor). The "≈14.8 m / 106 m" popup reproduces
+at exactly 9 locations, ALL ~1–1.5 km offshore over 13–17 m MN soundings — a fresh golf-course
+tap in the replica returns the DRIES branch, so that popup was almost certainly stale from an
+earlier over-water tap (the Gympie screenshot already proved popups persist across pan/zoom) or
+influenced by on-phone manual pins/traced contours (in `depthSamples()`, not in the repo).
+Phone check queued: fresh tap on the golf course, expect "dries ≈ …". All five gate call sites
+equally affected (findDeepest marginally tighter at 80 m). depthColor() renders ALL negative
+field values as the single mint <0.25 m band — why dry land reads as one flat mint wash. Candidate
+fixes for the scoping session, in rough preference order: (A) elevation-aware gate — dries
+samples only qualify as paint/read evidence where the local estimate is above −HAT per port
+(reuse the `port_offset()` latitude-bucket pattern), optionally with a dries colour ramp;
+(B) re-export SC/BR v3 with ELEV_MAX≈HAT — cleanest data but re-import churn and loses
+legitimate above-HAT platform readings; (C) real land/water mask — most robust, heaviest.
+Diagnosis scripts in session scratchpad (`diag1–3.js`).*
+
+*v16.40.1 · 12 Jul 2026 — planning session, NO code shipped: on-phone confirmation received —
+v16.40's shading fix works, tint now paints over Sunshine Coast, Brisbane River, and Maroochy
+Noosa (closing that build's mandatory on-phone check). **NEW incident found in the same
+screenshots:** shading (and, per the identical shared gate, plausibly tap-read/`findDeepest()`/
+`buildAutoContours()` too) is painting over genuinely DRY land in the Sunshine Coast area — a
+golf course, suburban blocks, and a stretch of Sunshine Motorway all show the mint-green wash,
+while the actual river channel running through the same scene is the one thing NOT shaded. A
+tap over the shaded golf-course land returned "≈14.8 m … low confidence … nearest data 106 m
+away … ~18.0 m water" — a water-depth-style estimate reported over land that is unambiguously
+not water. **Leading hypothesis, NOT yet confirmed — investigate before patching:** this is
+plausibly the v16.25 fix operating exactly as designed, now exposed by far denser data. v16.25
+deliberately widened the shading/tap-read distance-bounded fallback so that being within
+R1=120 m of ANY real imported sample — dries OR sounding — counts as sufficient evidence of
+real coastal/intertidal ground, dropping the old depth-sign requirement (necessary at the time
+because most Sunshine Coast/Brisbane River points are "dries," i.e. LiDAR ground returns, not
+soundings). At the original Coolum-era density that 120 m halo around scattered points stayed
+close to the coast; with Brisbane River's and Sunshine Coast's much denser point sets, a 120 m
+radius around riverside "dries" ground points can plausibly reach genuinely dry hinterland —
+golf courses, roads, suburbs — that happen to sit within 120 m of a river/estuary edge. This
+would also explain why the river channel itself is unshaded: topographic LiDAR can't penetrate
+open water, so there may be no samples directly over mid-channel water to shade from, while
+nearby bank samples paint outward onto the land side instead. **Unconfirmed — must be verified
+against the real CSV and the exact tapped coordinate, not assumed.** A second screenshot
+showing the identical popup values (14.8 m, "nearest data 106 m away," tide +3.2) while the map
+was panned/zoomed out to a Gympie-area view (~20 km scale, tens of km inland) is presumed to be
+the SAME stale, un-recalculated popup left open across the pan/zoom, not a fresh tap producing
+a bogus far-inland reading — flagged for confirmation, not treated as a second bug. **Separately,
+Aaron flagged the Maroochy Noosa "blobby"/disc rendering (~23% coverage, R1=120 m vs the
+180 m export grid) as something he wants improved, not just accepted** — v16.40 had documented
+this as expected-not-buggy; reclassified here as an open cosmetic backlog item, independent of
+and lower-priority than the land-overpaint bug above (that one is a correctness/accuracy issue;
+this one is a visual-density preference on already-correct data). Read-only investigation
+queued for the land-overpaint bug (priority); blob-density improvement queued as backlog, not
+urgent. No code touched.*
+
 *v16.40 · 12 Jul 2026 — shading engine-argument-limit crash FIXED (build 2026.07.09a): the
 "no shading over Brisbane River / Sunshine Coast / Maroochy Noosa" report traced (read-only
 investigation, this session's fix) to `buildShade()`'s bbox calc using
@@ -370,10 +447,15 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.09a — shading argument-ceiling fix (v16.40), on-phone shading
-confirmation pending (desktop structurally cannot verify it — see v16.40). 2026.07.08a
-(durability receipt + region-scoped rollback) is confirmed live: all four datasets imported
-and durable on-phone, 113,557 pts. (v16.26: GitHub Pages had
+**Current build:** 2026.07.10a — regional tide-port fix (v16.41): depth/tap popups now use the
+nearest port's tide table (Burnett Heads / Brisbane Bar / Mooloolaba) instead of hardcoded
+Burnett Heads everywhere. Shading argument-ceiling fix (v16.40) **confirmed working on-phone**:
+tint now paints over Sunshine Coast, Brisbane River, and Maroochy Noosa. **Open incident
+(v16.40.1, root cause CONFIRMED v16.41, fix not yet scoped):** shading/tap-read paints genuinely
+dry land near the Sunshine Coast/Brisbane River systems — NOT the R1 halo: the intertidal
+exports' −3..+5 m AHD band put samples ON the dry land itself (63% of SC / 74% of BR on-phone
+points sit above HAT), and v16.25's any-sample-within-120 m gate paints them. All
+four datasets remain imported and durable on-phone, 113,557 pts. (v16.26: GitHub Pages had
 silently stalled since Jul 5 on 7 unpushed local commits; fixed by correcting the local remote and
 pushing, confirmed via Actions run #86 and a direct on-phone build-string check). **Region-scoped
 REPLACE/MERGE mutation logic confirmed correct by direct test (v16.27) — narrowed per v16.38:
@@ -389,23 +471,33 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (12 Jul 2026, post-v16.40 build):** build 2026.07.09a — engine
-argument-ceiling fix for buildShade()/buildAutoContours() shipped (changelog v16.40),
-regression harness green on the exact 113,557-pt on-phone shape. **Item 4 is now DURABLE and
-CONFIRMED** — all four datasets (legacy 55,660 + Brisbane River 20,794 + Sunshine Coast 17,925
-+ Maroochy Noosa "custom" 19,178 = 113,557) survived genuine force-close/reopen on 2026.07.08a
-with no receipt banner. **Recommended next job (mandatory, desktop cannot do it): on-phone
-shading check on 2026.07.09a** — toggle depth shading over Sunshine Coast, Brisbane River,
-Maroochy Noosa AND Bargara; tint must actually appear in all four. Maroochy Noosa correctly
-renders as ~23%-coverage discs (180 m grid vs 120 m paint radius, see v16.40) — not a bug.
-While there, consider re-tagging the Maroochy Noosa dataset out of the free-text "custom" slot
-into a named region (cosmetic only — region keys have no functional effect, confirmed v16.40
-investigation). Item 5 (low-confidence popup tag) still pending, unaffected. Pending cleanup:
-`bathy_checkpoint.json` + `bathy_smoke.csv` (completed-run scratch), the `_inspect/` sample
-folder under `data/raw/Bathymetric-LiDAR-Sunshine-Coast/`,
-`gap_checkpoint.json`/`hybrid_checkpoint.json`, `guya_species_qld_v3.md` (origin undecided).
-The `woongarra_imported_rollback_v1` cleanup item is CLOSED — v16.39 removes it at boot
-(~2.17 MB reclaimed on first run of the new build).
+**Next-session note (12 Jul 2026, post-v16.41):** build 2026.07.10a — regional tide-port fix
+shipped (popups now select Burnett Heads / Brisbane Bar / Mooloolaba by tapped point; Woongarra
+regression-clean). **Recommended next job: scope and build the land-overpaint fix** — root cause
+is CONFIRMED (see v16.41 entry): intertidal-export samples sit ON dry land (−3..+5 m AHD band)
+and v16.25's any-sample-within-120 m gate paints them; tightening R1 is ruled out as a fix.
+Candidate directions, rough preference order: (A) elevation-aware gate (dries only qualify where
+the local estimate is above −HAT per port, `port_offset()`-style latitude buckets, optionally a
+dries colour ramp so exposed ground stops rendering as water-mint); (B) SC/BR v3 re-export with
+ELEV_MAX≈HAT (cleanest data, but re-import churn + loses legitimate above-HAT platform
+readings); (C) real land/water mask (heaviest, likely overkill). On-phone checks queued: fresh
+tap on the painted golf course must show the "dries ≈ …" branch (the "≈14.8 m/106 m" popup was
+almost certainly stale or manual-contour-influenced — verify); a Maroochy-area popup must now
+show Mooloolaba-scale tide (≤ +2.2), not +3.2. Data chore flagged: Brisbane Bar + Mooloolaba
+2027 tide tables not yet embedded (Burnett has 2027) — popups there lose tide text at Jan 2027.
+**New backlog item, not urgent:** Aaron wants the Maroochy Noosa "blobby" disc rendering
+(~23%-coverage discs, 180 m export grid vs 120 m paint radius) improved, not just accepted as
+expected-not-buggy (v16.40's framing) — needs its own scoping session once the land-overpaint
+bug is resolved; likely candidates are a larger/adaptive paint radius for sparse grids or a
+smoothing pass, either way keep it clearly separate from the land-overpaint fix so the two
+don't get conflated in one patch. While in the shading code, consider re-tagging the Maroochy
+Noosa dataset out of the free-text "custom" slot into a named region (cosmetic only — region
+keys have no functional effect, confirmed v16.40 investigation). Item 5 (low-confidence popup
+tag) still pending, unaffected. Pending cleanup: `bathy_checkpoint.json` + `bathy_smoke.csv`
+(completed-run scratch), the `_inspect/` sample folder under
+`data/raw/Bathymetric-LiDAR-Sunshine-Coast/`, `gap_checkpoint.json`/`hybrid_checkpoint.json`,
+`guya_species_qld_v3.md` (origin undecided). The `woongarra_imported_rollback_v1` cleanup item
+is CLOSED — v16.39 removes it at boot (~2.17 MB reclaimed on first run).
 
 **Previous note (12 Jul 2026, post-REPLACE):** build 2026.07.07a is confirmed live and item 4
 is DONE — the real Brisbane River + Sunshine Coast v2 REPLACE ran successfully, counts good,
