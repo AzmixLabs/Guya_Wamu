@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.08a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.09a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.08a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.09a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1952,6 +1952,14 @@ function smoothField(F,V,W,H,passes,thr){
     const t=src;src=dst;dst=(t===F)?new Float32Array(W*H):t;}
   if(src!==F)F.set(src);
 }
+/* O(n) sample bbox. NEVER Math.min.apply / spread here: both pass the array as literal call
+   arguments, and iOS JSC's argument ceiling (~65,536) is far below desktop V8's — with 113k+
+   samples the old apply-based bbox threw RangeError silently and no shading ever painted. */
+function ptsBounds(pts){let minLa=Infinity,maxLa=-Infinity,minLo=Infinity,maxLo=-Infinity;
+  for(let i=0;i<pts.length;i++){const p=pts[i];
+    if(p.lat<minLa)minLa=p.lat;if(p.lat>maxLa)maxLa=p.lat;
+    if(p.lng<minLo)minLo=p.lng;if(p.lng>maxLo)maxLo=p.lng;}
+  return {minLa:minLa,maxLa:maxLa,minLo:minLo,maxLo:maxLo};}
 let _zoneFaded=null;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
@@ -1961,8 +1969,8 @@ function buildShade(){
   if(!shadeOn)return;
   const pts=depthSamples();
   if(pts.length<3)return;
-  let minLa=Math.min.apply(null,pts.map(p=>p.lat)),maxLa=Math.max.apply(null,pts.map(p=>p.lat)),
-      minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
+  const bb=ptsBounds(pts);
+  let minLa=bb.minLa,maxLa=bb.maxLa,minLo=bb.minLo,maxLo=bb.maxLo;
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
   /* render only the visible window when zoomed in - keeps pixels small and bands crisp */
@@ -2245,8 +2253,8 @@ function buildAutoContours(){
   if(!autoCtOn)return;
   const pts=depthSamples();
   if(pts.length<3)return;
-  let minLa=Math.min.apply(null,pts.map(p=>p.lat)),maxLa=Math.max.apply(null,pts.map(p=>p.lat)),
-      minLo=Math.min.apply(null,pts.map(p=>p.lng)),maxLo=Math.max.apply(null,pts.map(p=>p.lng));
+  const bb=ptsBounds(pts); /* same iOS JSC argument-ceiling hazard as buildShade - see ptsBounds */
+  let minLa=bb.minLa,maxLa=bb.maxLa,minLo=bb.minLo,maxLo=bb.maxLo;
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
   /* render only the visible window when zoomed in - keeps pixels small and bands crisp */

@@ -1,4 +1,39 @@
 # Guya — Feature Backlog & Roadmap
+*v16.40 · 12 Jul 2026 — shading engine-argument-limit crash FIXED (build 2026.07.09a): the
+"no shading over Brisbane River / Sunshine Coast / Maroochy Noosa" report traced (read-only
+investigation, this session's fix) to `buildShade()`'s bbox calc using
+`Math.min.apply(null, pts.map(...))` over the full flat depth-sample array — 113,557 elements.
+`Function.prototype.apply` passes the array as literal call arguments; iOS JavaScriptCore's
+argument ceiling (~65,536) is far below desktop V8's (~124,700 at default stack), so on-phone
+the first bbox line threw RangeError, buildShade() aborted before painting anything, and the
+exception was swallowed (event-listener errors go to console, not UI) — the toggle appeared to
+do nothing. **NOT a v16.39 regression** (that diff preserved every buildShade/rebuild call
+1:1), **not region-related** (imported is a flat array; no code consults region keys — the
+"custom" Maroochy Noosa tag is harmless), **not a durability issue** (all 113,557 pts loaded
+fine; tap-read worked over every region because idwDepthAt() is plain loops, no apply, and is
+gated only on shadeOn — which is set BEFORE buildShade() throws). **For the record: shading
+has plausibly been silently broken for ALL regions including Bargara since v16.28**, when the
+store first crossed 65,536 (legacy 55,660 + Brisbane River 20,794 = 76,454) — the v16.28
+"looks like bare land" tap-read screenshots were popups over an unpainted map, and the
+"Bargara still shades" premise in this session's report was inferred from tap-read, a separate
+code path. **Fix:** new O(n) `ptsBounds()` helper replaces all four apply calls in
+buildShade() AND the identical dormant pattern in buildAutoContours() (would have thrown the
+moment auto-contours was toggled at current data size). Spread syntax deliberately NOT used —
+it hits the same engine ceiling. `Math.max.apply` over transect verts (~1867) left as-is:
+small array, out of reach of the ceiling. **Validation:** both blocks node --check pass;
+Leaflet byte-identical; zoneAt() + green-zone dragend safeguard intact; regression harness
+rebuilt the exact on-phone 113,557-pt shape (real v2 CSVs through the app's own thin loop —
+counts match the phone byte-for-byte — plus 55,660 synthetic legacy): old apply code throws
+RangeError at node --stack-size=500 (proving the harness catches the bug class; default V8
+stack tolerates it, which is exactly why desktop never reproduced this), new ptsBounds never
+throws and returns a bbox numerically identical to a chunked apply-based control under every
+stack tested. **DESKTOP CANNOT CONFIRM THIS FIX — mandatory on-phone step:** toggle shading on
+over Sunshine Coast, Brisbane River, Maroochy Noosa AND Bargara water and confirm tint
+actually appears (not merely no error). **Expected-not-buggy once it works:** Maroochy Noosa's
+180 m export grid vs the shader's 120 m paint radius (R1) renders as ~23%-coverage discs
+around samples, NOT a continuous wash — do not misread that as a fresh bug; Brisbane River /
+Sunshine Coast are dense enough to paint solidly.*
+
 *v16.39 · 12 Jul 2026 — v16.38 fix SHIPPED (build 2026.07.08a): boot-time durability receipt
 (Fix A) + region-scoped rollback (the region-scoped half of Fix B), per the v16.38 diagnosis
 (iOS WebKit same-session read-back can never detect an async flush-to-disk failure).
@@ -335,8 +370,10 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.08a — durability receipt + region-scoped rollback (v16.39), deploy
-pending on-phone confirmation. Previous confirmed-live build: 2026.07.07a (v16.26: GitHub Pages had
+**Current build:** 2026.07.09a — shading argument-ceiling fix (v16.40), on-phone shading
+confirmation pending (desktop structurally cannot verify it — see v16.40). 2026.07.08a
+(durability receipt + region-scoped rollback) is confirmed live: all four datasets imported
+and durable on-phone, 113,557 pts. (v16.26: GitHub Pages had
 silently stalled since Jul 5 on 7 unpushed local commits; fixed by correcting the local remote and
 pushing, confirmed via Actions run #86 and a direct on-phone build-string check). **Region-scoped
 REPLACE/MERGE mutation logic confirmed correct by direct test (v16.27) — narrowed per v16.38:
@@ -352,16 +389,18 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (12 Jul 2026, post-v16.39 build):** build 2026.07.08a — durability receipt
-+ region-scoped rollback_v2 shipped (changelog v16.39), synthetic tests green, on-phone
-durability NOT yet proven (structurally can't be from one session — the receipt proves it on
-next boot). **Item 4 remains UNCONFIRMED**; nothing beyond legacy + Brisbane River (76,454 pts,
-close/reopen-confirmed) is proven durable on Aaron's phone. **Recommended next job:** confirm
-2026.07.08a is live on-phone (check the build string after a real reload), then re-import
-Sunshine Coast v2 followed by Maroochy Noosa v2 appgrade, ONE at a time, each verified with a
-genuine force-close/reopen before the next — a boot with no red banner and correct row counts
-is the first real durability pass; the interim force-close protocol stays in effect regardless.
-Item 5 (low-confidence popup tag) still pending, unaffected. Pending cleanup:
+**Next-session note (12 Jul 2026, post-v16.40 build):** build 2026.07.09a — engine
+argument-ceiling fix for buildShade()/buildAutoContours() shipped (changelog v16.40),
+regression harness green on the exact 113,557-pt on-phone shape. **Item 4 is now DURABLE and
+CONFIRMED** — all four datasets (legacy 55,660 + Brisbane River 20,794 + Sunshine Coast 17,925
++ Maroochy Noosa "custom" 19,178 = 113,557) survived genuine force-close/reopen on 2026.07.08a
+with no receipt banner. **Recommended next job (mandatory, desktop cannot do it): on-phone
+shading check on 2026.07.09a** — toggle depth shading over Sunshine Coast, Brisbane River,
+Maroochy Noosa AND Bargara; tint must actually appear in all four. Maroochy Noosa correctly
+renders as ~23%-coverage discs (180 m grid vs 120 m paint radius, see v16.40) — not a bug.
+While there, consider re-tagging the Maroochy Noosa dataset out of the free-text "custom" slot
+into a named region (cosmetic only — region keys have no functional effect, confirmed v16.40
+investigation). Item 5 (low-confidence popup tag) still pending, unaffected. Pending cleanup:
 `bathy_checkpoint.json` + `bathy_smoke.csv` (completed-run scratch), the `_inspect/` sample
 folder under `data/raw/Bathymetric-LiDAR-Sunshine-Coast/`,
 `gap_checkpoint.json`/`hybrid_checkpoint.json`, `guya_species_qld_v3.md` (origin undecided).
