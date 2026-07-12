@@ -1,4 +1,109 @@
 # Guya — Feature Backlog & Roadmap
+*v16.33 · 12 Jul 2026 — Maroochy/Noosa BATHYMETRY SHIPPED as data (no `index.html` change, build
+stays 2026.07.07a): `data/maroochy_noosa_bathy_v1.csv` — 946,877 rows, 25 m grid, LAT-referenced,
+depths −1.15…+42.48 m, 99.0% genuinely submerged — the project's first real depth data, from the
+QSpatial "Bathymetric LiDAR for Sunshine Coast" delivery (Fugro LADS Mk 3, 2011 survey). NOT yet
+imported on-phone; 947k rows vs the 25k import cap needs a thinning decision first. See changelog
+v16.33, which also records the v16.29–v16.32 read-only investigations that de-risked it (real zip
+contents vs the wrong ISO metadata, vertical-datum resolution, Fugro classification legend, the
+Maroochy Wetland Sanctuary defect zone).*
+
+*(v16.28 summary follows:)*
+*planning session, no code shipped: item 4 CONFIRMED EXECUTED, plus a
+depth-data-sourcing review that closes with no pipeline change. **Real Brisbane River +
+Sunshine Coast v2 REPLACE run by Aaron on-phone** (v2 CSVs from v16.24) — counts confirmed
+good, Bargara/Woongarra confirmed intact, no error banner. **Item 4 is now genuinely DONE**,
+not just cleared-to-run. Aaron then screenshotted four tap-read popups across both regions
+(Pinkenba/river-mouth, Buderim/Mountain Creek, Maroochydore, Bli Bli), all reading "dries ≈ X m
+... data N m away," flagged as looking like land/exposed ground rather than water depth.
+**Diagnosed as NOT a bug — two already-documented facts compounding, not a new fault:**
+(1) Brisbane River and Sunshine Coast structurally only ever have intertidal/exposed-ground
+elevation data — turbid water defeats laser bathymetry here (confirmed 19 Jun 2026), so "dries"
+is the only reading this pipeline can ever produce for these two regions, unrelated to today's
+REPLACE. (2) v16.25 (already live) deliberately dropped the depth-sign requirement on the
+tap-read/shading fallback specifically so Sunshine Coast north of Caloundra would paint at all —
+that's why almost every tap within ~80–120 m of any dries point now surfaces it, exactly as
+designed, confirming the v16.25 fix is working correctly at Coolum and beyond. **Item 5** (missing
+low-confidence tag on the "dries" popup branch past 80 m) is now actively relevant given daily
+use — promoted from "small independent fix" to worth doing soon.
+
+Aaron then asked for real depth "as best we can," Maroochy/Noosa included, and offered Navionics
+as a possible source. **Navionics REJECTED** — conflicts directly with the standing rule "no
+seabed database, never infer depth from Navionics or other chart art" (chart soundings aren't a
+verified survey tied to a known datum, and extracting/redistributing derived chart data is a
+licensing problem separate from viewing it live). Logged here so it isn't re-proposed.
+
+**Real Maroochy/Noosa bathymetric LiDAR identified precisely:** "Bathymetric LiDAR for Sunshine
+Coast," Queensland Government Open Data Portal (data.qld.gov.au), CC BY 4.0, 2022 vintage, 5 m
+resolution, genuine green-laser bathymetric survey (0–30 m depths) covering the lower estuarine
+reaches and offshore of the Maroochy and Noosa Rivers specifically — not the whole Sunshine
+Coast. This is the same dataset already referenced in the item-15 "Home-water depth reality"
+note (19 Jun 2026) and **already confirmed back in v16.1 (2 Jul) as manual-order-only** — checked
+directly against the CKAN API then, only a QSpatial order-and-email-link page exists, no bulk
+API/shortcut. Status unchanged: **stays a you-step for Aaron**, same pattern as ELVIS; Claude
+Code processes the delivered files once they land (clip/AHD→LAT convert/CSV export/import), same
+pipeline already used for the Point Clouds work.
+
+Aaron then screenshotted ELVIS's own "Bathymetry" overlay (elevation.fsdf.org.au) and an Order
+Data panel showing a Moreton Bay/Brisbane River AOI with **QLD Government Bathymetry: 3 Metre
+(93 of 93 tiles available)**, asking whether this is a path to real depth. **Confirmed: this is
+the SAME EOMAP-derived "Bathymetry (3 m)" bucket already rejected — twice.** History, from this
+roadmap's own record: the original Sunshine Coast attempt ordered from this bucket by mistake (3
+rejected zips still sit in `data/raw/Sunshine-Coast/`); it was then mistakenly re-endorsed in
+v16.2 (3 Jul, "finer than the 5 m previously assumed, a genuine improvement") and a 950-tile
+Sunshine Coast order placed under that belief; that order was never used — the actual
+`sunshine_coast_intertidal_ground_v1.csv` output (v16.5) is Point Clouds/AHD data (100% negative
+= dries-only, ground-classified), and v16.8 (4 Jul) wrote the corrected fact into the project
+instructions themselves: **Point Clouds/AHD is the correct ELVIS bucket; Bathymetry-3m is EOMAP
+satellite-derived, ±10 m accuracy, ambiguous dual LAT/MSL datum, vendor-labelled
+not-for-navigation — rejected.** Ordering from it a third time would repeat a mistake already
+made and corrected twice. **No change to the plan** — the same screenshot's Order panel also
+showed Geoscience Australia's Bathymetry (30/50/100 m, AusBathyTopo-class — already-noted as
+coarse open-coast only, too coarse for nearshore precision) and Digital Earth Australia's "10
+Metre Intertidal" (already scoped separately at item 14b, Exposure-only, gated on a confidence
+check, not yet built) — neither is new or actionable either.
+
+**Net result:** the only real path to genuine measured water depth for Maroochy/Noosa is the
+data.qld.gov.au dataset above, via manual QSpatial order (new backlog item 14 below). Everywhere
+else in Brisbane River and the broader Sunshine Coast remains dries-only by the same physical
+limit as before — own sonar → GPX import is still the only real depth path there, unchanged.
+Aaron's fair pushback noted for the record: the intertidal/ground-elevation pipeline alone
+("if we were only building intertidal I probably wouldn't have bothered") is a real limitation,
+not oversold here — its standalone value is rock-platform/flat/access elevation for a land-based
+angler, not underwater structure; the classifier-fault and storage-scoping fixes built alongside
+it were real bug fixes independent of which depth layer sits on top, and the same
+REPLACE/MERGE/rollback mechanics will be reused when the Maroochy/Noosa bathymetry lands.
+
+*v16.27 · 12 Jul 2026 — planning/validation, no code shipped: small-file synthetic REPLACE +
+MERGE test run on live build 2026.07.07a, specifically to close the risk flagged in v16.26 —
+whether a region-scoped REPLACE would touch the untagged "pre-region-tagging" legacy dataset
+(55,660 pts, spanning all three regions, created by the backup restore since it predates
+per-region tagging). Test file: `guya_test_synthetic_sunshinecoast.csv`, 5 points, Sunshine Coast
+region selected. **MERGE:** 55,660 → 55,665; new region-tagged 5pt Sunshine Coast dataset created;
+legacy 55,660pt dataset unchanged. **REPLACE (same region, same file):** Sunshine Coast dataset
+stayed at 5pt (confirmed replace, not merge-on-merge); **legacy dataset still exactly 55,660pt** —
+the critical result, confirming REPLACE is correctly region-scoped and does not touch the
+untagged legacy blob. Test dataset removed after confirmation, on-device state clean. **Item 4
+(Brisbane River + Sunshine Coast v2 REPLACE) is now fully cleared — no known blockers remain.*
+
+*v16.26 · 12 Jul 2026 — planning/ops incident, no code shipped: GitHub Pages had not deployed
+since Jul 5 (run #85) — builds 2026.07.06a (v16.24.2) and 2026.07.07a (v16.25) were committed
+locally on 11–12 Jul but never pushed, so the live site sat frozen on 2026.07.05a for a week
+despite both fixes being complete in the repo. Misdiagnosed initially as phone-side caching, then
+briefly as a repo-rename URL break (repo has been `AzmixLabs/Guya_Wamu` since before the Claude
+Code migration — that rename is old and unrelated to this incident). Root cause found via the
+Actions tab (no Pages deployment since Jul 5) + `git status` (7 commits ahead of origin).
+**Fixed:** local remote corrected from `AzmixLabs/Guya.git` to
+`https://github.com/AzmixLabs/Guya_Wamu.git`; `git push` run, 7 commits landed
+(`a01538f..cf8ed0b`), Pages run #86 deployed clean (~40s). **Confirmed by Aaron:** the live site
+now shows build 2026.07.07a, and the `version:2` backup restore (recovering the full multi-region
+depth dataset) completed successfully on the correctly-deployed build — this validates the
+restore code path specifically (true full-replace, per v16.24.2). **New standing habit:** confirm
+`git push` actually ran and a new Pages Actions run appears before treating any Claude Code
+session's fixes as shipped — a local commit is not a deployment. **Surfaced in passing, not yet
+actioned:** `guya_species_qld_v3.md` sits untracked in the repo — origin/purpose undecided,
+separate small item, see priority list.*
+
 *v16.25 · 12 Jul 2026 — build 2026.07.07a: FIX SHIPPED for the shading/tap-read coverage gap
 north of Caloundra (independently diagnosed, separate subsystem and separate incident from
 v16.24.1/v16.24.2's storage bug — do not conflate). Root cause: the cosmetic paint/read mask
@@ -96,28 +201,43 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.07a *(v16.25: fixed the shading/tap-read coverage gap north of
-Caloundra — dropped the depth-sign requirement on the cosmetic paint/read mask's distance-bounded
-fallback, across all five call sites sharing that gate. v16.24.2: dataset-scoped "Imported
-depths" storage, fixing the v16.24.1 REPLACE/MERGE data-loss incident — a separate subsystem,
-separate incident, do not conflate the two fixes. 2b wiring — zoning/FHA/tides — see changelog
-v16.19. `storage_check.html` diagnostic page + its temporary in-app link, from v16.7, are still
-present and still flagged for removal.)*
+**Current build:** 2026.07.07a — **confirmed live and deployed** (v16.26: GitHub Pages had
+silently stalled since Jul 5 on 7 unpushed local commits; fixed by correcting the local remote and
+pushing, confirmed via Actions run #86 and a direct on-phone build-string check). **Region-scoped
+REPLACE/MERGE confirmed safe against the legacy dataset by direct test (v16.27)** — see below.
+*(v16.25: fixed
+the shading/tap-read coverage gap north of Caloundra — dropped the depth-sign requirement on the
+cosmetic paint/read mask's distance-bounded fallback, across all five call sites sharing that gate.
+v16.24.2: dataset-scoped "Imported depths" storage, fixing the v16.24.1 REPLACE/MERGE data-loss
+incident — a separate subsystem, separate incident, do not conflate the two fixes. 2b wiring —
+zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page + its temporary
+in-app link, from v16.7, are still present and still flagged for removal.)*
 
-**Next-session note (12 Jul 2026, post-fix):** build 2026.07.07a shipped — item 4 UNBLOCKED
-(storage fix, v16.24.2) and the shading/tap-read coverage gap north of Caloundra is CLOSED
-(v16.25) — both independent of each other. **Recommended next job: Aaron runs the small-file
-test plan** (changelog v16.24.2: synthetic CSV REPLACE + MERGE, then a backup export/restore
-round-trip) before re-attempting the real Brisbane River/Sunshine Coast v2 REPLACE — this
-exercises the fixed, region-scoped path safely; per the backup-file analysis during the storage
-investigation, the 55,660-pt on-device dataset already looks correctly distributed across all
-three regions, so this is about proving the path is safe going forward, not recovering anything
-currently missing. Once that's confirmed working, the Coolum-area (and broader Mooloolaba→Noosa)
-shading/tap-read should now work correctly on re-import too — worth a spot-check alongside the
-test plan, not a separate session. Item 5 (dries-popup low-confidence tag) remains available as
-an independent small build. Pending cleanup: `storage_check.html` + its in-app link (v16.7);
-`gap_checkpoint.json`/`hybrid_checkpoint.json` are completed-run scratch, safe to delete; v1
-depth CSVs stay until Aaron confirms the re-import.
+**Next-session note (12 Jul 2026 PM, post-bathy-export):** build string unchanged at 2026.07.07a
+(no app code touched). Shipped `data/maroochy_noosa_bathy_v1.csv` (946,877 pts, 25 m grid, LAT
+datum, committed) via `data/raw/_inventory/bathy_pipeline.py` — full numbers and the baked-in
+source/datum/exclusion rules are in changelog v16.33. **Recommended next job: the import
+decision** — 947k rows is ~38× the 25k import cap, so either re-export a pre-thinned app-grade
+CSV (coarser grid, keep v1 as the archive) or confirm the app's import-time auto-thin survives a
+26 MB CSV parse on-phone before running it. Item 5 (low-confidence popup tag) still pending. New
+pending cleanup: `bathy_checkpoint.json` + `bathy_smoke.csv` (completed-run scratch) and the
+`_inspect/` sample folder under `data/raw/Bathymetric-LiDAR-Sunshine-Coast/` are safe to delete.
+
+**Previous note (12 Jul 2026, post-REPLACE):** build 2026.07.07a is confirmed live and item 4
+is DONE — the real Brisbane River + Sunshine Coast v2 REPLACE ran successfully, counts good,
+Bargara intact. The "dries everywhere" tap-read result Aaron then saw is confirmed expected, not
+a bug (v16.28) — no patch needed. **Recommended next job: item 5** (add the missing
+"low-confidence past 80 m" tag to the "dries" popup branch) — small, independent, and now
+actively relevant given daily use. **Separately, a data-sourcing decision was made (v16.28, no
+code):** pursue real bathymetric depth for Maroochy/Noosa via the "Bathymetric LiDAR for
+Sunshine Coast" dataset (data.qld.gov.au, CC BY 4.0, 5 m, 0–30 m depths) — manual QSpatial
+order, Aaron's step, same pattern as ELVIS (see new item 14). ELVIS's own "Bathymetry" bucket was
+re-checked and re-confirmed as the already-rejected EOMAP product — do not order from it.
+Navionics was proposed and rejected as a depth source — do not revisit. Pending cleanup:
+`storage_check.html` + its in-app link (v16.7); `gap_checkpoint.json`/`hybrid_checkpoint.json` are
+completed-run scratch, safe to delete; v1 depth CSVs are now safe to drop (re-import confirmed);
+`guya_species_qld_v3.md` sits untracked in the repo (v16.26) — origin/purpose undecided, a small
+standalone decision.
 
 **Next session — priority order:**
 1. **Close the depth-data audit gap — DONE (v16.21).** All 544 remaining SC/Noosa tiles audited
@@ -149,14 +269,21 @@ depth CSVs stay until Aaron confirms the re-import.
    168,461 pts; v1 files kept for audit trail until the re-import is confirmed). All ten control
    locations PASS — every previously-flagged vintage reads "no data" in its flagged cells, and
    every control tile retains real nearby coverage (76–1,236 points). See changelog v16.24.
-4. **Re-import — UNBLOCKED (v16.24.2 fix shipped).** The v16.24.1 incident's root cause was
-   confirmed structural (unscoped shared store) and fixed: "Imported depths" is now dataset-scoped
-   per region, REPLACE/MERGE only ever touch the targeted region, restore is a true full replace,
-   writes are verified with a persistent error surface, and one-step rollback covers every
-   destructive action. **Run the small-file test plan (changelog v16.24.2) before re-attempting
-   the real Brisbane River/Sunshine Coast v2 REPLACE.** Still explicitly a REPLACE for both
-   regions, not a fresh first import — that fact from v16.22 is unchanged, only the storage
-   mechanics under it are fixed.
+4. **Re-import — DONE (v16.28: real REPLACE executed and confirmed by Aaron).** The v16.24.1
+   incident's root cause was confirmed structural (unscoped shared store) and fixed: "Imported
+   depths" is now dataset-scoped per region, REPLACE/MERGE only ever touch the targeted region,
+   restore is a true full replace, writes are verified with a persistent error surface, and
+   one-step rollback covers every destructive action. Aaron's `version:2` backup restore ran
+   successfully on the confirmed-live 2026.07.07a build (55,660 pts, exact match); the small-file
+   synthetic REPLACE + MERGE test (v16.27) then confirmed region-scoped REPLACE leaves the
+   untagged "pre-region-tagging" legacy dataset untouched. **The real Brisbane River + Sunshine
+   Coast v2 REPLACE was then run for real** (v2 CSVs from v16.24: Brisbane River ~189,187 pts,
+   Sunshine Coast ~168,461 pts) — counts confirmed good on-device, Bargara/Woongarra confirmed
+   intact, no persistent error banner. Item closed. **Follow-on, diagnosed not built (v16.28):**
+   tap-read popups across both regions now read "dries" almost everywhere — confirmed expected,
+   not a bug (see v16.28 changelog entry: physical turbid-water limit + the v16.25 fallback fix
+   both working as designed). v1 depth CSVs are now safe to drop per the existing
+   disposable-once-confirmed policy.
 5. **Small, independent fix — no dependency on the above:** add the missing "low confidence" tag
    to the "dries" popup branch past 80 m (the depth-popup branch already has it) — found
    incidentally during the v16.17 diagnostic.
@@ -170,12 +297,11 @@ depth CSVs stay until Aaron confirms the re-import.
    the gate: `buildShade()`, tap-to-read, `findDeepest()`, `buildAutoContours()`, and the desktop
    hover-readout. `zoneAt()`/legal-zone logic untouched and confirmed separate. See changelog
    v16.25.
-7. `git remote -v` check — DONE (v16.19): still points at `AzmixLabs/Guya.git`, unchanged
-   despite the repeated "repository moved to Guya_Wamu" notice. **What's left is a decision, not
-   a check:** confirm on github.com whether the repo was actually renamed server-side, then
-   either rename the local remote to match or confirm nothing changed — once, deliberately —
-   rather than letting the notice fire a third time on an unverified redirect (the same class of
-   risk already flagged for the phone's home-screen icon in v16.7/v16.15).
+7. `git remote -v` check — **RESOLVED (v16.26).** Confirmed on github.com: the repo really has
+   been `AzmixLabs/Guya_Wamu` since before the Claude Code migration (not a recent event). The
+   local remote was still pointing at the old `AzmixLabs/Guya.git`, which is what surfaced the
+   deploy incident (v16.26) — corrected to `https://github.com/AzmixLabs/Guya_Wamu.git`, confirmed
+   via `git remote -v`. No further action needed.
 8. Confirm `fishhabitat_bundaberg_region.geojson` — RESOLVED (v16.19): confirmed byte-identical
    to the already-shipped Woongarra FHA store. It's that store's raw source file, not an
    unrelated file. No action needed.
@@ -188,6 +314,20 @@ depth CSVs stay until Aaron confirms the re-import.
     (confirmed v16.5, re-confirmed v16.19) — same pattern as Redcliffe following Brisbane Bar in
     2a. Cheap, not urgent.
 12. Gold Coast stays parked.
+13. **New (v16.26):** `guya_species_qld_v3.md` sits untracked in the repo (surfaced by `git status`
+   during the deploy-incident fix) — origin and whether it belongs are undecided. Small, standalone,
+   no dependency on anything above.
+14. **New (v16.28): Maroochy/Noosa real bathymetric LiDAR sourcing.** Target dataset identified:
+   "Bathymetric LiDAR for Sunshine Coast," data.qld.gov.au, CC BY 4.0 (2022), 5 m, genuine
+   green-laser bathymetric survey, 0–30 m depths, lower estuarine + offshore reaches of both the
+   Maroochy and Noosa Rivers specifically (not the whole Sunshine Coast). Already confirmed
+   (v16.1, 2 Jul) as manual-order-only via QSpatial, no bulk API — **Aaron's step**: place the
+   order via the dataset's QSpatial catalogue page. Once files land, Claude Code processes them
+   with the same clip/AHD→LAT-convert/CSV-export/import pipeline already used for the Point
+   Clouds work — likely its own region-scoped dataset (e.g. "Sunshine Coast — Maroochy/Noosa
+   Bathy") given it's a materially better source than the surrounding intertidal-only coverage.
+   Do not substitute ELVIS's "Bathymetry" bucket (EOMAP-derived, rejected twice already — see
+   v16.28) or Navionics (rejected, chart-art rule) for this.
 
 *(superseded URGENT block follows for history:)* a visual anomaly was showing on the live map near/offshore of Caloundra — a geometric wedge converging to a single point plus a disconnected dashed-green quadrilateral in open ocean, reproduced identically on both desktop and phone (not a stale-view issue). It renders under the app's "Marine-park zones" toggle (dashed-green matches existing MNP no-take styling), which redirects the investigation to `ZONES.features`, not the newly-imported depth data. Leading theories, **neither confirmed**: (a) a partial-reprojection bug on a specific feature (some vertices transformed, some not — precedent: `Noosa_2015_LGA`'s known-bad CRS VLR), or (b) a stray AOI/clip-boundary scratch polygon that got merged into `ZONES.features` instead of being discarded. **Also unresolved: whether a 2b zoning/FHA wiring build was actually run and never reported back to this planning chat** — a git-history check is queued to settle this before assuming the wiring status one way or the other. Separately, the complex coastline-hugging zone shapes visible around Bribie Island/Redcliffe in the same wider view are assessed as **likely correct, pre-existing 2a data** (Moreton Bay MP's documented northern boundary is Caloundra, so 2a zones legitimately start appearing there) — Aaron simply hadn't scrolled this far north before; lower priority to verify than the offshore anomaly. See v16.11 for the full diagnostic-first Claude Code prompt — **do not patch/re-export anything until the investigation reports back which of these it is.** **Brisbane River processing is paused** behind this — if it's a reprojection-pipeline bug rather than a one-off bad merge, it could recur identically on Brisbane River's data (already downloaded, not yet processed). Once resolved: **Sunshine Coast depth data is DONE** — imported to the phone as a single-pass, auto-thinned CSV (~18,875 pts, ~547 KB; see v16.9–v16.10) — and the **2b wiring build** (zoning/FHA/tides; data was validated and sitting ready as of v16.3–v16.4) may or may not still need running, pending the git check above.
 **As of 2 Jul 2026 — workflow + 2b status update (v16.1, planning only, nothing shipped):** Guya
@@ -563,16 +703,21 @@ shipped 14k–14l**) and the reference/utility/depth/coverage items — independ
     Safety note: chasing a deeper mark along a rock platform can walk you into worse swell/wash —
     keep the wind/swell-exposure flags in view.
 
-> **Home-water depth reality (SE QLD / Moreton Bay), confirmed 19 Jun 2026:** beyond the open coast
-> this is a physics + coverage gap, not a missing download. Turbid water defeats laser bathymetry — a
-> satellite-laser (ICESat-2) study found >half of Moreton Bay too sediment-laden to read — so the
-> clear-water LiDAR that gave Woongarra its shading can't be replicated up the Pine / Brisbane / Hays
-> Inlet. National open bathy (GA AusBathyTopo, 250 m) is coarse open-coast only; the one all-QLD-
-> estuary composite (CSIRO 5 m) fills gaps with **modelled** creek depth → out by the no-chart-art
-> rule; hydro charts are channel-centric + copyright. Realistic home-water depth = (a) **your own
-> sonar → GPX** (works in mud; already supported); (b) real 5 m bathy-LiDAR exists for the **Sunshine
-> Coast** Maroochy/Noosa estuaries (data.qld.gov.au) if you extend north; (c) otherwise **no depth
-> layer** — spots / tides / zones / FHA / patterns all work without it. Don't bake modelled bathymetry.
+> **Home-water depth reality (SE QLD / Moreton Bay), confirmed 19 Jun 2026, sourcing decided
+> 12 Jul 2026 (v16.28):** beyond the open coast this is a physics + coverage gap, not a missing
+> download. Turbid water defeats laser bathymetry — a satellite-laser (ICESat-2) study found >half
+> of Moreton Bay too sediment-laden to read — so the clear-water LiDAR that gave Woongarra its
+> shading can't be replicated up the Pine / Brisbane / Hays Inlet. National open bathy (GA
+> AusBathyTopo, 30/50/100 m) is coarse open-coast only; the one all-QLD-estuary composite (CSIRO
+> 5 m) fills gaps with **modelled** creek depth → out by the no-chart-art rule; hydro charts and
+> **Navionics are both rejected on the same rule** (chart-derived, not a verified survey — see
+> v16.28); ELVIS's own "Bathymetry" bucket is the EOMAP satellite product, rejected twice already
+> (v16.8, re-confirmed v16.28) — do not order from it. Realistic home-water depth = (a) **your own
+> sonar → GPX** (works in mud; already supported); (b) **real 5 m bathymetric LiDAR — genuine
+> green-laser survey, 0–30 m depths — exists specifically for the Maroochy/Noosa lower estuarine +
+> offshore reaches** ("Bathymetric LiDAR for Sunshine Coast," data.qld.gov.au, CC BY 4.0, 2022;
+> manual QSpatial order, see item 14) if extending north; (c) otherwise **no depth layer** —
+> spots / tides / zones / FHA / patterns all work without it. Don't bake modelled bathymetry.
 
 14b. **Intertidal flats & exposure — DEA Intertidal (EVALUATED 20 Jun 2026 → qualified GO, Exposure-only,
     gated on a confidence check).** Free (CC BY 4.0), satellite-derived intertidal product.
@@ -1539,6 +1684,39 @@ Guya's own ID is feature-hints (4b), never an AI verdict. For the actual ID, poi
   rendering fix takes effect on whatever data is already/eventually on-device, no import required
   to see it working, but should be spot-checked in the same phone session as the v16.24.2 test
   plan rather than treated as its own separate on-phone verification pass.
+
+- **v16.33 (12 Jul 2026, data-processing build — no `index.html` change, no import performed):**
+  **Maroochy/Noosa bathymetry pipeline SHIPPED**: `data/raw/_inventory/bathy_pipeline.py`
+  processed the QSpatial "Bathymetric LiDAR for Sunshine Coast" delivery
+  (`DP_LIDAR_SunshineCoast.zip`, Fugro LADS Mk 3 green-laser survey, Oct–Nov 2011, delivered
+  Feb 2013) into `data/maroochy_noosa_bathy_v1.csv` — **946,877 rows** (25 m grid cells, median
+  z per cell, same lat,lng,depth schema and sign convention as the intertidal CSVs). Smoke test
+  (20 spread tiles) then full run (756 tiles, checkpointed/resumable; one restart after a
+  numpy-int64 JSON-serialisation crash at the first checkpoint — checkpointing is exactly the
+  path smoke mode skips, noted for future smoke designs). **Input: 28.78 M points (27.81 M
+  class 13 + 0.97 M class 15), 29,735 points dropped inside the Wetland Sanctuary defect zone,
+  0 outside the Area-A extent. Output depth range −1.15…+42.48 m LAT; 1.0% dries (negative) /
+  99.0% submerged — decisively unlike the 100%-negative intertidal exports, sanity gate passed**
+  (bulk of cells 20–30 m, real tail to 42 m matching the QA report's ~40 m reach).
+  **Rules baked in, from the v16.29–v16.32 read-only investigations (recorded here — those
+  sessions made no roadmap updates):** (1) depth points ONLY from
+  `Classified/Offshore_AHD_tidal_data` classes 13+15 — the Fugro legend (found in the bundled
+  Report of Survey) is NON-ASPRS: 13=validated seabed, 14=non-seabed (documented but absent from
+  the delivery), 15=20 m subset of 13; onshore 1=non-ground, 2=ground. Onshore folders are never
+  read: 23 onshore tiles around the Maroochy Wetland Sanctuary carry a confirmed
+  ground-classified-as-seabed defect (QA report FAIL, located empirically). (2) Belt-and-braces
+  point-level exclusion of that defect zone, E 503–508 k / N 7,052–7,062 k MGA56 — it caught
+  29,735 offshore-folder points too. (3) **Vertical datum resolved as standard AHD** — the LAS
+  files' "Australian Hydrographic Datum" VLR tag treated as a mislabel, per Fugro's own RoS
+  ("shifted to the AHD datum", AusGeoid08) plus two clean zero-offset onshore/offshore seams;
+  the seam test elsewhere was inconclusive-to-noisy (tile-join mismatches are a documented
+  defect), so AHD-per-Fugro is a judgement call, not a certainty — if imported depths ever look
+  systematically ~1 m off vs charted/soundings, revisit this first. (4) Same per-port AHD→LAT
+  offsets as `export_csv.py` (Noosa Head 1.15 north of lat −26.533, Mooloolaba 1.00 south of
+  it). (5) Clip to the real Area-A block E 496–524 k / N 7,040–7,136 k (tile-grid derived — the
+  ISO record's bbox is a loose envelope, and its format list was outright wrong: the zip is LAS
+  1.2 point clouds + XYZ, not the claimed SHP/TAB/FGDB/KMZ/GPKG). NOT imported on-phone —
+  946,877 rows vs the 25k import cap needs a thinning decision first (next-session note).
 
 - **v16.24 (11 Jul 2026, data-processing build — no `index.html` change, no import performed):**
   Drop-mask BUILD shipped for the v16.23 hybrid scope (items 2+3 closed; Aaron's sign-off came
