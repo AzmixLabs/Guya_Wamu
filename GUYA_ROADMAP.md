@@ -1,4 +1,48 @@
 # Guya — Feature Backlog & Roadmap
+*v16.42 · 13 Jul 2026 — Brisbane Bar + Mooloolaba 2027 tide tables MERGED (build 2026.07.11a),
+closing v16.41.1's data chore (1) — from Jan 2027 those two ports' popups would have silently
+dropped tide text. **Source:** BoM NTC official per-port prediction PDFs
+(bom.gov.au/ntc/IDO59001/ — `IDO59001_2027_QLD_TP003.pdf` Brisbane Bar,
+`IDO59001_2027_QLD_TP019.pdf` Mooloolaba), the same NTC prediction series behind the MSQ
+Queensland Tide Tables (© Commonwealth of Australia, Bureau of Meteorology — BoM is the credited
+author of the MSQ tables). Checked first: MSQ's own tide-tables page and the data.qld.gov.au
+open-data CSVs (CC BY 4.0) are both still 2026-only — the whole-year MSQ 2027 PDF isn't
+published yet; BoM publishes per-port 2027 a year ahead. **Parser proven by round-trip, not
+assumed:** the same column-aware pdfplumber parse (8 sub-columns/page, weekday prefixes glued to
+times) re-run on BoM's 2026 PDFs reproduced the shipped `BRISBANE_TIDES_2026` and
+`MOOLOOLABA_TIDES_2026` embeds exactly — 365/365 days identical for both ports — which also
+confirms the BoM per-port PDFs carry predictions identical to the MSQ tables the 2026 embeds
+came from. **Validation (all PASS, both ports, both years):** weekday cross-check 365/365
+(2027; 364/364 markers on the 2026 controls), all 365 dates present, 1–4 events/day, strictly
+increasing times, strict H/L alternation by continuous phase — 0 violations across 1,411 events
+each; Mooloolaba 2027 max 2.24 m vs published HAT 2.21 m (same near-match as 2026's 2.22 m);
+Brisbane Bar 2027 max 2.81 m (its 2026 embed tops at 2.79 m). **Merge mirrors Burnett exactly:**
+`BRISBANE_TIDES_2027`/`MOOLOOLABA_TIDES_2027` consts + `Object.assign(...2026,...2027)` — one
+lookup spans 2026–2027; pure data addition, `tideHeightNow()`/`waterNowText()`/`nearestPort()`
+untouched (confirmed all consumers go through `PORTS[].table`, which Object.assign extends in
+place); the stale "Brisbane Bar/Mooloolaba tables are 2026-only" comment inside tideHeightNow()
+updated. Runtime-verified in a Node VM against the REAL code slice from index.html: all three
+ports now span 730 days (2026-01-01→2027-12-31) and simulated mid-2027 taps at
+Bargara/Redcliffe/Maroochydore return real tide heights via the real
+nearestPort()+tideHeightNow() path. Both script blocks node --check PASS; Leaflet block
+byte-identical; zoneAt() + green-zone dragend safeguard intact; both style blocks untouched.
+Chore (2) remains open — Noosa still resolves to Mooloolaba as a stopgap and still needs wiring
+as its own Standard Port.*
+
+*v16.41.1 · 12 Jul 2026 — planning note, no code shipped: v16.41 (tide-port fix, build
+2026.07.10a) pushed and confirmed on `origin/main` (`cc2c2dd`) — no repeat of the v16.26
+unpushed-commit stall; `git status` confirmed clean and up to date immediately after push.
+On-phone confirmation still pending: build string should read `2026.07.10a`, a Bargara/
+Woongarra tap should read unchanged (Burnett Heads), and a Sunshine Coast/Brisbane River tap
+should read Mooloolaba/Brisbane Bar-scale (≤~2.2 m), not the old Burnett-style +3.0 m+ readings.
+Two items flagged for the backlog, not urgent: **(1)** Brisbane Bar and Mooloolaba tide tables
+are 2026-only (Burnett already has 2027 merged) — from Jan 2027 those two ports' popups will
+silently drop tide text rather than show a wrong one; needs a table refresh before then.
+**(2)** Noosa currently resolves to Mooloolaba as an interim stopgap (v16.41) — this is **NOT**
+the final answer; Noosa Head is on record as its own MSQ Standard Port (2024 Semidiurnal Tidal
+Planes table, no offset math needed) and still needs wiring as its own port in a future session.
+Don't let "resolves to Mooloolaba" be misread as the intended end state by a future session.*
+
 *v16.41 · 12 Jul 2026 — tide-port bug FIXED (build 2026.07.10a) + land-overpaint ROOT CAUSE
 CONFIRMED (diagnosis only, that fix not yet scoped). **Tide fix:** `tideHeightNow()` hardcoded
 `BURNETT_TIDES_2026` regardless of location, so every depth popup outside Woongarra applied
@@ -447,7 +491,10 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.10a — regional tide-port fix (v16.41): depth/tap popups now use the
+**Current build:** 2026.07.11a — Brisbane Bar + Mooloolaba 2027 tide tables merged (v16.42),
+pure data addition, all three ports now span 2026–2027. Previous build 2026.07.10a (v16.41
+regional tide-port fix) was pushed and confirmed on `origin/main` (`cc2c2dd`); its on-phone
+confirmation is still pending: depth/tap popups now use the
 nearest port's tide table (Burnett Heads / Brisbane Bar / Mooloolaba) instead of hardcoded
 Burnett Heads everywhere. Shading argument-ceiling fix (v16.40) **confirmed working on-phone**:
 tint now paints over Sunshine Coast, Brisbane River, and Maroochy Noosa. **Open incident
@@ -471,21 +518,26 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (12 Jul 2026, post-v16.41):** build 2026.07.10a — regional tide-port fix
-shipped (popups now select Burnett Heads / Brisbane Bar / Mooloolaba by tapped point; Woongarra
-regression-clean). **Recommended next job: scope and build the land-overpaint fix** — root cause
-is CONFIRMED (see v16.41 entry): intertidal-export samples sit ON dry land (−3..+5 m AHD band)
-and v16.25's any-sample-within-120 m gate paints them; tightening R1 is ruled out as a fix.
-Candidate directions, rough preference order: (A) elevation-aware gate (dries only qualify where
+**Next-session note (13 Jul 2026, post-v16.42):** build 2026.07.11a — Brisbane Bar + Mooloolaba
+2027 tide tables merged (pure data addition, Burnett-pattern Object.assign, all validation
+PASS); v16.41.1's data chore (1) is CLOSED. **Recommended next job (small, do first): on-phone
+confirmation of the v16.41 tide fix** — check build string reads 2026.07.11a, tap
+Bargara/Woongarra (expect unchanged Burnett Heads reading), tap Sunshine
+Coast/Brisbane River (expect Mooloolaba/Brisbane Bar-scale ≤~2.2 m, not the old +3.0 m+ Burnett
+readings). **Then: scope and build the land-overpaint fix** — root cause is CONFIRMED (see
+v16.41 entry): intertidal-export samples sit ON dry land (−3..+5 m AHD band) and v16.25's
+any-sample-within-120 m gate paints them; tightening R1 is ruled out as a fix. Candidate
+directions, rough preference order: (A) elevation-aware gate (dries only qualify where
 the local estimate is above −HAT per port, `port_offset()`-style latitude buckets, optionally a
 dries colour ramp so exposed ground stops rendering as water-mint); (B) SC/BR v3 re-export with
 ELEV_MAX≈HAT (cleanest data, but re-import churn + loses legitimate above-HAT platform
 readings); (C) real land/water mask (heaviest, likely overkill). On-phone checks queued: fresh
 tap on the painted golf course must show the "dries ≈ …" branch (the "≈14.8 m/106 m" popup was
-almost certainly stale or manual-contour-influenced — verify); a Maroochy-area popup must now
-show Mooloolaba-scale tide (≤ +2.2), not +3.2. Data chore flagged: Brisbane Bar + Mooloolaba
-2027 tide tables not yet embedded (Burnett has 2027) — popups there lose tide text at Jan 2027.
-**New backlog item, not urgent:** Aaron wants the Maroochy Noosa "blobby" disc rendering
+almost certainly stale or manual-contour-influenced — verify). **One data chore still open, not
+urgent:** Noosa's Mooloolaba fallback is a stopgap, not the
+final answer — Noosa Head is on record as its own MSQ Standard Port and still needs its own
+wiring (its 2026+2027 BoM per-port PDFs exist at bom.gov.au/ntc/IDO59001/, TP021 — same
+source/parser as v16.42, so wiring it is now mostly mechanical). **New backlog item, not urgent:** Aaron wants the Maroochy Noosa "blobby" disc rendering
 (~23%-coverage discs, 180 m export grid vs 120 m paint radius) improved, not just accepted as
 expected-not-buggy (v16.40's framing) — needs its own scoping session once the land-overpaint
 bug is resolved; likely candidates are a larger/adaptive paint radius for sparse grids or a
@@ -496,7 +548,8 @@ keys have no functional effect, confirmed v16.40 investigation). Item 5 (low-con
 tag) still pending, unaffected. Pending cleanup: `bathy_checkpoint.json` + `bathy_smoke.csv`
 (completed-run scratch), the `_inspect/` sample folder under
 `data/raw/Bathymetric-LiDAR-Sunshine-Coast/`, `gap_checkpoint.json`/`hybrid_checkpoint.json`,
-`guya_species_qld_v3.md` (origin undecided). The `woongarra_imported_rollback_v1` cleanup item
+`guya_species_qld_v3.md` (origin/purpose still undecided — untracked in repo since at least
+v16.26, unrelated to this session). The `woongarra_imported_rollback_v1` cleanup item
 is CLOSED — v16.39 removes it at boot (~2.17 MB reclaimed on first run).
 
 **Previous note (12 Jul 2026, post-REPLACE):** build 2026.07.07a is confirmed live and item 4
