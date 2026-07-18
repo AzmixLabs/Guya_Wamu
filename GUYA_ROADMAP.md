@@ -1,4 +1,111 @@
 # Guya — Feature Backlog & Roadmap
+*v16.45 · 18 Jul 2026 — MN blobby-disc cosmetic fix SHIPPED (build 2026.07.18a): buildShade()'s
+R0 raised 30→35 (R1=120 unchanged), per `data/raw/_discrender_spike/DISC_RENDER_SPIKE.md`'s
+finding that MN's discrete-disc look is an alpha-ramp calibration issue meeting 126 m-median
+sample spacing, not a coverage gap, and that the v16.44 HAT gate filters upstream of every R1
+check at `depthSamples()` itself — so this radius-only ramp change cannot reopen the
+land-overpaint bug (re-confirmed this session by reading `buildShade()`: R0/R1 are `const`,
+local to `buildShade()` at line 1988, not shared with `okHAT`'s `-nearestPort().hat` threshold
+or with `buildAutoContours()`'s own separate `R1=120` declaration — no shared-constant risk
+existed). **Methodology, reproduced not assumed:** a Node-side replica of `buildShade()`'s exact
+alpha ramp + sample-index code, run against the real `maroochy_noosa_bathy_v2_appgrade.csv`
+(19,178 pts) and the real `sunshine_coast`/`brisbane_river` v2 CSVs pushed through the app's own
+25k auto-thin loop AND the real `okHAT` gate (same `nearestPort()` routing, same `PORTS[].hat`
+values) — i.e. the actual on-phone-equivalent post-Option-A density, not the pre-fix numbers the
+spike itself used. Baseline at shipped R0=30 reproduced the spike's own MN number almost exactly
+(84.5% painted-at-all / 23.9% alpha≥0.75, vs the spike's 84.4%/23.9%), confirming the replica is
+faithful. **SC/BR's own current alpha≥0.5 baseline computed as the fair target (not assumed
+~100%):** SC 50.1%, BR 47.5% (blended 48.8%) — both markedly lower than the pre-v16.44 spike
+numbers because the HAT gate now excludes ~60% of SC/BR's points as above-HAT dry land; this is
+the correct, current comparison, not the stale one. **R0=35 chosen** as the smallest value
+clearing that blended target: MN's alpha≥0.5 coverage moves 45.8%→48.6% (within 0.2 pp of the
+48.8% blended target). **No-regression, verified empirically not just asserted:** raising R0 can
+only ever increase alpha at a fixed `near` distance (monotonic in the ramp formula) — confirmed
+against the real MN/SC/BR data: all coverage metrics (painted/a25/a50/a75/core) flat-or-up,
+none down. **Land-bleed structurally impossible, not just checked:** the "painted at all"
+(near≤R1) footprint — the actual geographic extent that can ever receive any paint — is set by
+R1 alone, untouched this session; verified byte-identical before/after for all three datasets
+(MN 84.5%, SC 71.2%, BR 68.3%, unchanged to one decimal). Raising R0 only redistributes opacity
+*within* the existing footprint; it cannot paint a new pixel. **Honest limitation, not smoothed
+over:** a synthetic native-resolution (35 m/px) visual crop of MN before/after shows a real but
+modest textural change, not a dramatic disc-to-wash transformation — the numeric target was hit
+exactly as scoped ("smallest R0", per the brief, not "eliminate all texture"), but the true
+perceptual verdict depends on Leaflet's own screen-scale image compositing over satellite tiles,
+which cannot be exercised headlessly in this environment (no browser-automation tooling
+installed, and MN's real dataset lives only in Aaron's on-device localStorage, not this repo).
+**Mandatory on-phone check queued, not fabricated:** screenshot MN water at a normal zoom
+(expect a visibly denser wash, not necessarily perfectly smooth) and a quick BR/SC/Bargara
+sanity check (expect unchanged — the structural land-bleed argument above already rules out
+regression; this is a confirmation step, not a discovery step). **MN region re-tag folded in
+per spike carry-forward:** `#imp-region` dropdown gains a real "Maroochy / Noosa" option
+(`maroochy_noosa` key); `regionLabel()` knows it; a one-time boot-time migration renames any
+existing `datasets.custom` (the free-text "Other…" fallback key Aaron's MN import landed under,
+since the field was left blank) to `datasets.maroochy_noosa` if present — mirrors the existing
+`legacy_unknown` migration pattern, fires once, no functional effect (region keys were never
+consulted by `depthSamples()`/`rebuildImportedFlat()`, confirmed v16.40). **Validation:** both
+script blocks pass `node --check`; inlined Leaflet block confirmed byte-identical to HEAD;
+`zoneAt()` + `ORDER` (MNP>CPZ>HPZ>GUZ) unchanged; green-zone dragend safeguard
+(index.html:1542-1544) unchanged; both style blocks untouched; diff scoped to exactly the four
+intended edits (R0 value + comment, region dropdown option, `regionLabel()` entry,
+custom→maroochy_noosa migration) plus the two build-string bumps. Did NOT touch R1, the HAT
+gate, `depthSamples()`, Option 3, or any Noosa tide-port code, per the session's explicit scope.*
+
+*v16.44.2 · 18 Jul 2026 — planning note, no code shipped: **on-phone Woongarra check CLOSED,
+v16.44 ACCEPTED.** Four taps across two sessions (2 screenshots each), read against the real
+`index.html` (not inferred). Tide port correct in all four (Burnett Heads +2.2/+2.3). **Both
+`waterNowText()` branches verified correct against source:** `wn=t+d` with d signed — dries
+(d<−0.05) prints "X m over it now"/"exposed now", depth prints "now ~X m water". Elliott River
+mouth dries 1.1 m, tide +2.2 → "1.1 m over it now" (2.2−1.1, exact). Barolin Rock depth 4.0 m,
+tide +2.2 → "6.2 m water" (2.2+4.0, exact). The 1.1 m dries reading is direct on-phone evidence
+the gate correctly keeps HAT-adjacent legitimate intertidal (1.1 m < Burnett Heads HAT 3.70 m,
+v16.44) rather than dropping it. **A suspected sign bug raised earlier in this session (against
+two prior Innes Park screenshots showing "≈2.2/5.1 m depth" and "~4.4/7.4 m water" over visibly
+dry land) is RETRACTED.** Root cause, confirmed by reading `depthSamples()`: those two points
+were NOT imported/dries samples at all — they were **Navionics-traced contour lines** (Aaron
+confirmed manual tracing in that area, done early in the project, before the standing
+no-chart-art-for-depth rule hardened). `depthSamples()` samples the `contours` store at ~1/12
+polyline spacing and feeds it into the shared sample pool alongside imported data; those traces
+carry positive depth values, which trivially pass the `d>-HAT` gate (built to catch above-HAT
+*dries*, not to vet contour provenance) — so the interpolator confidently reported "water" over
+land using real code executing correctly on out-of-policy data. Not a v16.44 gap, not
+interpolation overshoot, not a gate bug. **Open data-hygiene item, Aaron's call, no code needed:**
+delete the land-adjacent traced contours at Innes Park (per-line ✕ in the contours panel, or
+"Clear all contours" — `woongarra_contours_v1`), then **re-export a fresh `version:2` backup
+immediately** — contours merge back in by ID on restore, so an old backup would silently
+resurrect them. Shading near Innes Park will visibly change once they're gone (expected, not a
+regression). **v16.44 is now fully accepted — no further on-phone action queued for it.***
+
+*v16.44.1 · 18 Jul 2026 — planning note, no code shipped, no `index.html` change: session-close
+review of v16.44 plus a time-boxed model-routing note for the next Claude Code session.
+**HAT cross-check completed for the two ports v16.44 didn't independently verify** (only
+Mooloolaba was checked against a published source at build time; Burnett Heads and Brisbane Bar
+were not). Checked directly against MSQ's 2020 Semidiurnal Tidal Planes table: published HAT is
+Burnett Heads/Bargara **3.67 m** and Brisbane Bar **2.73 m**, both *below* the embedded-table-max
+values the gate actually uses (3.70 m / 2.81 m) — confirms all three ports sit in the
+conservative/safe direction, not just Mooloolaba (same logic v16.44 already applied there: a
+higher threshold protects HAT-adjacent ledges from wrongly dropping out). Note: MSQ moved to a
+newer 2010–2029 tidal-datum epoch in a 2022 table edition, so today's authoritative figures may
+differ by a few cm from this 2020 source — not close enough to the used values to matter. Does
+NOT close the outstanding item: the real acceptance test is still the on-phone Bargara tap,
+not yet run (see v16.44 and the next-session note below). **Fable 5 plan-inclusion window closes
+soon — a sequencing note, not a roadmap change:** Anthropic's promotional inclusion of Fable 5 in
+Pro/Max/Team weekly limits (up to 50% of the weekly cap, no extra charge) has been extended
+twice already (7 Jul → 12 Jul → 19 Jul) and is currently set to end **19 Jul 2026, 11:59:59 PM
+PT** — roughly **5 PM AEST Monday 20 Jul** in Brisbane (PT is UTC−7 in July; AEST is UTC+10; no
+further extension confirmed as of this note, but two prior extensions mean it's worth checking
+support.claude.com before treating this as final). After that, Fable reverts to metered usage
+credits ($10/$50 per Mtok) unless credits are funded. **No item in the current backlog is both
+ready-to-run and cleanly Fable-shaped under the existing rules:** the one long-autonomous-batch
+candidate, Option 3's real SC/BR v3 re-export, is explicitly gated "don't trigger standalone,
+ride along with a future re-export" (v16.43) — that gate was about avoiding duplicate re-import
+churn, not data safety, so running it now instead of later isn't a correctness risk, but it is a
+conscious call to move it up in sequence purely to catch the pricing window. Left for Aaron to
+decide going into the next session; not pre-authorised here. Gold Coast's raw-LiDAR processing
+(parked, last sequenced) would be the other Fable-shaped candidate if that data has finished
+landing — worth a 30-second check before the session starts. If neither is greenlit, plain
+Sonnet work (the on-phone check, Noosa wiring) proceeds as normal — Fable isn't required for
+anything currently queued.*
+
 *v16.44 · 13 Jul 2026 — land-overpaint FIXED, Option A (elevation-aware gate), build
 2026.07.13a. Confirmed root cause (v16.41): SC/BR intertidal exports carry supratidal ground
 (above HAT, genuinely dry) inside a −3..+5 m AHD band, and v16.25's distance-only fallback
@@ -580,7 +687,12 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.13a — land-overpaint FIXED, Option A elevation-aware gate (v16.44):
+**Current build:** 2026.07.18a — MN blobby-disc cosmetic fix (v16.45): buildShade()'s R0 raised
+30→35 (R1=120 unchanged), closing MN's alpha≥0.5 coverage to within 0.2pp of SC/BR's own current
+baseline (measured, not assumed); land-bleed structurally ruled out (painted-at-all footprint is
+set by R1 alone, verified unchanged); MN re-tagged out of free-text "custom" into a named
+`maroochy_noosa` region. On-phone check still pending (see next-session note below). Previous
+build 2026.07.13a — land-overpaint FIXED, Option A elevation-aware gate (v16.44):
 dries samples above HAT no longer count as paint/read evidence at any of the five shared v16.25
 call sites; validated against the real 113,557-pt on-phone replica (all named dry probes now
 excluded, all wet soundings unaffected); on-phone confirmation still pending. Previous build
@@ -611,16 +723,38 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (13 Jul 2026, post-v16.44):** build 2026.07.13a — Option A land-overpaint fix
-SHIPPED, all offline validation PASS (see v16.44 entry). **Recommended next job (small, do
-first): the on-phone check this fix's own regression risk depends on** — tap a Bargara/Woongarra
-rock-platform reading pre-known and confirm it's numerically unchanged (the legacy Woongarra
-dataset isn't in this repo, so this is the only way to close that risk for real; a structural
-proof + a synthetic boundary check were run instead, see v16.44). Also worth a quick look while
-on-phone: the Sunshine Motorway/Twin Waters golf-course area that was visibly over-painted in the
-v16.43.1 screenshots should now show no shading (dry land, correctly excluded), and Coolum's
-genuine flats should still shade normally. **Option A's known residual gap is measured, not
-assumed:** the v16.43 spike puts it at 53–58% of the sub-HAT messy tier (~800–880 pilot points)
+**Next-session note (18 Jul 2026, post-v16.45):** build now 2026.07.18a — MN blobby-disc fix
+shipped (R0 30→35), MN re-tagged to a named region; see v16.45 above for full detail.
+**Mandatory on-phone check queued, not yet run:** confirm build string reads `2026.07.18a`;
+screenshot MN water at normal zoom (expect denser, less discrete-disc; a synthetic desktop
+render this session showed a real but modest improvement, not a dramatic wash — set
+expectations accordingly, don't treat a still-textured result as a failed fix unless it looks
+unchanged from pre-build); quick BR/SC/Bargara glance to confirm unaffected (land-bleed is
+structurally ruled out this session, so this is a confirmation step only); confirm the imported-
+depths panel now shows "Maroochy / Noosa" rather than a raw "custom" row. **Recommended next
+job — data hygiene, no build, Aaron's own action, still outstanding from v16.44.2:** delete the
+Navionics-traced contour lines near Innes Park and re-export a fresh `version:2` backup right
+after (contours merge back by ID on restore, so this needs to happen before any future restore
+from an older file). **Next actual build candidate:** Noosa tide-port wiring — mechanical, BoM
+TP021 PDFs already confirmed available, plain Sonnet job. If the MN on-phone check comes back
+still too discrete at typical zoom, the next lever is Option 3's land/water mask territory
+(sub-HAT halo spillover) or a further R0/R1 retune — scope as its own session, don't fold into
+the on-phone confirmation itself. **Still-open model-routing question, unchanged from the last
+note:** Fable 5's included-plan access is currently set to lapse ~5 PM AEST Monday 20 Jul (see
+v16.44.1). No item above needs Fable — Noosa wiring is Sonnet-shaped. The only Fable-shaped
+candidate remains Option 3's SC/BR v3 re-export, still explicitly gated "don't trigger
+standalone" (v16.43); pulling it forward purely to catch the pricing window is still Aaron's
+call to make, not pre-authorised here.
+
+**Previous note (18 Jul 2026, post-v16.44.1):** the on-phone Bargara/Woongarra check was still
+outstanding and the Fable-timing question was newly raised — both are addressed above (check
+closed in v16.44.2; Fable question restated, unresolved). The HAT cross-check and Fable-window
+detail in the v16.44.1 entry above are otherwise unchanged and still accurate.
+
+**Previous note (13 Jul 2026, post-v16.44):** build 2026.07.13a — Option A land-overpaint fix
+SHIPPED, all offline validation PASS (see v16.44 entry). Superseded by v16.44.2's on-phone
+closure above; everything else below is unchanged. **Option A's known residual gap is measured,
+not assumed:** the v16.43 spike puts it at 53–58% of the sub-HAT messy tier (~800–880 pilot points)
 still painting — an accepted tradeoff, to be closed later if/when **Option 3 (real land/water
 mask)** rides in on a future SC/BR re-export. Option 3 stays scored and ready but NOT an
 immediate build (v16.43): hybrid STRICT-AND (OSM ∧ WOfS freq≥0.2) scores 0.79% false-paint /

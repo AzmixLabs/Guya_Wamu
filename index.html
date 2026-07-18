@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.13a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.18a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.13a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.18a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1155,7 +1155,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
     </div>
     <div class="blk"><div class="lbl">Imported depths (LiDAR / survey CSV)</div>
-      <div class="dp-actions"><select class="dp-in" id="imp-region" style="flex:1"><option value="woongarra">Bargara / Woongarra</option><option value="brisbane_river">Brisbane River</option><option value="sunshine_coast">Sunshine Coast</option><option value="other">Other…</option></select></div>
+      <div class="dp-actions"><select class="dp-in" id="imp-region" style="flex:1"><option value="woongarra">Bargara / Woongarra</option><option value="brisbane_river">Brisbane River</option><option value="sunshine_coast">Sunshine Coast</option><option value="maroochy_noosa">Maroochy / Noosa</option><option value="other">Other…</option></select></div>
       <div class="dp-actions" id="imp-region-other-row" style="display:none"><input class="dp-in" id="imp-region-other" placeholder="region/dataset name" style="flex:1"></div>
       <input type="file" id="imp-file" accept=".csv,text/csv" hidden>
       <div class="dp-actions"><button class="dp-btn" id="imp-replace-btn">⭯ Replace this region</button><button class="dp-btn" id="imp-merge-btn">＋ Merge into this region</button></div>
@@ -1985,7 +1985,13 @@ function buildShade(){
   const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
   const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
-  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=30,R1=120;
+  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=35,R1=120;
+  /* R0 raised 30->35 (v16.45): MN's 126m-median sample spacing left the R0=30 alpha ramp's
+     mid-sample tissue too faint to read as paint (23.9% of MN footprint at alpha>=0.75 vs
+     BR/SC's ~33-35%), rendering as discrete discs rather than a continuous wash. R0=35 was
+     the smallest value bringing MN's alpha>=0.5 coverage (48.6%) in line with BR/SC's own
+     alpha>=0.5 baseline (47.5%/50.1%) - measured against the real post-HAT-gate v2 datasets,
+     not assumed. R1=120 unchanged; this is a ramp-calibration change only. */
   /* pass 1: water/land mask */
   const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
@@ -2094,6 +2100,15 @@ if(!Object.keys(datasets).length){try{
     try{localStorage.setItem(IMP_DS_KEY,JSON.stringify({datasets:datasets}));}catch(e3){}
   }
 }catch(e4){}}
+/* v16.45: Maroochy/Noosa was imported under the free-text "Other…" fallback key "custom" (no
+   region name typed) before this build added it as a named region - re-tag it in place so it
+   shows correctly in the dataset list/regionLabel(). Cosmetic only: region keys have no effect
+   on depthSamples()/rebuildImportedFlat() (both read points regardless of key), confirmed v16.40. */
+if(datasets.custom&&!datasets.maroochy_noosa){
+  datasets.maroochy_noosa={region:'maroochy_noosa',label:(datasets.custom.label&&datasets.custom.label!=='custom')?datasets.custom.label:'Maroochy / Noosa',importedAt:datasets.custom.importedAt,points:datasets.custom.points};
+  delete datasets.custom;
+  try{localStorage.setItem(IMP_DS_KEY,JSON.stringify({datasets:datasets}));}catch(e5){}
+}
 let imported=[]; /* flat view across every region's dataset - depthSamples()/compare-tool read this unchanged */
 function rebuildImportedFlat(){imported=[];Object.keys(datasets).forEach(function(k){const ds=datasets[k];if(ds&&Array.isArray(ds.points))for(let i=0;i<ds.points.length;i++)imported.push(ds.points[i]);});}
 rebuildImportedFlat();
@@ -2134,7 +2149,7 @@ function undoLastImpReplace(){const snap=latestImpSnapshot();
   try{localStorage.removeItem(impRbKey(snap.region));}catch(e){}
   refreshImpUndoBtn();if(typeof refreshImpPanel==='function')refreshImpPanel();if(typeof refreshDatasetList==='function')refreshDatasetList();buildShade();
   alert(ok?'Restored.':'Restored in memory, but save verification failed — see the warning above.');}
-function regionLabel(key){const known={woongarra:'Bargara / Woongarra',brisbane_river:'Brisbane River',sunshine_coast:'Sunshine Coast',legacy_unknown:'Legacy import (pre-region-tagging)'};
+function regionLabel(key){const known={woongarra:'Bargara / Woongarra',brisbane_river:'Brisbane River',sunshine_coast:'Sunshine Coast',maroochy_noosa:'Maroochy / Noosa',legacy_unknown:'Legacy import (pre-region-tagging)'};
   if(known[key])return known[key];
   if(datasets[key]&&datasets[key].label)return datasets[key].label;
   return key;}
