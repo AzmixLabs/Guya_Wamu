@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.18a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.19a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.18a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.19a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1985,13 +1985,16 @@ function buildShade(){
   const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
   const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
-  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=35,R1=120;
-  /* R0 raised 30->35 (v16.45): MN's 126m-median sample spacing left the R0=30 alpha ramp's
-     mid-sample tissue too faint to read as paint (23.9% of MN footprint at alpha>=0.75 vs
-     BR/SC's ~33-35%), rendering as discrete discs rather than a continuous wash. R0=35 was
-     the smallest value bringing MN's alpha>=0.5 coverage (48.6%) in line with BR/SC's own
-     alpha>=0.5 baseline (47.5%/50.1%) - measured against the real post-HAT-gate v2 datasets,
-     not assumed. R1=120 unchanged; this is a ramp-calibration change only. */
+  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=56,R1=120;
+  /* R0 raised 30->35 (v16.45) then 35->56 (v16.46): MN's irregular sample spacing (median
+     126 m but p90 gap 175.9 m) rendered as discrete discs because mid-gap alpha collapsed.
+     v16.45's aggregate area-fraction tuning (match MN's alpha>=0.5 area to BR/SC's) missed
+     contiguity: at a p90 gap the midpoint sits ~88 m out, where alpha was still <0.4 - the
+     visible on-phone holes. v16.46 criterion: alpha >= 0.5 AT the p90-gap midpoint itself.
+     From this exact ramp, alpha(88) = (R1-88)/(R1-R0) - R0=56 is the smallest integer
+     clearing 0.5 (0.5009). Accepted residual: the p99+ tail (~1% of points, ~200 m+ gaps)
+     still fades (midpoint alpha ~0.30) - known, not a bug. R1=120 deliberately untouched:
+     it alone bounds the painted footprint, so land-overpaint behaviour cannot change. */
   /* pass 1: water/land mask */
   const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));

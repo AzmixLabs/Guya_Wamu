@@ -1,4 +1,40 @@
 # Guya — Feature Backlog & Roadmap
+*v16.46 · 19 Jul 2026 — MN disc-rendering RE-TUNE SHIPPED (build 2026.07.19a): R0 raised again,
+35→56 (R1=120 deliberately untouched), after Aaron's on-phone screenshot showed visible gaps
+persisting near Mudjimba/Bli Bli under v16.45's R0=35. **Root cause of the miss, owned not
+excused: v16.45 validated against the wrong criterion.** It matched MN's TOTAL alpha≥0.5 area
+fraction to BR/SC's aggregate baseline — an area metric that a field of slightly-fatter discs
+can satisfy without ever becoming contiguous. MN's spacing has a real tail (p90 gap 175.9 m,
+p99 201 m, ceiling ~210 m — this session re-derived those numbers independently from the CSV
+and they match the spike exactly); at a p90 gap the midpoint sits ~88 m from the nearest
+sample, where alpha was 0.377 under R0=35 (and 0.356 under the original 30) — that near-R1
+low-alpha tissue is precisely the visible hole. **New criterion, per the re-tune brief: alpha
+≥ 0.5 AT the p90-gap midpoint itself.** Worked from buildShade()'s real ramp read from the
+file (index.html:2014, `distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0))` — verified linear
+between R0 and R1, and verified `AL` reaches paint un-smoothed: `smoothField()` takes it as a
+read-only validity mask and only smooths the depth field FD): alpha(88)=(120−88)/(120−R0) ≥
+0.5 ⇒ R0 ≥ 56. **R0=56 is the smallest integer clearing the target — p90-midpoint alpha =
+0.5009, reported explicitly against the target as required** (R0=55 gives 0.4932, just under).
+The p90 target IS reachable via R0 alone, so R1 was not touched and the stop-and-report branch
+in the brief was not triggered; 56 is judged not uncomfortably high — under half of R1, ramp
+still spans 64 m, and BR/SC read as a denser wash, not saturation. **No-regression verified
+empirically (same real-data replica methodology as v16.45 — real CSVs through the app's own
+thin loop + real okHAT gate):** MN a50 48.6%→60.2%, a75 27.2%→42.6%; SC a50 51.5%→56.9%; BR
+a50 48.9%→54.1% — every metric flat-or-up, none down; legacy Woongarra (on-phone only, not in
+repo) is covered by the same structural monotonicity argument as v16.44/45: raising R0 can
+only raise alpha at any fixed distance. Painted-at-all footprint remains R1-bound — the
+84.5%→84.7% MN tick is a sub-metre sliver at the very edge of R1 crossing the a>0.01
+threshold, not new geographic reach; land-overpaint behaviour cannot change (HAT gate
+upstream, unchanged; R1 unchanged). **Accepted residual, quantified up front:** the p99+ tail
+(~1% of points, ~200 m+ gaps) still fades — midpoint alpha ~0.30 at p99, ~0.23 at the 210 m
+ceiling — same accepted-residual framing as Option A's known gap; if faint patches show
+on-phone at THOSE spots, that's the known tail, not a failed fix. **Validation:** both script
+blocks `node --check` PASS; Leaflet block byte-identical to HEAD; `zoneAt()`/ORDER + green-zone
+dragend safeguard untouched (diff is exactly the R0 const, its comment, and the two build
+strings); both style blocks untouched. On-phone re-check queued: Mudjimba/Bli Bli area
+specifically (the reported gap sites), expect contiguous wash at p90-scale gaps, tolerate
+faint patches only at rare 200 m+ tail gaps.*
+
 *v16.45 · 18 Jul 2026 — MN blobby-disc cosmetic fix SHIPPED (build 2026.07.18a): buildShade()'s
 R0 raised 30→35 (R1=120 unchanged), per `data/raw/_discrender_spike/DISC_RENDER_SPIKE.md`'s
 finding that MN's discrete-disc look is an alpha-ramp calibration issue meeting 126 m-median
@@ -687,11 +723,12 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.18a — MN blobby-disc cosmetic fix (v16.45): buildShade()'s R0 raised
-30→35 (R1=120 unchanged), closing MN's alpha≥0.5 coverage to within 0.2pp of SC/BR's own current
-baseline (measured, not assumed); land-bleed structurally ruled out (painted-at-all footprint is
-set by R1 alone, verified unchanged); MN re-tagged out of free-text "custom" into a named
-`maroochy_noosa` region. On-phone check still pending (see next-session note below). Previous
+**Current build:** 2026.07.19a — MN disc-rendering re-tune (v16.46): R0 raised 35→56 on the
+corrected criterion (alpha≥0.5 at the p90-gap midpoint, 0.5009 achieved — v16.45's aggregate
+area-fraction match was the wrong metric and left visible holes on-phone at Mudjimba/Bli Bli);
+R1=120 untouched, land-bleed still structurally ruled out; p99+ tail (~1%) fades by design.
+On-phone re-check pending. Previous build 2026.07.18a (v16.45) raised R0 30→35 and re-tagged
+MN out of free-text "custom" into a named `maroochy_noosa` region (that re-tag stands). Previous
 build 2026.07.13a — land-overpaint FIXED, Option A elevation-aware gate (v16.44):
 dries samples above HAT no longer count as paint/read evidence at any of the five shared v16.25
 call sites; validated against the real 113,557-pt on-phone replica (all named dry probes now
@@ -723,28 +760,27 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (18 Jul 2026, post-v16.45):** build now 2026.07.18a — MN blobby-disc fix
-shipped (R0 30→35), MN re-tagged to a named region; see v16.45 above for full detail.
-**Mandatory on-phone check queued, not yet run:** confirm build string reads `2026.07.18a`;
-screenshot MN water at normal zoom (expect denser, less discrete-disc; a synthetic desktop
-render this session showed a real but modest improvement, not a dramatic wash — set
-expectations accordingly, don't treat a still-textured result as a failed fix unless it looks
-unchanged from pre-build); quick BR/SC/Bargara glance to confirm unaffected (land-bleed is
-structurally ruled out this session, so this is a confirmation step only); confirm the imported-
-depths panel now shows "Maroochy / Noosa" rather than a raw "custom" row. **Recommended next
-job — data hygiene, no build, Aaron's own action, still outstanding from v16.44.2:** delete the
-Navionics-traced contour lines near Innes Park and re-export a fresh `version:2` backup right
-after (contours merge back by ID on restore, so this needs to happen before any future restore
-from an older file). **Next actual build candidate:** Noosa tide-port wiring — mechanical, BoM
-TP021 PDFs already confirmed available, plain Sonnet job. If the MN on-phone check comes back
-still too discrete at typical zoom, the next lever is Option 3's land/water mask territory
-(sub-HAT halo spillover) or a further R0/R1 retune — scope as its own session, don't fold into
-the on-phone confirmation itself. **Still-open model-routing question, unchanged from the last
-note:** Fable 5's included-plan access is currently set to lapse ~5 PM AEST Monday 20 Jul (see
-v16.44.1). No item above needs Fable — Noosa wiring is Sonnet-shaped. The only Fable-shaped
-candidate remains Option 3's SC/BR v3 re-export, still explicitly gated "don't trigger
-standalone" (v16.43); pulling it forward purely to catch the pricing window is still Aaron's
-call to make, not pre-authorised here.
+**Next-session note (19 Jul 2026, post-v16.46):** build now 2026.07.19a — MN disc re-tune
+shipped (R0 35→56, midpoint-alpha criterion; v16.45's R0=35 was confirmed insufficient
+on-phone at Mudjimba/Bli Bli — see v16.46 for the full correction, including why the v16.45
+metric was wrong). **Mandatory on-phone re-check queued, not yet run:** confirm build string
+reads `2026.07.19a`; screenshot the SAME Mudjimba/Bli Bli stretch that showed gaps — expect a
+contiguous wash at typical gaps, tolerate faint patches only at rare ~200 m+ tail gaps (~1% of
+points, quantified in v16.46 — if a faint patch shows, check it's isolated before calling it a
+failure); quick BR/SC/Bargara glance (denser wash expected there too, structurally no new land
+reach); the "Maroochy / Noosa" panel-row check from v16.45 still applies if not yet done.
+**If gaps STILL persist at non-tail spacing after this build:** the remaining levers are R1
+(shoreline-spillover risk on other regions' sub-HAT messy tier — bring back to planning, per
+the standing decision, don't tune inline) or Option 3's land/water mask; don't iterate R0 a
+third time without questioning the ramp shape itself. **Recommended next job — data hygiene,
+no build, Aaron's own action, still outstanding from v16.44.2:** delete the Navionics-traced
+contour lines near Innes Park and re-export a fresh `version:2` backup right after. **Next
+actual build candidate:** Noosa tide-port wiring — mechanical, BoM TP021 PDFs already
+confirmed available, plain Sonnet job. **Model-routing note:** Fable 5's included-plan window
+(v16.44.1) is set to lapse ~5 PM AEST Monday 20 Jul — this session ran on Fable; nothing in
+the queue above requires it going forward. Option 3's SC/BR v3 re-export remains gated "don't
+trigger standalone" (v16.43); pulling it forward to catch the pricing window remains Aaron's
+call, not pre-authorised here.
 
 **Previous note (18 Jul 2026, post-v16.44.1):** the on-phone Bargara/Woongarra check was still
 outstanding and the Fable-timing question was newly raised — both are addressed above (check
