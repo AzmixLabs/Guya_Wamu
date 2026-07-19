@@ -1,4 +1,73 @@
 # Guya — Feature Backlog & Roadmap
+*v16.47 · 19 Jul 2026 — MN disc-rendering: GLOBAL R0 REPLACED WITH PER-SAMPLE ADAPTIVE R0
+(build 2026.07.19b). v16.46's flat R0=56 confirmed failing on-phone in BOTH directions at once:
+the Tewantin/Noosa Heads river corridor still showed a visible chain of discrete blobs, AND the
+same global bump inflated Option A's already-known, previously-faint sub-HAT "messy tier"
+(v16.43/44) into visible land-overpaint near Maroochydore. Root cause: a single global constant
+cannot serve a sparse dataset (wants wide reach) and a dense-but-contaminated one (wants tight
+reach) simultaneously. **Step 1 — how alpha is actually computed, confirmed from code before
+designing anything:** `distA` (opacity) is driven by the SINGLE nearest sample's distance
+(`near`), found in the same per-pixel bucket scan that ALSO builds the multi-sample IDW depth
+field (`num`/`den`, weight `1/(dist²+1)`) — but depth combines every sample in the 3×3 bucket
+neighbourhood while alpha uses only the minimum distance among them. This is exactly why one
+flat radius can't work for both a sparse and dense region. **Step 2 — real Tewantin/Noosa Heads
+corridor NN spacing, pulled from the CSV, not assumed:** 407 real MN points in a
+-26.43..-26.36 lat / 153.02..153.11 lng box: median=141.7 m, **p90=175.0 m (essentially
+identical to MN's overall p90=175.9 m that v16.46 was tuned against)**, but p99=206.1 m and
+max=285.0 m — both worse than MN's overall p99=201.0 m. **Not a hard data-availability wall:**
+a transect-line probe (along-lat vs along-lng axis nearest-neighbour medians, 226 m / 175 m)
+found no sharp along-track-vs-lateral signature that would indicate missing lateral coverage —
+consistent with the disc-render spike's own Finding 1 ("not a point lattice… arbitrary
+coordinates", one point per 180 m export cell). The corridor's own p90 essentially matches the
+global p90 v16.46 targeted; what actually broke it is structural: ANY global-percentile-tuned
+flat radius leaves its own worst ~10% of gaps under-covered EVERYWHERE by definition, and in a
+narrow linear river (only ~2% of MN's points, 407/19,178) those isolated worst-case gaps read
+as a visible broken chain, where the same statistical rate would be far less perceptible spread
+across a broad 2-D bay. **Step 3 — design:** `R0_local(sample) = clamp(gap(sample) − R1,
+R0_MIN, R0_MAX)`, where `gap(sample)` is that sample's own nearest-OTHER-sample distance (found
+via the SAME R1-sized bucketed index `buildShade()` already builds — no second index, no
+per-pixel cost change, one extra O(n) pass over samples before the O(W·H) pixel loop). Derived
+from the identical alpha(mid)≥0.5 criterion v16.46 used, applied per-sample instead of
+globally. `R0_MIN=30` = the original pre-v16.45 value (dense clusters revert to exactly that
+tightness). `R0_MAX=90` = 210−R1, matching the disc-render spike's own "practical NN ceiling
+~210 m" design target — genuine >210 m gaps (isolated soundings, ~1% of MN) stay capped/faint
+by design, per the spike's own "let them stay unpainted islands" guidance, not chased.
+**Step 4 — SC Maroochydore overpaint, verified against real CSV samples (Aaron's literal
+screenshot coordinates are on-device only, not available to this session — flagged as a proxy,
+not the literal tapped point):** three real sub-HAT messy-tier candidates pulled from the CSV
+(marginal depth −0.5<d<0, Twin Waters/Mudjimba/Bli Bli area) all resolve to **R0_local=30.0 —
+an exact revert to pre-v16.45 tightness**, because they sit in locally dense clusters. Concrete
+alpha at increasing offsets from one such point (Bli Bli area, −26.688922,153.129286): at +100 m,
+pre-v16.45=0.222, v16.46=0.312 (40% more opaque — the visible overpaint), **adaptive=0.222,
+identical to pre-v16.45.** Same pattern held at the other two points. **Step 5 — Tewantin
+corridor gap closure, real gap-midpoints, not aggregate area:** across the corridor's 395
+real nearest-neighbour gaps, the fraction of gap-midpoints reaching alpha≥0.5 rises
+**60.0% (pre-v16.45) → 88.1% (v16.46) → 90.1% (adaptive)** — adaptive closes MORE of the
+corridor than the flat global bump did, without the SC/BR side-effect. **Honest residual,
+reported plainly per the brief:** the 5 largest real corridor gaps (216–246 m) exceed the
+R0_MAX design ceiling (210 m) and stay low-alpha under every scheme tested (adaptive alpha
+0.06–0.25 at those specific midpoints) — a real, quantified, structural limit at the extreme
+tail, not a bug; matches the spike's own "let outliers stay unpainted islands" framing.
+**Step 6 — three-point no-regression (real CSVs through the app's thin loop + real HAT gate):**
+MN a50 45.8%(pre-v16.45)→60.2%(v16.46)→**53.3%(adaptive)**; SC a50 50.1%→56.9%→**50.9%**
+(essentially reverted); BR a50 47.5%→54.1%→**49.5%** (essentially reverted). Adaptive
+deliberately gives MN less aggregate coverage than v16.46's flat bump — that overshoot was
+never the goal; closing the SPECIFIC gaps that create visible discs was, without dragging SC/BR
+along for the ride. **Performance:** the new per-sample precompute is O(n) over the sample
+count using the same bucket-scan pattern already run per PIXEL — structurally cheap relative to
+the O(W·H) pixel loop it sits beside (typically W·H≫n); not independently browser-benchmarked
+(no headless browser tooling in this environment, same limitation as prior sessions).
+**Validation:** both script blocks `node --check` PASS; Leaflet block SHA-256
+`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`, byte-identical to
+`9d5cebd`; `zoneAt()`/`ORDER` (index.html:1207/1296) and the green-zone dragend safeguard
+(index.html:1542-1544) unchanged; diff scope reported verbatim, not asserted — exactly the two
+build strings, the `R0`→`R0_MIN`/`R0_MAX` const + comment, a new per-sample precompute loop,
+and the pixel-loop's `distA` line switching from the global `R0` to the nearest sample's own
+`.r0`; R1, the HAT gate, and `depthSamples()` untouched; no SC/BR re-export triggered. On-phone
+re-check queued: same Tewantin/Noosa Heads and Maroochydore-area screenshots as this session's
+report, expect the corridor filled in and the Maroochydore land-overpaint back to pre-v16.45
+levels.*
+
 *v16.46 · 19 Jul 2026 — MN disc-rendering RE-TUNE SHIPPED (build 2026.07.19a): R0 raised again,
 35→56 (R1=120 deliberately untouched), after Aaron's on-phone screenshot showed visible gaps
 persisting near Mudjimba/Bli Bli under v16.45's R0=35. **Root cause of the miss, owned not
@@ -723,13 +792,18 @@ Personal / family land-based fishing **+ nature field-log** tool. Single self-co
 file, Leaflet, localStorage + IndexedDB, offline-first, hosted free on GitHub Pages.
 **Not for commercial sale** — built for Aaron + family (sisters, nephews, daughter).
 
-**Current build:** 2026.07.19a — MN disc-rendering re-tune (v16.46): R0 raised 35→56 on the
-corrected criterion (alpha≥0.5 at the p90-gap midpoint, 0.5009 achieved — v16.45's aggregate
-area-fraction match was the wrong metric and left visible holes on-phone at Mudjimba/Bli Bli);
-R1=120 untouched, land-bleed still structurally ruled out; p99+ tail (~1%) fades by design.
-On-phone re-check pending. Previous build 2026.07.18a (v16.45) raised R0 30→35 and re-tagged
-MN out of free-text "custom" into a named `maroochy_noosa` region (that re-tag stands). Previous
-build 2026.07.13a — land-overpaint FIXED, Option A elevation-aware gate (v16.44):
+**Current build:** 2026.07.19b — MN disc-rendering: global R0 replaced with a PER-SAMPLE
+adaptive radius (v16.47), after v16.46's flat R0=56 was confirmed on-phone to both leave the
+Tewantin/Noosa Heads corridor still visibly gappy AND inflate SC/BR's known sub-HAT messy-tier
+residual into visible Maroochydore land-overpaint. R0_local=clamp(gap−R1,30,90) per sample;
+dense SC/BR clusters revert to exactly pre-v16.45 tightness (verified: a50 within ~1pp of the
+pre-v16.45 baseline), the Tewantin corridor's own gap-midpoint alpha≥0.5 rate rises to 90.1%
+(vs 60.0% pre-v16.45, 88.1% under v16.46's flat bump). R1=120 still untouched throughout. See
+v16.47 for full numbers. On-phone re-check pending. Previous build 2026.07.19a (v16.46) raised
+a flat R0 30→56 on a p90-midpoint criterion — superseded by v16.47's per-sample version, same
+session day. Build 2026.07.18a (v16.45) re-tagged MN out of free-text "custom" into a named
+`maroochy_noosa` region (that re-tag stands, untouched since). Previous build 2026.07.13a —
+land-overpaint FIXED, Option A elevation-aware gate (v16.44):
 dries samples above HAT no longer count as paint/read evidence at any of the five shared v16.25
 call sites; validated against the real 113,557-pt on-phone replica (all named dry probes now
 excluded, all wet soundings unaffected); on-phone confirmation still pending. Previous build
@@ -760,27 +834,28 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (19 Jul 2026, post-v16.46):** build now 2026.07.19a — MN disc re-tune
-shipped (R0 35→56, midpoint-alpha criterion; v16.45's R0=35 was confirmed insufficient
-on-phone at Mudjimba/Bli Bli — see v16.46 for the full correction, including why the v16.45
-metric was wrong). **Mandatory on-phone re-check queued, not yet run:** confirm build string
-reads `2026.07.19a`; screenshot the SAME Mudjimba/Bli Bli stretch that showed gaps — expect a
-contiguous wash at typical gaps, tolerate faint patches only at rare ~200 m+ tail gaps (~1% of
-points, quantified in v16.46 — if a faint patch shows, check it's isolated before calling it a
-failure); quick BR/SC/Bargara glance (denser wash expected there too, structurally no new land
-reach); the "Maroochy / Noosa" panel-row check from v16.45 still applies if not yet done.
-**If gaps STILL persist at non-tail spacing after this build:** the remaining levers are R1
-(shoreline-spillover risk on other regions' sub-HAT messy tier — bring back to planning, per
-the standing decision, don't tune inline) or Option 3's land/water mask; don't iterate R0 a
-third time without questioning the ramp shape itself. **Recommended next job — data hygiene,
-no build, Aaron's own action, still outstanding from v16.44.2:** delete the Navionics-traced
+**Next-session note (19 Jul 2026, post-v16.47):** build now 2026.07.19b — global R0 replaced
+with a per-sample adaptive radius after v16.46's flat R0=56 was confirmed failing on-phone in
+BOTH directions (Tewantin corridor still gappy, Maroochydore land-overpaint newly visible); see
+v16.47 for the full derivation and numbers (Tewantin gap-midpoint alpha≥0.5 rate 60.0%→90.1%,
+SC/BR messy-tier alpha reverted to within ~1pp of pre-v16.45). **Mandatory on-phone re-check
+queued, not yet run — check BOTH regressions this time, not just MN:** confirm build string
+reads `2026.07.19b`; screenshot the Tewantin/Noosa Heads river corridor (expect it filled in,
+tolerate faint patches only at the rare >210 m tail gaps, quantified in v16.47); ALSO screenshot
+the Maroochydore golf-course/suburb area that showed overpaint under v16.46 (expect it back to
+pre-v16.45 levels — this is the regression that made the flat-radius approach unworkable, so
+confirming it's gone matters as much as confirming MN improved). **If either check still fails:**
+this was the third R0 iteration in one day; before a fourth, question whether per-sample R0 is
+the right lever at all, or whether it's time to bring R1/Option 3's land-water mask back to
+planning rather than keep retuning the same ramp. **Recommended next job — data hygiene, no
+build, Aaron's own action, still outstanding from v16.44.2:** delete the Navionics-traced
 contour lines near Innes Park and re-export a fresh `version:2` backup right after. **Next
-actual build candidate:** Noosa tide-port wiring — mechanical, BoM TP021 PDFs already
-confirmed available, plain Sonnet job. **Model-routing note:** Fable 5's included-plan window
-(v16.44.1) is set to lapse ~5 PM AEST Monday 20 Jul — this session ran on Fable; nothing in
-the queue above requires it going forward. Option 3's SC/BR v3 re-export remains gated "don't
-trigger standalone" (v16.43); pulling it forward to catch the pricing window remains Aaron's
-call, not pre-authorised here.
+actual build candidate (once the MN on-phone check closes):** Noosa tide-port wiring —
+mechanical, BoM TP021 PDFs already confirmed available, plain Sonnet job. **Model-routing
+note:** Fable 5's included-plan window (v16.44.1) is set to lapse ~5 PM AEST Monday 20 Jul —
+this session ran on Fable; nothing in the queue above requires it going forward. Option 3's
+SC/BR v3 re-export remains gated "don't trigger standalone" (v16.43); pulling it forward to
+catch the pricing window remains Aaron's call, not pre-authorised here.
 
 **Previous note (18 Jul 2026, post-v16.44.1):** the on-phone Bargara/Woongarra check was still
 outstanding and the Fable-timing question was newly raised — both are addressed above (check

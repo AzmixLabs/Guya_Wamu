@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.19a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.19b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.19a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.19b</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1985,16 +1985,24 @@ function buildShade(){
   const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
   const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
-  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0=56,R1=120;
-  /* R0 raised 30->35 (v16.45) then 35->56 (v16.46): MN's irregular sample spacing (median
-     126 m but p90 gap 175.9 m) rendered as discrete discs because mid-gap alpha collapsed.
-     v16.45's aggregate area-fraction tuning (match MN's alpha>=0.5 area to BR/SC's) missed
-     contiguity: at a p90 gap the midpoint sits ~88 m out, where alpha was still <0.4 - the
-     visible on-phone holes. v16.46 criterion: alpha >= 0.5 AT the p90-gap midpoint itself.
-     From this exact ramp, alpha(88) = (R1-88)/(R1-R0) - R0=56 is the smallest integer
-     clearing 0.5 (0.5009). Accepted residual: the p99+ tail (~1% of points, ~200 m+ gaps)
-     still fades (midpoint alpha ~0.30) - known, not a bug. R1=120 deliberately untouched:
-     it alone bounds the painted footprint, so land-overpaint behaviour cannot change. */
+  const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R0_MIN=30,R0_MAX=90,R1=120;
+  /* v16.45 (global R0 30->35) then v16.46 (35->56) both tuned ONE constant shared by every
+     region at once - confirmed by phone screenshots to fail both ways simultaneously: MN's
+     Tewantin/Noosa Heads river corridor still showed a visible chain of discs (its own tail
+     gaps run past what a single global-percentile R0 can ever close), while the same bump
+     inflated alpha over SC/BR's already-known sub-HAT "messy tier" (Option A's own quantified
+     residual, v16.43/44) into visible land-overpaint near Maroochydore. No flat constant can
+     serve a sparse dataset (wants wide reach) and a dense-but-contaminated one (wants tight
+     reach) at once. v16.47: R0 is now PER-SAMPLE, not global - each sample's own local
+     nearest-neighbour gap sets its own radius via the same alpha(mid)>=0.5 criterion as
+     v16.46 (R0_local=gap-R1), clamped to [R0_MIN=30 .. R0_MAX=90]. R0_MIN=30 is the original
+     pre-v16.45 value, so dense clusters (most of SC/BR, and most of MN) revert to exactly
+     that tightness - confirmed empirically to land within ~1pp of the pre-v16.45 baseline for
+     SC/BR. R0_MAX=90=210-R1 matches the disc-render spike's own "practical NN ceiling ~210 m"
+     design target; genuine >210 m gaps (isolated soundings, ~1% of MN) stay capped/faint by
+     design rather than chased - the spike's own guidance ("let them stay unpainted islands").
+     R1=120 still deliberately untouched throughout: it alone bounds the painted footprint, so
+     land-overpaint behaviour cannot change regardless of R0. */
   /* pass 1: water/land mask */
   const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
@@ -2002,19 +2010,34 @@ function buildShade(){
   const mAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?0:mask[y*W+x];
   /* pass 2a: interpolated field (bucketed IDW) */
   const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
+  /* per-sample adaptive R0 (v16.47): reuses the SAME bucketed index above (no second index
+     built) to find each sample's own nearest-OTHER-sample gap, then sets that sample's own
+     r0 via the v16.46 midpoint-alpha=0.5 criterion, clamped to [R0_MIN,R0_MAX]. O(n) over the
+     sample count, not the pixel count - cheap next to the W*H pixel loop below. A sample with
+     no neighbour inside the R1-sized 3x3 search (isolated beyond ~R1) is treated as maximally
+     sparse (clamped to R0_MAX), matching how such points are already treated everywhere else
+     in this file (isolated soundings stay capped, not chased). */
+  for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
+    let best=1e9;
+    for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
+      for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
+        const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLng,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
+    const gap=best>=1e9?(R0_MAX+R1):best;
+    p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
   const FD=new Float32Array(W*H),AL=new Float32Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
       const i0=y*W+x;
       let mSum=0;for(let dy2=-1;dy2<=1;dy2++)for(let dx2=-1;dx2<=1;dx2++)mSum+=mAt(x+dx2,y+dy2);
       const mA=mSum/9;
-      let num=0,den=0,near=1e9,nearD=0;
+      let num=0,den=0,near=1e9,nearD=0,nearR0=R0_MIN;
       const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
       for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
-          if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+          if(dist<near){near=dist;nearD=bk[k].d;nearR0=bk[k].r0;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
       if(!den){AL[i0]=0;continue;}
-      const distA=near<=R0?1:(near>=R1?0:1-(near-R0)/(R1-R0));
+      /* v16.47: ramp uses the NEAREST sample's own adaptive r0, not a global constant. */
+      const distA=near<=nearR0?1:(near>=R1?0:1-(near-nearR0)/(R1-nearR0));
       /* Paint where there's water. Coast: inside a legislated zone polygon (mA). River/estuary,
          and any stretch outside the marine-park's zoned extent (e.g. Mooloolaba-Noosa, north of
          the Caloundra boundary), lies OUTSIDE the polygons, so also accept cells within R1 of
