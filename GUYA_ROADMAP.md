@@ -1,4 +1,144 @@
 # Guya — Feature Backlog & Roadmap
+*v16.48 · 22 Jul 2026 — `r0` CACHE SHIPPED (build 2026.07.21a): per-sample R0_local from v16.47 is
+now memoised across `buildShade()` calls instead of recomputed on every pan. Repo hygiene done
+first (see below). Diagnose-before-patch run in full before any edit.
+
+**Q1 OBJECT IDENTITY — new objects every call, confirmed by reading `depthSamples()`
+(`index.html:2214-2219`):** it builds a fresh array of brand-new `{lat,lng,d}` literals every
+single invocation, from `points`/`contours`/`imported`. `buildShade()` calls it fresh every time
+(`index.html:1970`). v16.47's `p.r0=…` write was therefore never a cache — it mutated a throwaway
+object discarded at the end of the call. **Confirms the cache must live in a side structure, not
+a property**, exactly per the brief.
+
+**Q2 PERSISTENCE COUPLING — none.** The `pts`/`s` objects are never serialised anywhere. The only
+`localStorage` writers touching this pool are `savePts()` (points), `saveCt()` (contours), and the
+`IMP_DS_KEY` writers (datasets — NOT `imported` itself, which is a derived flat view, never a
+`setItem` target). A module-level side array reachable from none of those cannot leak into any
+export/backup/import-write payload — no repeat of the v16.35 quota incident is possible from this
+change.
+
+**Q3 POOL MUTATION PATHS — three choke points, not a call-site hunt.** `depthSamples()`'s
+composition depends only on `points`, `contours`, `imported` (`okHAT`/`nearestPort()` reads only
+static `PORTS`, never mutated at runtime). Traced every mutation: `points` only ever changes via
+`addPt()`/`removePt()`/backup-restore-merge/"remove all", **all four already call `savePts()`**
+immediately after; `contours` only ever changes via add/edit/delete/clear/undo/freehand-add/
+backup-restore-merge, **all already call `saveCt()`**; `imported` is only ever reassigned inside
+`rebuildImportedFlat()` itself, which **every** REPLACE/MERGE/✕-remove/clear-all/undo-replay/
+backup-restore path already calls. No per-region visibility toggle exists in the code today
+(searched, zero matches) and no bounds/zoom-based pool filtering exists either — `depthSamples()`
+returns the full unfiltered pool regardless of viewport. **Design: one module-level `poolVersion`
+counter, bumped inside `savePts()`, `saveCt()`, and `rebuildImportedFlat()` themselves** — 3 edits,
+not N call sites, and every current AND future path through the established save/rebuild
+convention is covered automatically.
+
+**Q4 ZOOM INDEPENDENCE — mostly clean, one small pre-existing coupling found and reported, not
+silently patched.** `gap`/`R0_local` (`index.html:2020-2026` pre-edit) use `mLat=111320` (exact,
+viewport-independent) and `mLng=111320·cos(midLa)` where `midLa` is derived from the
+**viewport-clipped** render bounds (`index.html:1977-1988`), not a fixed anchor. Nothing is in
+pixels (the literal stop-condition), but `mLng` does drift with pan position: across MN's full
+lat span (0.86°) `cos(lat)` varies ~0.67%. This was invisible pre-cache because r0 was recomputed
+fresh every call (drift self-corrected every pan); caching **freezes it at whichever viewport was
+active at the last version bump**, so the tiny drift becomes real (if minuscule) staleness rather
+than a non-issue. **Judgement call, not silently resolved:** given the explicit zero-behavioural-
+change constraint and R0_MIN/MAX/R1 untouched, this is left as-is and reported rather than fixed —
+fixing it would mean re-anchoring `mLng` to the pool's own bbox, a genuine formula-input change out
+of scope for a memoisation-only patch. Bound is <0.7% of `mLng` over the ENTIRE dataset's latitude
+range, clamped into [30,90] — vanishingly unlikely to ever cross a visible threshold. Flagged as a
+small, quantified, optional follow-up if perfect viewport-independence is ever wanted.
+
+**IMPLEMENTATION:** `let poolVersion=0` (`index.html:1308` area) bumped by `savePts()`/`saveCt()`/
+`rebuildImportedFlat()`. `let _r0Cache=null` (next to `_zoneFaded`) holds `{version,n,r0:Float32Array}`.
+The precompute loop now checks `_r0Cache.version===poolVersion && _r0Cache.n===pts.length` — hit:
+a plain array copy (`pts[k].r0=_r0Cache.r0[k]`); miss: the identical original bucket-scan search,
+now also writing into `r0Arr` for the next cache. **R0_local formula, R0_MIN=30, R0_MAX=90, R1=120,
+the HAT gate, `okHAT`, `depthSamples()`, `zoneAt()` all byte-for-byte untouched** — confirmed by the
+diff itself, not merely asserted.
+
+**VALIDATION.** Equivalence: reimplemented the exact precompute formula in Node against every real
+CSV in the repo (MN v2 19,178 pts; Brisbane River intertidal v1/v2, 209,540/189,187 pts; Sunshine
+Coast intertidal v1/v2, 188,855/168,461 pts) — **0 mismatches across 775,221 samples tested**,
+comparing a fresh computation against an independent second fresh computation at Float32 precision
+(the same precision the shipped cache stores) — confirms the formula has no hidden call-order/
+mutable-state dependency that would make a cached value diverge from a freshly-computed one.
+Timing (Node, same real CSVs): MN 19,178 pts — uncached precompute 54.65 ms, cached-path cost per
+subsequent pan 0.091 ms (**598× faster per pan after the first call**). Brisbane River v1
+209,540 pts — 472.02 ms uncached vs 0.478 ms cached (987×). Sunshine Coast v1 188,855 pts —
+397.18 ms uncached vs 0.331 ms cached (1199×). The legacy 55,660-pt phone-only blob is **not in
+this repo and was not measured** — linear extrapolation from MN's measured per-point cost gives
+**~159 ms uncached per `buildShade()` call**, reported as an estimate only (point density/bucket-
+occupancy won't be perfectly uniform, so treat this as indicative, not a promised number).
+
+**BUILD DISCIPLINE.** Both script blocks `node --check`: exit 0/0 (verified twice — once before,
+once after the build-string bump, to catch any edit-induced break). Leaflet block SHA-256
+`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a` — byte-identical to `9d5cebd`,
+confirmed by extracting the exact byte range with newline-translation disabled (a first extraction
+attempt via a naive text-mode script silently CRLF-corrupted 5 bytes and produced a false-mismatch
+hash — caught and redone correctly rather than reported blind). `zoneAt()`/`ORDER`
+(`index.html:1296`) and the green-zone `dragend` safeguard (`index.html:1542`) confirmed absent
+from the diff (`grep` over `git diff`, not eyeballed) — untouched. Both `<style>` blocks likewise
+absent from the diff — untouched. Build string bumped `2026.07.19b`→`2026.07.21a` at both
+occurrences (`index.html:1035`, `index.html:1074`). Diff scope, file:line: `index.html:1306-1310`
+(`poolVersion` decl + `savePts()`), `:1966-1974` (`_r0Cache` decl), `:2029-2049` (the memoised
+precompute block, replacing the old unconditional loop), `:2159` (`rebuildImportedFlat()`),
+`:2909` (`saveCt()`), `:1035`/`:1074` (build string ×2). Nothing else touched.
+
+**STEP 0 REPO HYGIENE (done first, before any of the above):** the pre-existing uncommitted
+`GUYA_ROADMAP.md` edit (v16.47.1→v16.47.5 entries) was purely additive/consistent with the
+versioned entries already at the file's head, plus one coherent in-place "pending"→"complete"
+status update corroborated by the v16.47.2 entry in the same diff — no conflict, no duplication.
+Committed alongside the untracked `guya_species_qld_v3.md` (benign QLD species-passport seed data,
+read in full before committing, unrelated to any of this build). Pushed before Step 1 began.
+
+**STEP 5 FOLD-IN — AusSeabed coverage query, read-only, no repo writes, ~15 min box.** Queried
+`warehouse.ausseabed.gov.au/geoserver` WFS directly (public OGC endpoint, no account needed):
+`GetCapabilities` located the actual coverage-index layer, `ausseabed:MARINEDATAREGISTER_
+ACQUISITIONS_INDEX` (distinct from the ~1000 individual per-survey coverage rasters also listed);
+`GetFeature` with a bbox filter `153.0,-28.2,153.65,-26.7` (Caloundra→Point Danger) returned
+**166 acquisition records.** Findings, reported as coverage-index text per the brief — **this does
+NOT reopen the depth-data question, still evidence-closed per v16.47.2**:
+  - **Maroochy/Noosa's known Fugro LADS survey is confirmed as the SOLE LiDAR bathymetry coverage
+    on the Sunshine Coast open-coast stretch of this index** (`Sunshine Coast Maroochy River to
+    Noosa River Bathymetry 2011`, LADS Mk3 Laser, 586.80 km², CC BY 4.0, Qld Government) — matches
+    what's already held, corroborating rather than contradicting the closed research audit. **One
+    new-to-the-record nuance**: AusSeabed's own metadata tags it `USER_CONSTRAINTS: "Not to be used
+    for navigational purposes"` — not previously logged; almost certainly immaterial to a fishing
+    app (Guya was never charting/navigation) but recorded for completeness.
+  - **New backlog-only finding, filed against the already-parked Gold Coast region (#15), not
+    actioned:** the index carries genuine 2014 LiDAR bathymetry (not chart-derived) over Gold
+    Coast waterways — Nerang, Coomera, Biggera, McCoys, Loders (individually 0.002–2.8 km², plus
+    one 138.82 km² umbrella "Bathymetric Lidar 2014" record), all CC BY 4.0. This is IN ADDITION
+    to the already-filed NSW Marine LiDAR Topo-Bathy 2018 (Palm Beach→Point Danger only). Neither
+    changes anything for a currently-open Guya region; both stay parked under item #15 until Gold
+    Coast is ever unparked.
+  - **Discrepancy flagged, NOT resolved — needs a verify if this area is ever revisited, not now:**
+    the index lists `Moreton Bay Queensland Bathymetry 2004` (Multibeam, 27.14 km², 2004-08-29) as
+    **CC BY 4.0**. This plausibly corresponds to the previously-researched Curtin CMST 2004 Moreton
+    Bay multibeam survey, which the depth-data audit recorded as licensed **"research purposes, not
+    for navigation" — i.e. NOT CC BY**. Either these are different surveys, or AusSeabed's
+    portal-level licence tag disagrees with the survey's own stated terms (a known class of
+    data-portal metadata issue). Not chased further inside the 15-minute box; flagged plainly
+    rather than silently assumed either way.
+  - **Negative confirmation:** no record anywhere in the 166 touching the SEQ bbox is named for
+    Redcliffe/Scarborough/Woody Point/Bramble Bay/Deception Bay/Pumicestone/Bribie. The City of
+    Moreton Bay 2021 Redcliffe Hydrographic Survey (backlog item 15a) is **not in AusSeabed's
+    national index** — consistent with it being a council-only DataHub item never submitted
+    upstream. Doesn't change item (a)'s status; still "inspect extents first" on the council portal
+    directly, unconfirmable via this route.
+  - **Bulk of the 166 records** are Gold Coast canal-estate "digital bathymetric contours from
+    charts" (chart-derived — excluded per the project's own no-chart-art rule) and NSW singlebeam
+    hydrosurveys near the Tweed/Point Danger border, plus one 2023 30 m "Approaches to Moreton Bay"
+    vessel survey (bbox lat −26.43…−26.95, "Approaches to" naming and 30 m resolution both point to
+    a channel-approach survey, i.e. deeper transit water, not the 0–50 m land-based fringe).
+    **No new candidate for the unmeasured 0–50 m fringe surfaced** — reinforces, does not overturn,
+    the v16.47.2 evidence-closed finding.
+
+**NEXT JOB:** Option 3 (STRICT-AND land/water mask, runtime path, AUTHORISED v16.47.3) — was
+gated behind this cache landing first, per the v16.47.2 sequence. MN v3 (native-25m/200m-band
+clip, v16.47.5) sits behind that. On-phone re-check for THIS build: confirm build string reads
+`2026.07.21a`; feel-check panning after toggling shading on with a multi-region point pool loaded
+(expect no regression — it was already fine, this should make it feel better, not worse); no
+visual change expected anywhere (this is memoisation-only).*
+
 *v16.47.5 · 21 Jul 2026 — MN v3 CLIP CRITERION CHANGED BY AARON: distance-from-shore, not depth.
 Supersedes v16.47.4's Option A. Storage economics reverse completely — full native resolution now
 looks affordable. No code shipped, build unchanged at 2026.07.19b.

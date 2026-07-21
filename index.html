@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.19b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.21a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.19b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.21a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1304,8 +1304,13 @@ function toDDM(dd,isLat){const v=Math.abs(dd),deg=Math.floor(v),min=(v-deg)*60;r
 
 /* ---- depth points store (localStorage; safe if unavailable) ---- */
 const STORE='woongarra_depthpoints_v1';
+/* v16.48: bumped by savePts()/saveCt()/rebuildImportedFlat() - the only three places that ever
+   reassign points/contours/imported (depthSamples()'s full input set). buildShade()'s per-sample
+   r0 cache invalidates on this counter instead of the cache having to be hand-wired at every
+   add/remove/import/undo/restore call site. */
+let poolVersion=0;
 function loadPts(){try{return JSON.parse(localStorage.getItem(STORE))||[];}catch(e){return [];}}
-function savePts(){try{localStorage.setItem(STORE,JSON.stringify(points));}catch(e){}}
+function savePts(){try{localStorage.setItem(STORE,JSON.stringify(points));}catch(e){}poolVersion++;}
 let points=loadPts();
 const depthLayer=L.layerGroup().addTo(map);
 const depthRenderer=L.canvas({padding:0.5});
@@ -1961,6 +1966,14 @@ function ptsBounds(pts){let minLa=Infinity,maxLa=-Infinity,minLo=Infinity,maxLo=
     if(p.lng<minLo)minLo=p.lng;if(p.lng>maxLo)maxLo=p.lng;}
   return {minLa:minLa,maxLa:maxLa,minLo:minLo,maxLo:maxLo};}
 let _zoneFaded=null;
+/* v16.48: per-sample r0 memoisation - {version,n,r0} keyed on poolVersion (see its declaration
+   near STORE/savePts for the invalidation contract) + pool length as a defensive belt-and-braces
+   check. depthSamples() returns brand-new {lat,lng,d} objects every call (no stable identity to
+   cache a property on - confirmed by reading it), but for a fixed pool its output is a
+   deterministic array (points -> contours -> imported, in array order, filtered only by the
+   static okHAT/PORTS gate), so position-indexing into a side array is safe whenever both the
+   version and the length still match. */
+let _r0Cache=null;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
   try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
@@ -2016,14 +2029,24 @@ function buildShade(){
      sample count, not the pixel count - cheap next to the W*H pixel loop below. A sample with
      no neighbour inside the R1-sized 3x3 search (isolated beyond ~R1) is treated as maximally
      sparse (clamped to R0_MAX), matching how such points are already treated everywhere else
-     in this file (isolated soundings stay capped, not chased). */
-  for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
-    let best=1e9;
-    for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
-      for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
-        const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLng,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
-    const gap=best>=1e9?(R0_MAX+R1):best;
-    p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
+     in this file (isolated soundings stay capped, not chased).
+     v16.48: memoised across calls via _r0Cache, keyed on poolVersion+pts.length (see _r0Cache's
+     declaration for why position-indexing is safe). Every pan re-runs buildShade() but this now
+     only re-does the O(n) bucket-scan search on the FIRST call after the pool actually changes -
+     a plain array copy otherwise. Formula/R0_MIN/R0_MAX/R1 untouched either way. */
+  if(_r0Cache&&_r0Cache.version===poolVersion&&_r0Cache.n===pts.length){
+    for(let k=0;k<pts.length;k++)pts[k].r0=_r0Cache.r0[k];
+  }else{
+    const r0Arr=new Float32Array(pts.length);
+    for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
+      let best=1e9;
+      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
+        for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
+          const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLng,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
+      const gap=best>=1e9?(R0_MAX+R1):best;
+      p.r0=r0Arr[k]=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
+    _r0Cache={version:poolVersion,n:pts.length,r0:r0Arr};
+  }
   const FD=new Float32Array(W*H),AL=new Float32Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
@@ -2136,7 +2159,7 @@ if(datasets.custom&&!datasets.maroochy_noosa){
   try{localStorage.setItem(IMP_DS_KEY,JSON.stringify({datasets:datasets}));}catch(e5){}
 }
 let imported=[]; /* flat view across every region's dataset - depthSamples()/compare-tool read this unchanged */
-function rebuildImportedFlat(){imported=[];Object.keys(datasets).forEach(function(k){const ds=datasets[k];if(ds&&Array.isArray(ds.points))for(let i=0;i<ds.points.length;i++)imported.push(ds.points[i]);});}
+function rebuildImportedFlat(){imported=[];Object.keys(datasets).forEach(function(k){const ds=datasets[k];if(ds&&Array.isArray(ds.points))for(let i=0;i<ds.points.length;i++)imported.push(ds.points[i]);});poolVersion++;}
 rebuildImportedFlat();
 function countDsPts(dsObj){let n=0;Object.keys(dsObj).forEach(function(k){const ds=dsObj[k];if(ds&&Array.isArray(ds.points))n+=ds.points.length;});return n;}
 function showImpError(msg){const el=document.getElementById('imp-save-err');if(el){el.textContent='⚠ '+msg;el.style.display='block';}}
@@ -2886,7 +2909,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
 /* ---------- DEPTH CONTOURS (Navionics routes -> depth lines) ---------- */
 const CSTORE='woongarra_contours_v1';
 function loadCt(){try{return JSON.parse(localStorage.getItem(CSTORE))||[];}catch(e){return[];}}
-function saveCt(){try{localStorage.setItem(CSTORE,JSON.stringify(contours));}catch(e){}}
+function saveCt(){try{localStorage.setItem(CSTORE,JSON.stringify(contours));}catch(e){}poolVersion++;}
 let contours=loadCt(),ctOn=true;
 const ctLayer=L.layerGroup().addTo(map);
 const ctRenderer=L.canvas({padding:0.5});
