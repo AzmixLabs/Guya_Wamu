@@ -1,4 +1,477 @@
 # Guya — Feature Backlog & Roadmap
+*v16.47.5 · 21 Jul 2026 — MN v3 CLIP CRITERION CHANGED BY AARON: distance-from-shore, not depth.
+Supersedes v16.47.4's Option A. Storage economics reverse completely — full native resolution now
+looks affordable. No code shipped, build unchanged at 2026.07.19b.
+
+**AARON'S DECISION (21 Jul):** keep the offshore data, but only out to **~200 m from shore**, and
+make what remains **as smooth as possible**. This replaces the depth-based clip (≤15 m LAT) proposed
+in v16.47.4 Option A, and it replaces "offshore goes blank" with "offshore is kept where it's
+castable and deleted where it isn't."
+
+**WHY THIS IS THE BETTER CRITERION (not merely a different one):**
+  - It encodes castability **directly**, rather than using depth as a proxy for it. Depth and
+    distance decouple badly at exactly the places that matter — off steep rock like Point Arkwright
+    or Noosa Heads, water 60 m out can already exceed 15 m, so a depth clip would have deleted
+    genuinely fishable ground; over the shallow shelf off Marcoola, 15 m LAT sits ~1 km out, so a
+    depth clip would have retained a kilometre of uncastable water.
+  - **It keeps the river corridors whole automatically.** The Maroochy and Noosa are mostly under
+    400 m wide, so a 200 m band from either bank covers them bank-to-bank with no special-casing.
+    The v16.47.4 depth clip would have kept them too (they're shallow) but by accident rather than
+    by design.
+  - **Reality check, recorded but not treated as a problem:** 200 m is generous against actual
+    land-based casting (a big surf cast is ~80–100 m). The extra margin is deliberate — it gives
+    context on the water beyond the cast, and at these point counts it is nearly free. Don't trim
+    it to "realistic" casting range; the generosity costs almost nothing and losing it would cost
+    situational awareness.
+
+**CLIP DEFINITION AS SPECIFIED:** retain a point if its distance to the nearest land-polygon
+boundary is ≤ 200 m. **Use the OSM water/land polygons already being brought into the project for
+Option 3 (v16.47.3)** — same source, same session, no new dependency, and it guarantees the clip
+boundary and the paint mask agree with each other rather than disagreeing at the margin. Rivers
+narrower than 400 m are retained bank-to-bank as a consequence, which is the desired behaviour.
+
+**THE ARITHMETIC — AND WHY IT REVERSES THE STORAGE QUESTION.** v1 holds 946,877 pts on a 25 m grid,
+so the surveyed footprint is 946,877 × 625 m² ≈ **591 km²**. A 200 m band is a thin ribbon of that:
+  open coast, ~30 km Mudjimba→Noosa × 0.2 km            ≈  6 km²
+  Maroochy + Noosa river corridors, ~25 km × ~0.2 km    ≈  5 km²
+  total band                                            ≈ 11 km²  =  **~1.9% of footprint**
+  native 25 m points inside the band ≈ 946,877 × 0.019  ≈ **~17,600 pts**
+  storage ≈ 17,600 × 27.91 B (measured, v16.47.4)       ≈ **~491 KB**
+**That is LESS than the 535 KB / 19,178 pts currently deployed.** Full native 25 m resolution inside
+the casting band is roughly break-even with today's coarse 180 m grid across the whole footprint —
+because five-sixths of that footprint is water Aaron will never cast to.
+
+**SMOOTHNESS AT NATIVE 25 m — the ask is fully satisfied, with headroom.** R0_local =
+clamp(25−120, 30, 90) = 30. Orthogonal midpoint d = 12.5 m; diagonal midpoint d = 17.7 m. **Both
+fall inside R0 = 30, so alpha = 1.0 — fully saturated paint, no ramp, no holes anywhere.** This is
+not "smoother than the lattice"; it is the maximum the renderer can produce, and it exceeds
+Bargara. No R0, R1, or renderer change is needed to achieve it. The v16.47.2 alpha analysis and the
+v16.47.4 hole-rate measurements become moot inside the band — they described a coverage problem
+that a 25 m grid does not have.
+
+**Pipeline simplification worth noting:** at native resolution there is **no thinning step at all**
+— MN v3 becomes a pure spatial clip of v1. `bathy_thin_v2.py`'s deepest-point-per-cell rule (and
+the within-cell positional jitter it caused, diagnosed in v16.47.4) drops out of the picture
+entirely. Fewer moving parts than any previously costed option.
+
+**MUST MEASURE BEFORE BUILDING — the estimate above is geometric, not measured.** The 591 km²
+figure is sound (derived from point count × cell area), but the ~11 km² band area rests on eyeballed
+coastline and river lengths. Real coastline is crenulated and the rivers meander, so the true count
+could plausibly land 2–3× higher. **First step of the build is to compute the actual clipped count,
+not to assume ~17,600.** A pre-agreed ladder so this does NOT need a round-trip back to planning:
+  ≤ 60,000 pts   → ship **native 25 m**, no thinning          (≤ 1.68 MB)
+  60k – 150k     → thin to **40 m** within the band           (≤ 4.19 MB — check quota first)
+  > 150,000 pts  → thin to **60 m** within the band; alpha at the diagonal midpoint is then 0.86,
+                   still far above the 0.5 "barely touching" threshold and still visibly smooth
+  In every branch the band stays at 200 m — **thin the grid, never shrink the band.** The band is
+  Aaron's spec; the grid is the adjustable variable.
+
+**COVERAGE CAVEAT — check, don't assume, and do not treat a gap as a bug.** The research audit
+(v16.47.2) recorded Sunshine Coast Council's own consultants stating the surf zone — sand bar and
+beach trough systems — cannot be surveyed accurately. LADS bathymetric LiDAR has a *shallow* limit
+as well as a deep one. **The innermost part of the 200 m band, right at the beach, may simply have
+no source data**, in which case the clipped output will show a bare strip at the waterline on open
+coast. v1's minimum depth of −1.15 m confirms *some* very shallow data exists, but not that it is
+continuous alongshore. **Report actual coverage-versus-distance during the build.** If the surf
+strip is empty, that is a survey limitation, not a pipeline fault, and must NOT be papered over by
+widening R1 or interpolating into it.
+
+**IMPORT DISCIPLINE — unchanged and non-negotiable:** MN v3 must be imported with **REPLACE** on
+the `maroochy_noosa` region, never MERGE. MERGE cannot remove the existing 19,178 coarse 180 m
+points; merging v3 in would leave both grids co-resident and reintroduce the very lattice this
+fixes. Set the region dropdown **explicitly** before importing (the Maroochy/Noosa MERGE incident
+was a process gap, not a code gap). The 25,000-point cap is per CSV parse, not per store, so a
+multi-chunk import is expected and fine. Run `storage_check.html` in the home-screen container
+first as standing practice, though at these projected sizes quota risk is negligible.
+
+**SUPERSEDED BY THIS ENTRY:** v16.47.4's Option A (60 m grid clipped to ≤15 m LAT, ~27,900 pts,
++0.24 MB) and its Options B and C. The "offshore goes blank" tradeoff v16.47.4 asked Aaron to accept
+is **withdrawn — it is no longer necessary.** v16.47.4's measurements (grid confirmation, hole
+rates, provenance, 27.91 B/pt, re-thin projections) all stand and remain the evidence base; only its
+recommendation is replaced.
+
+**SEQUENCE — position unchanged, item 4 re-specified again:**
+  4. **MN v3 re-export = spatial clip of v1 to ≤200 m from the OSM land boundary, at native 25 m
+     if the measured count allows (ladder above).** Still sits behind the `r0` cache (item 1),
+     Option 3 (item 2), and the flats layer (item 3). Note the ordering is now doubly justified:
+     item 2 brings in the OSM polygons this clip depends on, so building item 4 first would mean
+     sourcing them twice.*
+
+*v16.47.4 · 21 Jul 2026 — MN offshore diagnostic RETURNED. Hypothesis CONFIRMED in kind,
+CORRECTED in magnitude and mechanism. No code shipped, build unchanged at 2026.07.19b.
+**NOTE: this entry's RECOMMENDATION (Option A, depth-based clip) is superseded by v16.47.5 above.
+Its MEASUREMENTS stand and remain the evidence base for all MN work.**
+
+**FILES CONFIRMED:** deployed = `data/maroochy_noosa_bathy_v2_appgrade.csv` (19,178 pts, 180 m
+MGA56 grid). Full source = `data/maroochy_noosa_bathy_v1.csv`, **PRESENT**, 946,877 pts, 25 m grid.
+Thinning logic located at `data/raw/_inventory/bathy_thin_v2.py`, reused read-only.
+
+**GRID CONFIRMED — definitively, not inferentially.** Transforming to MGA56 (EPSG:28356) and
+rounding at 180 m reproduces **exactly** 18,766 occupied cells offshore and **exactly** 19,178 for
+the full deployed set — a perfect match to point count, which only a rounded-coordinate export grid
+produces. Corroborated by a **zero-population bin at [185,190) m flanked by populated bins**,
+appearing independently on BOTH axes (east-pairs median 176.8 m, 20.6% in [175,180); north-pairs
+median 176.7 m, similar cluster at [170,180)). Organic sampling does not produce that.
+
+**DERIVATION CORRECTED — record this, it matters for fix design.** v16.47.2 predicted 100% of
+diagonal cell-centres beyond R1 and 0% of orthogonal midpoints. **MEASURED: diagonal-neighbour
+midpoints 31.4% exceed R1=120 m** (median nearest-sample 107.5 m); **orthogonal-neighbour midpoints
+15.2% exceed R1** (median 88.4 m, max observed 195.7 m). Diagonal holes occur ~2× as often as
+orthogonal — direction correct — but it is **not** the clean 100/0 split idealised geometry
+predicts. **CAUSE:** `bathy_thin_v2.py` keeps the **deepest point per cell**, not the cell centre,
+so kept points sit off-centre within their 180 m cells; real pair distances spread to ~2× grid (max
+391 m observed). The hole pattern is **probabilistic across both axes**, not a pure
+diagonal-cell-centre effect. Any grid-based fix must account for within-cell positional jitter, not
+just nominal G/√2 geometry.
+
+**SPACING (offshore, n=18,766):** min 24.8, p10 35.5, p25 75.1, median 125.6, p75 174.2, p90 175.9,
+p99 201.0, max 1343.1 m. Inshore (n=412, depth ≤1.0 m): median 175.3, p90 390.6 — wider and noisier,
+as expected for a river-following chain. Split rule was depth >1.0 m = offshore; it yields
+412/19,178 = 2.15%, closely matching the roadmap's independently-derived ~2% river-corridor figure,
+which cross-validates the rule.
+
+**PROVENANCE — GENUINE LADS, NOT CLASSIFIER-FAULT RESIDUE.** 100.00% (19,178/19,178) of deployed
+rows exist as exact (lat, lng, depth) triples in the 946,877-row v1 source. v2 is a strict
+unmodified subset — no interpolation, no averaging. Depth range identical across both files
+(−1.15 … +42.48), consistent with extremes-preserving per-cell max-depth selection. **The offshore
+lattice is real bathymetry; the Option 3 land/water mask must NOT touch it.**
+
+**BYTES-PER-POINT MEASURED: 27.91 B/point** (535,165 body bytes / 19,178 rows), vs the 28.44 B
+assumed since v16.28. Actual is 1.9% **smaller**, so all prior storage projections were mildly
+conservative — safe direction. **Use 27.91 going forward.**
+
+**RE-THIN PROJECTIONS from full source** (no file written): 60 m = 166,547 cells; 90 m = 74,720;
+120 m = 42,379; 180 m = 19,178 (exact match to deployed, confirming the reproduction is correct).
+v16.47.2's estimate of 76,712 pts at 90 m was accurate to within 2.7% of the measured 74,720.
+
+**DEPTH DISTRIBUTION — the finding that reframed the clip question.** Points deeper than 15 m LAT:
+v1 = 788,376/946,877 (**83.26%**); v2 = 15,927/19,178 (83.05%). Near-identical proportion at both
+thinning levels, so this is a property of the dataset, not an artefact of thinning. **Five-sixths of
+the MN footprint is deep offshore water a land-based angler cannot cast to.** v16.47.2 had costed
+densification across the whole footprint without combining it with a clip.
+
+**Options as costed at the time (SUPERSEDED by v16.47.5, retained for the arithmetic):**
+  A. 60 m grid, clipped to ≤15 m LAT: ~27,900 pts, 778 KB, store ~3.41 MB, diagonal alpha ~0.86
+  B. 90 m uniform, no clip:            74,720 pts, 2.09 MB, store ~4.72 MB, alpha ~0.63
+  C. 60 m uniform, no clip:           166,547 pts, 4.65 MB, store ~7.28 MB, alpha ~0.86
+  v16.47.2's "90 m, +1.64 MB" recommendation was correct arithmetic on the wrong target — it
+  densified water that will never be fished.
+
+**REPO HYGIENE — PRE-EXISTING, NOT CAUSED BY THE DIAGNOSTIC:** the diagnostic reported an
+uncommitted `GUYA_ROADMAP.md` edit and untracked `guya_species_qld_v3.md` in the working tree, both
+predating the session and untouched by it. HEAD otherwise matches `origin/main`. **"git status clean
+and up to date with origin/main" is a MANDATORY session-end step, so a prior session left this
+behind. Resolve at the START of the next Claude Code session before any new work.**
+
+**Diagnostic discipline note, worth keeping:** this session followed diagnose-before-patch exactly —
+read-only, no repo writes, all scratch outside the tree, hypothesis stated up front and then
+partially falsified by measurement rather than confirmed by assumption. It corrected two numbers
+that would otherwise have been built against. This is the pattern to repeat.*
+
+*v16.47.3 · 21 Jul 2026 — DECISION RECORDED, no code shipped, build unchanged at 2026.07.19b:
+**Option 3 (STRICT-AND land/water mask) is AUTHORISED, RUNTIME PATH, effective immediately.**
+
+**What was decided.** Aaron gave explicit GO on 21 Jul to (a) override v16.43's "don't trigger
+standalone — ride it along with a future SC/BR re-export" gate, and (b) implement the mask as a
+**runtime in-app polygon union evaluated at the existing shared v16.25 gate**, NOT as a bake-time
+per-point tag in a v3 CSV export. The v16.43 gate is therefore **retired, not weakened** — it was
+set on sequencing logic (avoid re-export churn for a fix that could piggyback later), and the
+runtime path removes the re-export entirely, so the reason the gate existed no longer applies.
+
+**Decisive argument for runtime over bake-time, recorded so it isn't relitigated:** roughly half
+the total point pool — the untagged legacy 55,660-pt "pre-region-tagging" blob — exists ONLY in
+Aaron's phone localStorage, is not in the repo, and cannot be regenerated or re-exported. **A
+bake-time mask can therefore NEVER reach it**, meaning land overpaint would be fixed in three of
+four datasets permanently. Runtime reaches it, reaches SC/BR/MN immediately with no re-import
+churn, and covers future regions automatically without each export having to remember to tag.
+Cost is +0.3–0.8 MB on a 2.1 MB single file, paid once, versus per-region re-export churn forever.
+
+**Spec as authorised (from the v16.43 spike, unchanged):** hybrid **STRICT-AND** — a point counts
+as paintable/readable water only if **OSM water polygons AND DEA WOfS (frequency ≥ 0.2) both agree
+it is water.** Scored on 13,178 pilot points: **0.79% false-paint, 99.74% wet coverage kept** vs
+OSM alone (2.06%/99.77%) and WOfS alone (2.04%/99.75%). The AND is load-bearing — the two sources
+fail in *different* places (OSM on canal estates and golf lakes, WOfS on narrow mangrove creeks,
+~0.25% of wet points), so requiring agreement cancels most of both.
+
+**Aaron's accuracy bar maps onto the threshold, not the mechanism:** *"some land overlap is OK if
+it's genuinely accurate to where the tide reaches often."* WOfS frequency IS observed wetness
+frequency, so **`freq≥0.2` is the tuning knob** — lower it to retain more marginal intertidal
+ground, raise it to be stricter. Treat 0.2 as the starting value from the spike, not a constant.
+
+**Expectation set, not to be quietly revised upward later: 0.79% false-paint, NOT 0%.** Residual
+is beach-swash and suburban-edge pixels — OSM's coastline sits at ~MHWS and WOfS goes nodata over
+surf. No scheme tested clears this. Beach/swash is the one genuine friction point identified by the
+spike and it stays.
+
+**Validation already on record (v16.43, does not need re-running):** every named dry probe read
+land on both sources; all 9 stale-popup locations read water (≥0.97) on both — either source alone
+would have caught the v16.40/v16.41 incident; the Maroochy Wetland Sanctuary defect grid (36 pts)
+read land 36/36 on OSM and 34/36 on WOfS, confirming the mask catches the defect *class*, not just
+that one instance.
+
+**Licensing note, carried forward:** OSM is **ODbL**, unlike the project's CC BY sources elsewhere.
+Fine for personal, non-commercial use (Guya is explicitly not for commercial sale); recorded so it
+is not rediscovered as a surprise.
+
+**Sequencing unchanged — this does NOT jump the queue.** Option 3 remains item 2 in the v16.47.2
+sequence, behind the `r0` cache (item 1), which must ship first because `buildShade()` re-runs on
+map movement and the mask adds work at the same gate. The MN offshore diagnostic (item 0) is still
+in flight and is independent of this decision — the offshore LADS lattice is genuine deep-water
+bathymetry that the mask will not and must not touch.
+
+**Build prompt not yet drafted** — to be written against the runtime spec once the diagnostic
+returns and the `r0` cache lands. Hard rules unaffected: this touches the cosmetic paint/read gate
+only, never `zoneAt()`, zone determination, or any legality assertion.*
+
+*v16.47.2 · 21 Jul 2026 — planning chat: v16.47 CLOSED on-phone; depth-data question
+EVIDENCE-CLOSED; DATA-TYPE TAXONOMY established; offshore MN lattice diagnosed; build sequence
+re-ordered. No code shipped, build unchanged at 2026.07.19b.
+
+**BOOKKEEPING WARNING — stale-roadmap artifact, recorded so it isn't re-merged:** a parallel
+research chat emitted a delta labelled "v16.43.2" carrying build string `2026.07.11a` and naming
+"Option A elevation-aware gate" as the next job. That chat held a roadmap copy stale by ~8 days /
+4 versions (Option A shipped v16.44, 13 Jul; the MN disc work shipped across v16.45/46/47). Its
+WEB FINDINGS are sound and are merged below in full; its version label, build string, and handoff
+are DISCARDED. **Standing process fix:** research-mode prompts must carry the current build string
+and roadmap version explicitly, since a research chat does not receive the re-uploaded roadmap by
+default. This is the exact "planning chats working off stale state with no way to detect it"
+failure the brief warns about, and it will recur otherwise.
+
+**v16.47 CLOSED — on-phone re-check complete at build 2026.07.19b:**
+  - Build string confirmed `2026.07.19b` after force-close/reopen.
+  - **Tewantin/Noosa Heads corridor: PASS.** Contiguous wash; the discrete-disc chain is gone.
+  - **Maroochydore/Bli Bli: PASS on the v16.46 regression** — land-overpaint back to pre-v16.45
+    levels as predicted. Residual overpaint still visible there is Option A's known sub-HAT
+    messy-tier residual (v16.43, 53–58% / ~800–880 pilot points), **NOT an R0 fault** — do not
+    read that screenshot as a v16.47 failure.
+  - **Shading toggle: no perceptible slowdown** once the app has loaded.
+  - **NEW, surfaced by the same check — MAP PANNING feels slightly slow.** `buildShade()` re-runs
+    on map movement, so every pan now pays v16.47's O(n) per-sample precompute across all 113,557
+    points. **FOLLOW-UP QUEUED:** cache each sample's `.r0`, invalidate only on
+    import/replace/clear. Bounded Sonnet job, no design change to the adaptive scheme. **MUST ship
+    BEFORE any densification** — densifying multiplies an already-noticeable per-pan cost. Honest
+    caveat: panning slowness is not proven attributable to the precompute (it may be partly
+    pre-existing at 113k points); the cache is a strict improvement regardless, but don't promise
+    it as a complete fix.
+  **No fourth R0 iteration required. R0 work is DONE.**
+
+**DATA-TYPE TAXONOMY (durable — the core reframe; "depths" was one label doing four jobs):**
+  1. **Woongarra/Bargara** — clear-water bathymetric LiDAR, dense. Real depth. Reference standard.
+  2. **Maroochy/Noosa** — Fugro LADS bathymetric LiDAR. Real depth, correct data, rendered at ~2%
+     density on a regular ~180 m export grid. A **DENSITY** problem, not a renderer problem.
+  3. **Sunshine Coast / Brisbane River / Moreton Bay (unprocessed)** — topographic NIR. Ground
+     elevation, zero water penetration, plus the class-9 classifier fault. **NEVER was depth and
+     cannot become depth.** A **MISLABELLING** problem.
+  4. **Redcliffe / western Moreton Bay** — turbidity defeats laser bathymetry. A **PHYSICS WALL**.
+  The v16.45/46/47 cycle cost three iterations in two days because an R0 (renderer) lever was
+  applied to problems 3 and 4, which are not renderer problems. **Diagnose the data type first.**
+
+**OFFSHORE MN LATTICE — diagnosed, and DISTINCT from the inshore disc issue v16.47 fixed:**
+  The blue disc lattice offshore Mudjimba/Marcoola/Noosa is **genuine LADS bathymetry** (renders
+  blue/deep; classifier-fault artifacts render near-zero green inshore — the colour split is the
+  tell). It is **NOT tidal, NOT dry**, so the land/water mask will not and should not touch it.
+  Cause is grid regularity against the R1 ceiling. **Derivation below is from documented constants,
+  NOT yet measured — the read-only diagnostic (sequence item 0) exists to confirm or refute it:**
+    180 m grid: `R0_local = clamp(180−120, 30, 90) = 60`
+      orthogonal midpoint d=90 → alpha = 1−(90−60)/(120−60) = **0.50** (design target, exactly met)
+      cell-centre diagonal d = 90·√2 = **127.3 m → BEYOND R1=120 → alpha = 0**
+    Every grid-cell centre is a fully transparent hole. On irregular inshore terrain these dips
+    scatter and read as texture; on a regular offshore grid they land simultaneously and the eye
+    reads periodicity instantly. **The alpha≥0.5 criterion v16.46/47 were tuned against was never a
+    "looks smooth" target — it is a "barely touching" target.** Bargara looks smooth because its
+    spacing puts midpoints near alpha 1.0, not 0.5.
+    **R0 CANNOT FIX THIS** — already 60 with headroom to 90; the binding constraint is R1=120
+    against a 127.3 m diagonal. No R0 value closes a gap wider than R1.
+  **REVISED FIX TARGET — 90 m grid, not the 60 m first proposed:**
+    90 m grid: `R0_local = clamp(90−120, 30, 90) = 30`; cell centre d = 45·√2 = 63.6
+      alpha = 1−(63.6−30)/(120−30) = **0.63** → connected, not dotted
+    Cost: 4× density → 19,178 → 76,712 pts; net add 57,534 × 28.44 B = **+1.64 MB**
+    (store ~3.2 MB → ~4.85 MB). **Supersedes the earlier +4.35 MB estimate**, which targeted a
+    60 m grid — the wrong target. A nearshore clip (drop >15 m LAT, uncastable for a land-based
+    angler) reduces this further. Bytes-per-point (28.44) is derived from the v16.28-era
+    2,174.1 KB / 76,454 pts figure and should be re-measured by the diagnostic.
+  **R1 raise past ~130** is the cheaper alternative (one constant, no re-import) but R1 governs
+  total paint reach in EVERY region including the SC/BR land data. Deliberately untouched all
+  session. **NOT the primary fix**; reconsider only as a small companion once the mask contains
+  land spill.
+
+**DEPTH-DATA QUESTION — EVIDENCE-CLOSED** (merged from the research audit; findings intact,
+bookkeeping discarded):
+  **PRIORITY QUESTION SETTLED — the 2011 Fugro LADS Sunshine Coast survey is NOT part of a
+  series.** One-off pilot: "Queensland Coastal Risk and Bathymetric LiDAR," run 2011–12 with the
+  CRC for Spatial Information and the Cwlth Dept of Climate Change and Energy Efficiency,
+  explicitly to produce evidence informing FUTURE acquisition **that never occurred** (QLD Gov
+  costed statewide acquisition at >$70M). The qld.gov.au seabed-mapping page (last reviewed
+  19 Jun 2024) still lists exactly one dataset and six Sunshine-Coast-only report appendices; the
+  Open Data record confirms the footprint as the lower estuarine reaches and offshore of the
+  Maroochy and Noosa Rivers — i.e. exactly what is already held. **No Moreton Bay, Bribie/
+  Pumicestone, Redcliffe, or Woongarra tiles exist. DO NOT RE-ASK.**
+
+  **STRUCTURAL FINDING (durable physical limit, not a search gap):** the 0–50 m / <5 m land-based
+  fringe is unmeasured across SEQ because all three instrument classes fail there simultaneously —
+  vessel multibeam/singlebeam cannot physically operate that shallow, green-laser bathymetric LiDAR
+  is defeated by western-bay and estuarine turbidity, and topographic NIR LiDAR has no water
+  penetration at all. Independently corroborated by Sunshine Coast Council's own nourishment
+  consultants in the Maroochydore monitoring report: the surf zone, including sand bar and beach
+  trough systems, cannot be surveyed accurately — the industry position on precisely the target
+  zone, from a project that had Port of Brisbane multibeam on hand.
+
+  **14 SOURCES CHECKED AND CLOSED:**
+  - **QSpatial "Bathymetric LiDAR for Sunshine Coast"** — already held (Maroochy/Noosa only, LAT,
+    2011, 5 m, CC BY 4.0). No additional tiles exist. NO-GO.
+  - **QSpatial / data.qld rest of catalogue** — no other bathymetric LiDAR or hydrographic survey
+    holding for SEQ. Catalogue exhausted. NO-GO.
+  - **Australian Hydrographic Office** — public products are 30 m Shoal Depth True Position grids
+    only; full-resolution surfaces available from AHO on request under **restricted licence**.
+    Charting priorities are channels and approaches. **Permanent NO-GO.**
+  - **Port of Brisbane** — multibeam/sub-bottom/side-scan to MSQ Class A / IHO Special Order, but
+    channels and berths only, commercial, no public portal. **Permanent NO-GO.**
+  - **Maritime Safety Queensland** — publishes hydrographic survey *standards*; a regulator, not a
+    data source. No open survey holdings. **Permanent NO-GO.**
+  - **Curtin CMST Moreton Bay multibeam 2004** — Reson SeaBat 8125, Coastal Water Habitat Mapping
+    Project, 29 Aug–5 Sep 2004, bbox 153.0–153.5 E / −26.9 to −27.3 S, EPSG:28350. **Real
+    instrument data**, but licensed "research purposes, not to be used for navigation" (not CC BY)
+    AND vessel-borne, so structurally cannot reach the fringe. **NO-GO on LICENCE, not on
+    quality** — revisitable only if terms change.
+  - **CSIRO Tidal Inundation multibeam 2024–25** — genuine 2 m / 1 m / 50 cm multibeam, but sites
+    are Fitzroy Estuary and Cassady Creek (Hinchinbrook Shire), 700+ km north. NO-GO on coverage.
+  - **CSIRO 5 m QLD estuaries composite DEM** — rejection mechanism now named precisely: creek
+    depths estimated from an allometric power law on satellite-derived creek width,
+    `depth = 10^(0.62·log10(width) − 1.1)`. Confirms the earlier rejection. NO-GO.
+  - **NSW Marine LiDAR Topo-Bathy 2018** — Fugro ALB (Riegl VQ-820-G + LADS HD), shore seaward to
+    laser extinction (~20–40 m), 3.4 m marine spot spacing, sub-metre, CC BY, SEED direct download.
+    Covers NSW plus **southern QLD Palm Beach→Point Danger ONLY** (~10 km), outside every named
+    area. **FILED AGAINST GOLD COAST (#15 parked)** if that region is ever unparked — otherwise
+    NO-GO on relevance.
+  - **Brisbane River Catchment Flood Study** — hydraulic model geometry (surveyed cross-sections,
+    **interpolated between**); $795 licence fee, USB hard-drive delivery. Fails the
+    no-modelled-depth rule on top of the cost. NO-GO.
+  - **Sunshine Coast Council** — Port of Brisbane MBES surveys around nourishment campaigns, but
+    figures are embedded in monitoring-report PDF appendices, not released as data. NO-GO.
+  - **AusSeabed** — survey-acquisitions coverage index; assessed by description only. MARGINAL →
+    see new backlog item (b).
+  - **City of Moreton Bay 2021 Redcliffe Hydrographic Survey** — **GO (small)**, see new backlog
+    item (a).
+  - **DEA Intertidal epoch check** — **NO newer epoch.** Current release still draws on 2023–2025
+    observations to represent median year 2024, matching the v14b evaluation. **Item 14b
+    unaffected**; there is nothing to wait for.
+
+  **NAVIONICS TRACING — HISTORICAL, CLOSED, DO NOT RE-RAISE:** the Innes Park traced contour lines
+  date from the project's earliest phase, **before** the LiDAR path and the no-chart-art rule
+  existed. They were deleted long ago and **pre-date every existing backup**. No contamination in
+  any current dataset; **no backup-hygiene action is outstanding** — this supersedes the standing
+  "delete Innes Park contours + re-export backup" chore carried since v16.44.2, which is now
+  CLOSED. Aaron confirmed 21 Jul that Navionics tracing is also not a fallback he'd use going
+  forward.
+
+  **SONAR → GPX: DECLINED by Aaron (21 Jul).** No castable sonar purchase. This removes the last
+  route to genuine depth numbers outside the Maroochy/Noosa footprint, and **supersedes the
+  research chat's "own sonar → GPX remains the only path" line** and item 15's option (a) as a
+  live plan.
+
+  **NET CONSEQUENCE:** for Brisbane River, Sunshine Coast and Redcliffe there is **NO DEPTH LAYER
+  and there will not be one.** This is now **evidence-closed, not provisionally closed.** Item 15
+  ("Home-water depth reality") stands as written but its option (a) is declined and its option (c)
+  is superseded by the FLATS LAYER below.
+
+**FLATS LAYER — the Redcliffe answer, and the biggest available win (NEW, HIGH PRIORITY):**
+  **Aaron ordered a Moreton Bay LiDAR patch and IT ARRIVED.** `MoretonBay_2014` /
+  `Moreton_Bay_2018` tiles are present in the deliveries and appear throughout the v16.21–v16.24
+  audit work (Pumicestone block, Golden Beach, Shorncliffe). **It was never processed into a CSV
+  or imported** — it stalled behind Brisbane River / Sunshine Coast and was then absorbed into the
+  classifier-fault investigation. **Not missed — queued and forgotten.** This answers "perhaps
+  Redcliffe wasn't captured or added by me?" definitively.
+  It is **topographic NIR** (same class as SC/BR) and carries the class-9 classifier fault —
+  **Brighton, in Bramble Bay, is the fault's ORIGIN SITE.** Processing it as depth would reproduce
+  the Bli Bli failure exactly.
+  **REFRAME: SC + BR + Moreton are ONE FLATS LAYER mislabelled as three depth datasets.** Same
+  product type, same fault, same drop-mask already designed (v16.23/24), same correct rendering —
+  **intertidal ground elevation, NOT depth shading.** Process Moreton with the existing drop-mask,
+  relabel SC/BR, render as flats.
+  **ACCURACY NOTE:** LiDAR elevation (~0.1 m) **beats** DEA Intertidal (RMSE 0.27–0.33 m;
+  microtidal correlation over Moreton only 0.61). If the LiDAR flats layer works, **DEA Exposure
+  (item 14b) demotes from main event to optional gap-fill** and its manual confidence check stops
+  being a blocker on anything.
+  **HARD CONSTRAINT, carried over from item 14b and NOT weakened:** a flats layer shows
+  **ELEVATION and EXPOSURE only, NEVER a "water depth over this bank right now" number.** A
+  centimetre readout over a flat reads exactly like bathymetry and walks into the no-bathymetry
+  rule. Three-state at most (likely dry / marginal / likely covered), driven by the existing tide
+  engine. **Precision note:** the tide engine already supplies tidal range; what the flats layer
+  adds is *which bank sits at which elevation*, making that range actionable.
+
+**OPTION 3 — RUNTIME PATH RECOMMENDED, NOT YET AUTHORISED:**
+  Recommendation is to **override v16.43's "don't trigger standalone" gate** and take the
+  **RUNTIME in-app mask** rather than the bake-time per-point tag. **Decisive reason:** ~half the
+  total point pool — the untagged legacy 55,660-pt blob — exists only in phone localStorage, is not
+  in the repo, and cannot be re-exported, so **a bake-time mask can NEVER reach it.** Runtime
+  reaches it, reaches all current regions immediately, and covers future regions automatically.
+  Cost +0.3–0.8 MB on a 2.1 MB app, once, versus per-region re-export churn forever.
+  **Aaron's accuracy bar, recorded verbatim in substance:** *"some land overlap is OK if it's
+  genuinely accurate to where the tide reaches often."* This maps directly onto WOfS
+  water-observation **frequency** — the `freq≥0.2` threshold inside STRICT-AND is the tuning knob;
+  lower it to keep more intertidal.
+  **Expectation set: 0.79% false-paint, NOT 0%.** Residual is beach-swash and suburban-edge pixels
+  (OSM coastline sits at ~MHWS; WOfS goes nodata over surf). No tested scheme clears it.
+  **AUTHORISED 21 Jul 2026 — RUNTIME PATH. See v16.47.3 entry at the head of this file.**
+
+**SEQUENCE (re-ordered this chat — supersedes prior next-job ordering):**
+  0. **MN offshore diagnostic** — read-only, Sonnet. Prompt drafted and dispatched 21 Jul.
+     Confirms or refutes the grid-regularity hypothesis with measured numbers, verifies the
+     offshore points are LADS and not fault residue, and re-measures bytes-per-point. **Do not
+     build against the derivation above until this returns.**
+  1. **`r0` cache** — small, unblocks everything downstream, **must precede densification**.
+  2. **Option 3 runtime mask** — land overpaint, all regions incl. the legacy blob (pending GO).
+  3. **Flats layer** — process Moreton 2014/2018 + relabel SC/BR. **Needs NO new data.** Biggest
+     single win available.
+  4. **MN nearshore densification to ~90 m** — the "look like Bargara" lever. **Gate on running
+     `storage_check.html` in the home-screen container FIRST**; the quota answer sets the point
+     budget, not the reverse. Multi-chunk import (the 25k cap is per CSV parse, not per store).
+  5. **Noosa tide-port wiring** — mechanical, BoM TP021 PDFs confirmed available, plain Sonnet.
+  6. **Future-proofing:** desktop render harness (retires the ship→screenshot→guess loop that cost
+     three R0 iterations); region-onboarding checklist in `CLAUDE.md`; **per-dataset `source_type`
+     tag** (`bathymetric` / `topographic` / `sonar`) so the app renders and labels data classes
+     differently instead of pretending ground elevation is seabed — the structural fix for the
+     confusion that produced this whole thread.
+
+**MN BATHY AS A RESOURCE BEYOND ITS OWN FOOTPRINT (new, opportunistic):** bathymetry does not
+extrapolate geographically, but the full 946,877-pt LADS dataset has two uses elsewhere.
+**(1) Calibration bench:** MN bathy overlaps the SC topographic footprint in the intertidal band
+near the Maroochy mouth — where both exist, the topographic misread can be *measured* against real
+survey, turning Option 3's 0.79% false-paint figure from OSM/WOfS agreement into ground truth.
+**(2) Empirical spacing answer:** subsample the full 946k at 60/90/120/180 m and render offline to
+establish what spacing actually looks like Bargara, without a phone round-trip. Both are free and
+use data already on disk.
+
+**NEW BACKLOG (low priority, neither blocks anything):**
+  (a) **2021 Redcliffe Hydrographic Survey** — City of Moreton Bay DataHub, item
+      `f6c1d8952e2447578215f4816ffe9ab6`
+      (`https://datahub.moretonbay.qld.gov.au/datasets/f6c1d8952e2447578215f4816ffe9ab6`). SandMap
+      Pty Ltd, two sites close offshore the Redcliffe Peninsula, commissioned for coastal modelling
+      and to set out groyne extensions and seawalls **encroaching below the low tide mark**.
+      Charted to LAT; **LAT = AHD − 1.23 m** per MSQ in the survey area, tied to Scarborough Boat
+      Harbour and Woody Point tidal stations. Council open data. **The ONLY new
+      instrument-measured, openly-licensed, nearshore, datum-solved source found in the entire
+      sweep.** The research chat rated it low on the grounds that engineering sites aren't fishing
+      spots — **disagreed here:** groynes and seawalls at Scarborough and Woody Point ARE
+      land-based fishing structures, and the surveyed seabed is the water immediately off them.
+      **INSPECT EXTENTS FIRST**, testing "is this off a fishable structure?" rather than "does it
+      cover the peninsula?". Bin it if not. Diagnose-before-patch applies.
+  (b) **AusSeabed coverage confirmation query** — Claude Code, Sonnet, read-only, ~15 min. Query
+      the bathymetry survey-acquisitions coverage layer via OGC services
+      (`warehouse.ausseabed.gov.au/geoserver`), clip to the SEQ AOIs, list any survey polygons
+      touching them. Purpose is to convert this audit's negative from "read the description" to
+      "queried the index," so it can be written in as permanent. **CAVEAT:** public coverage
+      excludes anything supplied to GA under a Restricted and Exclusive licence, so a hit ≠
+      obtainable data. Fold into whichever Sonnet session runs next — not worth its own session.
+
+**DELETED FROM HORIZON (superseded, do not re-add):**
+  - "Maroochy/Noosa blobby disc rendering — needs its own scoping session": scoped and shipped
+    across v16.45/46/47 (inshore) and diagnosed above (offshore).
+  - "Delete Navionics-traced contours near Innes Park + re-export backup" (standing since
+    v16.44.2): confirmed long done, pre-dating all backups.
+  - "Fable 5 included-plan window / pull Option 3 forward to catch pricing": window lapsed
+    ~5 PM AEST Mon 20 Jul as expected; nothing queued required it.*
+
 *v16.47 · 19 Jul 2026 — MN disc-rendering: GLOBAL R0 REPLACED WITH PER-SAMPLE ADAPTIVE R0
 (build 2026.07.19b). v16.46's flat R0=56 confirmed failing on-phone in BOTH directions at once:
 the Tewantin/Noosa Heads river corridor still showed a visible chain of discrete blobs, AND the
@@ -67,6 +540,27 @@ and the pixel-loop's `distA` line switching from the global `R0` to the nearest 
 re-check queued: same Tewantin/Noosa Heads and Maroochydore-area screenshots as this session's
 report, expect the corridor filled in and the Maroochydore land-overpaint back to pre-v16.45
 levels.*
+
+*v16.47.1 · 19 Jul 2026 — planning-chat review, no code shipped: build unchanged at 2026.07.19b.
+Reviewed v16.47's per-sample adaptive-R0 fix before handoff — the derivation checks out
+(nearest-neighbour math, the per-sample `R0_local` formula, the three real SC/BR proxy points
+correctly reverting to `R0_MIN=30`, the Tewantin gap-closure numbers) and reverting dense
+clusters to the pre-v16.45 baseline is the right call, since `R0=30` was never the problem —
+MN's sparse tail was. Two items added to the on-phone re-check below, neither a correctness
+concern with the fix itself: **(1) Performance, unmeasured:** the new per-sample precompute is
+a fresh O(n) loop over the full loaded point pool — likely the entire multi-region set, not
+just MN, since `buildShade()` has historically operated on the flat `pts` array (confirmed by
+v16.40's diagnosis) — with a 3×3 bucket lookup per sample, run every `buildShade()` call.
+Confirmed NOT to reuse the `Math.apply`/spread pattern that caused v16.40's iOS argument-ceiling
+crash (plain for-loops and indexing throughout), but real-device cost is genuinely untested (no
+headless-browser tooling in the build environment, same limitation v16.47 itself flagged) — this
+project has a standing pattern of desktop-fine/phone-slow surprises, so add a plain "does
+toggling shading feel slower than before" check alongside the visual ones. **(2) Verification
+paper trail thinner than the established standard:** v16.45/46 both had `node --check` exit
+codes and Leaflet SHA-256 pasted verbatim into the session; v16.47's validation step ran but its
+output wasn't surfaced the same way — the roadmap's PASS/byte-identical claims are consistent
+with everything else shown (same hash as the last two builds) so not treated as a live concern,
+just noting the trail is thinner than usual should anything need re-tracing later.*
 
 *v16.46 · 19 Jul 2026 — MN disc-rendering RE-TUNE SHIPPED (build 2026.07.19a): R0 raised again,
 35→56 (R1=120 deliberately untouched), after Aaron's on-phone screenshot showed visible gaps
@@ -799,7 +1293,8 @@ residual into visible Maroochydore land-overpaint. R0_local=clamp(gap−R1,30,90
 dense SC/BR clusters revert to exactly pre-v16.45 tightness (verified: a50 within ~1pp of the
 pre-v16.45 baseline), the Tewantin corridor's own gap-midpoint alpha≥0.5 rate rises to 90.1%
 (vs 60.0% pre-v16.45, 88.1% under v16.46's flat bump). R1=120 still untouched throughout. See
-v16.47 for full numbers. On-phone re-check pending. Previous build 2026.07.19a (v16.46) raised
+v16.47 for full numbers. **On-phone re-check COMPLETE and PASSED (v16.47.2, 21 Jul)** — both
+visual checks pass, shading toggle fine; a map-panning perf follow-up (`r0` cache) is queued. Previous build 2026.07.19a (v16.46) raised
 a flat R0 30→56 on a p90-midpoint criterion — superseded by v16.47's per-sample version, same
 session day. Build 2026.07.18a (v16.45) re-tagged MN out of free-text "custom" into a named
 `maroochy_noosa` region (that re-tag stands, untouched since). Previous build 2026.07.13a —
@@ -834,7 +1329,55 @@ zoning/FHA/tides — see changelog v16.19. `storage_check.html` diagnostic page 
 in-app link, from v16.7, are still present and still flagged for removal — see v16.38, its
 reliability is now separately confirmed accurate, don't second-guess it again.)*
 
-**Next-session note (19 Jul 2026, post-v16.47):** build now 2026.07.19b — global R0 replaced
+**Next-session note (21 Jul 2026, post-v16.47.5):** build unchanged at `2026.07.19b`; roadmap
+now **v16.47.5**. Three things landed after v16.47.3, all at the head of this file: **(i) Option 3
+STRICT-AND land/water mask is AUTHORISED on the RUNTIME path** (v16.47.3) — the deciding argument
+is that the untagged legacy 55,660-pt blob lives only in phone localStorage and can never be
+reached by a bake-time mask; **(ii) the MN offshore diagnostic RETURNED** (v16.47.4) — the 180 m
+export grid is confirmed beyond argument, the offshore points are verified genuine LADS (100% exact
+subset of v1) and NOT classifier-fault residue so the mask must not touch them, bytes-per-point is
+measured at 27.91, and the idealised hole-rate derivation was corrected to a measured 31.4%
+diagonal / 15.2% orthogonal caused by the deepest-point-per-cell jitter; **(iii) Aaron changed the
+MN v3 clip criterion** (v16.47.5) from depth-based to **distance-from-shore, ≤200 m, with maximum
+smoothness inside the band**. That last one reverses the storage question: the surveyed footprint is
+~591 km² and the 200 m casting band is only ~1.9% of it, so **full native 25 m resolution inside the
+band is projected at ~17,600 pts / ~491 KB — slightly LESS than the 19,178 pts / 535 KB deployed
+today**, with alpha = 1.0 everywhere (both orthogonal and diagonal midpoints fall inside R0=30, so
+no ramp, no holes, smoother than Bargara) and no thinning step at all. **That projection is
+geometric, not measured — measure the real clipped count first and follow the grid ladder in
+v16.47.5 rather than assuming ~17,600.** **FIRST ACTION next Claude Code session:** resolve the
+pre-existing uncommitted `GUYA_ROADMAP.md` edit and untracked `guya_species_qld_v3.md` in the working
+tree — left behind by an earlier session, mandatory hard rule, do it before any new work. **v16.47 is CLOSED** — on-phone re-check passed on both visual checks (Tewantin
+corridor contiguous, Maroochydore overpaint back to pre-v16.45 levels) and shading toggle shows no
+slowdown. **R0 work is done; do not open a fourth iteration.** Two things came out of that check
+and the same session's research sweep, both recorded in full in the v16.47.2 entry above:
+**(1) map panning feels slightly slow** — `buildShade()` re-runs on map movement so every pan pays
+v16.47's O(n) per-sample precompute over all 113,557 points; the queued fix is to cache each
+sample's `.r0` and invalidate only on import/replace/clear (bounded Sonnet job) and it **must ship
+before any densification**. **(2) the depth-data question is now evidence-closed** — the 2011 Fugro
+LADS survey was a one-off pilot with no wider series, 14 sources checked and closed, and the 0–50 m
+land-based fringe is unmeasured across SEQ as a physical limit rather than a search gap. Navionics
+tracing is confirmed historical and long deleted (**that standing backup chore is CLOSED**), and
+sonar → GPX is **declined**, so **Brisbane River / Sunshine Coast / Redcliffe get no depth layer,
+ever** — the answer for those regions is the **FLATS LAYER**. **The single biggest finding:** the
+`MoretonBay_2014`/`Moreton_Bay_2018` delivery Aaron ordered **did arrive and was never processed** —
+it is topographic NIR carrying the class-9 fault (Brighton is the fault's origin site), so it is not
+depth and never will be, **but it is exactly the flats layer Redcliffe needs, and it requires no new
+data.** **IN FLIGHT:** the MN offshore read-only diagnostic prompt was dispatched to Claude Code
+(Sonnet) on 21 Jul — it confirms or refutes the grid-regularity hypothesis for the offshore disc
+lattice, verifies those points are LADS rather than fault residue, and re-measures bytes-per-point.
+**Do not build against the v16.47.2 derivation until it returns.** **Next jobs, in order:**
+(1) `r0` cache; (2) **Option 3 runtime mask — AUTHORISED 21 Jul (v16.47.3)**, runtime path
+confirmed over bake-time because the untagged legacy 55,660-pt blob can never be reached by a
+bake-time mask; build prompt to be drafted after the diagnostic returns and the `r0` cache lands; (3) flats layer;
+(4) MN v3 = spatial clip to ≤200 m from shore at native 25 m if the measured count allows
+(v16.47.5, supersedes the ~90 m plan), REPLACE not MERGE; (5) Noosa
+tide-port wiring; (6) future-proofing (render harness, region-onboarding checklist, per-dataset
+`source_type` tag). **Usage note:** Aaron was at 75% of his weekly limit at the close of this
+chat — the diagnostic and the `r0` cache are both cheap Sonnet jobs; the flats layer is the
+expensive one and should get a clean session.
+
+**Previous note (19 Jul 2026, post-v16.47):** build now 2026.07.19b — global R0 replaced
 with a per-sample adaptive radius after v16.46's flat R0=56 was confirmed failing on-phone in
 BOTH directions (Tewantin corridor still gappy, Maroochydore land-overpaint newly visible); see
 v16.47 for the full derivation and numbers (Tewantin gap-midpoint alpha≥0.5 rate 60.0%→90.1%,
@@ -844,7 +1387,10 @@ reads `2026.07.19b`; screenshot the Tewantin/Noosa Heads river corridor (expect 
 tolerate faint patches only at the rare >210 m tail gaps, quantified in v16.47); ALSO screenshot
 the Maroochydore golf-course/suburb area that showed overpaint under v16.46 (expect it back to
 pre-v16.45 levels — this is the regression that made the flat-radius approach unworkable, so
-confirming it's gone matters as much as confirming MN improved). **If either check still fails:**
+confirming it's gone matters as much as confirming MN improved). Also do a quick feel check —
+pan/zoom and toggle shading on/off a couple of times; the fix adds a new per-sample precompute
+over the full loaded point set, so confirm nothing feels newly sluggish (unmeasured on real
+hardware — see v16.47.1). **If either check still fails:**
 this was the third R0 iteration in one day; before a fourth, question whether per-sample R0 is
 the right lever at all, or whether it's time to bring R1/Option 3's land-water mask back to
 planning rather than keep retuning the same ramp. **Recommended next job — data hygiene, no
