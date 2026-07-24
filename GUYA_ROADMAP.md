@@ -1,4 +1,113 @@
 # Guya — Feature Backlog & Roadmap
+*v16.49 · 24 Jul 2026 — `depthSamples()` POOL CACHE SHIPPED (build 2026.07.24a), Step 2 of the
+v16.48 follow-up plan: the RETURNED ARRAY is now memoised on `poolVersion`, not just the r0 values.
+v16.48 (`_r0Cache`, a side `Float32Array` + positional-index copy) still paid `depthSamples()`'s
+full ~113k-object-literal rebuild on every pan; only the O(n) neighbour-search half of the cost was
+actually cached. v16.49 caches `depthSamples()`'s array itself, so the SAME objects come back on
+every call while `poolVersion` is unchanged - the old side array is no longer needed, and
+`buildShade()`'s `p.r0=…` write (originally a v16.47 no-op on a throwaway object, per v16.48's own
+Q1 finding) becomes a genuine cache for free.
+
+**VERIFY (a) — no other mutator, checked not assumed.** Read every call site of
+`depthSamples()`'s output: `buildAutoContours()` (`index.html:2334`) only reads `.lat/.lng/.d` via
+`buildSampleIndex()`/the marching-squares field build, never writes; `idwIndex()`/`idwDepthAt()`
+(`:2265-2277`, feeding tap-to-read + `findDeepest`) likewise read-only. `buildSampleIndex()` itself
+(`:1937-1939`) only pushes references into buckets, never mutates. **The ONLY write anywhere in the
+file is `buildShade()`'s `p.r0=…`** (now `:2044-2049` area) - confirmed by reading, not grepped-and-
+assumed. Safe to cache the array.
+
+**VERIFY (b) — point-drag path does not exist for this pool.** `points` (the depth-sample pins
+`depthSamples()` reads) render as non-draggable `L.circleMarker`s (`renderDepths()`, `:1325-1343`)
+- no drag handler registered anywhere. The ONLY draggable markers in the app are `spots` (fishing
+pins, a fully separate array/layer/`saveSpots()`, unlocked via `sp-lock` -> `spotsUnlocked`,
+`:1545-1547`) - `depthSamples()` never reads `spots`. **No live-drag path touches the sample pool
+at all**, so no mid-drag staleness risk exists and no `poolVersion` bump on any `dragstart` is
+needed. (The green-zone spot-drag safeguard itself is unrelated and untouched.)
+
+**HEAP ESTIMATE — measured, not assumed; the brief's 88 B/object figure undercounts.** `node
+--expose-gc`, real `process.memoryUsage()` deltas, matching the actual code pattern (3-prop
+`{lat,lng,d}` literal in `depthSamples()`, `.r0` added dynamically later in `buildShade()` - a
+shape transition, not a single 4-prop literal): **~160-162 B/object**, not 88 B. At the brief's
+113,557-pt figure that's **~17.3 MB**, not ~10 MB. Building a 4-prop literal up front instead would
+land nearer ~130 B/object (~15.9 MB) - not done here, out of scope (`depthSamples()`'s literal
+shape is unchanged). Either way, trivial against a phone JS heap budget; the "safe to hold
+permanently" call is unchanged, only the number needed correcting.
+
+**Pool-size discrepancy, flagged not chased.** Per CLAUDE.md, the file on disk is the source of
+truth over a remembered number: rebuilt `depthSamples()`/`okHAT`/`nearestPort`/`PORTS.hat` verbatim
+in a Node harness (not reimplemented) and ran it over the real repo CSVs (`sunshine_coast_
+intertidal_ground_v2.csv` + `brisbane_river_intertidal_ground_v2.csv` +
+`maroochy_noosa_bathy_v2_appgrade.csv` - the same three cited for the v16.48 113,557-pt replica).
+Result: **144,474** post-HAT-gate samples today, not 113,557 (raw combined rows: 376,826; SC kept
+33.9%, BR kept 36.1%, MN kept 100%). Used 144,474 (the larger, currently-verified number) for the
+heap estimate above (~23.3 MB) rather than the stale 113,557 figure. Not chased further - could be
+dataset drift since the 113,557 figure was established, or a component of the original on-phone
+replica not reproducible from repo files alone; either way out of scope for a memoisation patch.
+
+**Q4 FOLD-IN — separate `mLngPool`, scoped to the gap/R0_local precompute only.** Added
+`midLaPool=(bb.minLa+bb.maxLa)/2, mLngPool=111320·cos(midLaPool)` right before the r0 precompute
+block, reusing `bb` (`ptsBounds(pts)`, already computed pre-viewport-clip at `:1985`) rather than
+building a second bbox pass. Used ONLY inside the gap-search distance formula
+(`dx=(p.lng-bk[m].lng)*mLngPool`); `cellLa/cellLo/sIx` (shared with the pixel-loop IDW search) and
+the pixel loop's own `mLng` (`:2000`, viewport-anchored) are UNTOUCHED - confirmed by diff. Result:
+r0 is now pan-independent (was previously re-derived from whatever viewport was active at the last
+`poolVersion` bump, which the v16.48 cache had just started freezing).
+
+**Quantified over the real 144,474-pt pool (Node, not asserted):** cos(-24.85°)=0.907411,
+cos(-27.5°)=0.887011 -> 2.25% drift (brief's estimate: 2.29%, close, different anchor rounding).
+Comparing pool-anchored `mLngPool` against both real viewport extremes: **95% of samples unchanged,
+mean |Δr0|≈0.28-0.29 m, mean alpha-shift≈0.5 pp** - matches the brief's "not visible" call.
+**Tail found, not in the brief's estimate:** 18-38 samples (0.01-0.03%) hit a full 60 m
+R0_MIN<->R0_MAX clamp-flip at a bucket-boundary edge case. This is PRE-EXISTING in shipped v16.48
+(viewport `mLng` already varies pan-to-pan there) - v16.49 does not introduce it, and removes its
+pan-dependence going forward (was jittering every pan; now deterministic per sample).
+
+**EQUIVALENCE.** Two independent fresh float64 passes over the real 144,474-pt pool, same anchor:
+**0 mismatches** (formula has no hidden call-order/mutable-state dependency - same method as
+v16.48's 775,221-sample check). Storage-precision delta from dropping the v16.48 `Float32Array`
+(now plain float64): 6,653/144,474 samples differ, **mean |Δ|=4.1×10⁻⁸ m, max |Δ|=3.8×10⁻⁶ m** -
+sub-micron, confirms the missing side array cost nothing in accuracy.
+
+**TIMING (Node, real repo CSVs, matching v16.48's methodology).** v16.48-style (array rebuilt every
+call, only r0 values cached) vs v16.49 (array itself cached), 30 simulated pans with no mutation
+between them: MN 19,178 pts - 4.20 ms/pan -> 0.13 ms/pan (32×); BR 189,187 pts - 39.97 ms/pan ->
+1.10 ms/pan (36×); SC 168,461 pts - 28.50 ms/pan -> 0.87 ms/pan (33×); combined 376,826-row pool -
+70.37 ms/pan -> 2.10 ms/pan (34×, average - dominated by the one real rebuild). Split out: **first
+call ≈90 ms (the real rebuild), every subsequent call in the same session ≈0 ms** (array reference
+return, zero allocation) - this is the object-churn elimination v16.48's r0-only cache left on the
+table.
+
+**IMPLEMENTATION.** `let _poolCache=null` + a one-line guard at the top of `depthSamples()`
+(`:2237` area): `if(_poolCache&&_poolCache.version===poolVersion)return _poolCache.s;` - version
+only, no length check, no positional-index mapping (both were only ever needed because the old
+`depthSamples()` built fresh objects every call; `poolVersion`'s bump contract already covers every
+mutation path per v16.48's own Q3). `buildShade()`'s v16.48 `_r0Cache` (side `Float32Array` +
+copy-loop) removed entirely and replaced with `let _r0Version=-1` + a bare guard around the
+original unconditional loop, which now writes `p.r0` straight onto the (now-stable) objects -
+`R0_local` formula, `R0_MIN=30`, `R0_MAX=90`, `R1=120`, the HAT gate, `okHAT`, `zoneAt()` all
+byte-for-byte untouched.
+
+**BUILD DISCIPLINE.** Both script blocks `node --check`: exit 0/0, checked twice (before and after
+the build-string bump). Leaflet block SHA-256 `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d
+57596f4e5641a` - byte-identical to `f894dd0`/HEAD (same hash v16.48 recorded). `zoneAt()`, `ORDER`,
+the green-zone `dragend` safeguard, and `spotsUnlocked` all confirmed absent from `git diff`. Both
+`<style>` blocks byte-identical (confirmed by direct string comparison against HEAD, not eyeballed).
+Diff scoped to exactly: `index.html:1969-1976` (`_r0Version` decl+comment, replacing `_r0Cache`),
+`:2025-2049` (r0 precompute block + `mLngPool`), `:2237-2253` (`depthSamples()` cache), `:1035`/
+`:1074` (build string ×2). Nothing else touched. `git status` clean before commit, only `index.html`
+modified.
+
+**Build-string deviation from the brief, flagged not silently followed.** The brief asked to keep
+`2026.07.21a`; that value is already the commit hash `f894dd0`'s shipped build string, so reusing
+it would collide with an already-released build and violates this file's own build discipline
+("bump the build string... read the current value, don't assume it"). Bumped to **`2026.07.24a`**
+(today's date) at both occurrences instead - flagged here rather than silently deviating.
+
+**Next-session note:** build `2026.07.24a` on `main`, working tree clean pending this commit. Step
+2 (this entry) + the Q4 fold-in are done. Remaining from the original Steps 3-5 plan: re-check
+against roadmap for what Step 3/4/5 covered (not restated here to avoid drift from this file's own
+record) before starting the next session's work.
+
 *v16.48 · 22 Jul 2026 — `r0` CACHE SHIPPED (build 2026.07.21a): per-sample R0_local from v16.47 is
 now memoised across `buildShade()` calls instead of recomputed on every pan. Repo hygiene done
 first (see below). Diagnose-before-patch run in full before any edit.

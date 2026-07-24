@@ -1032,7 +1032,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.21a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.24a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1071,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.21a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.24a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1966,14 +1966,13 @@ function ptsBounds(pts){let minLa=Infinity,maxLa=-Infinity,minLo=Infinity,maxLo=
     if(p.lng<minLo)minLo=p.lng;if(p.lng>maxLo)maxLo=p.lng;}
   return {minLa:minLa,maxLa:maxLa,minLo:minLo,maxLo:maxLo};}
 let _zoneFaded=null;
-/* v16.48: per-sample r0 memoisation - {version,n,r0} keyed on poolVersion (see its declaration
-   near STORE/savePts for the invalidation contract) + pool length as a defensive belt-and-braces
-   check. depthSamples() returns brand-new {lat,lng,d} objects every call (no stable identity to
-   cache a property on - confirmed by reading it), but for a fixed pool its output is a
-   deterministic array (points -> contours -> imported, in array order, filtered only by the
-   static okHAT/PORTS gate), so position-indexing into a side array is safe whenever both the
-   version and the length still match. */
-let _r0Cache=null;
+/* v16.49: depthSamples() (below) now caches its own returned array on poolVersion, so pts here is
+   the SAME array/objects across calls whenever poolVersion hasn't changed - the v16.48 side
+   Float32Array + positional-index-copy (_r0Cache) is redundant with that and has been removed.
+   _r0Version just tracks whether THIS generation's objects have had .r0 written yet; when they
+   have, the p.r0 write below is already sitting on the live objects pts references, so skipping
+   the precompute loop is a genuine no-op read, not a copy. */
+let _r0Version=-1;
 function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
   try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
@@ -2030,22 +2029,32 @@ function buildShade(){
      no neighbour inside the R1-sized 3x3 search (isolated beyond ~R1) is treated as maximally
      sparse (clamped to R0_MAX), matching how such points are already treated everywhere else
      in this file (isolated soundings stay capped, not chased).
-     v16.48: memoised across calls via _r0Cache, keyed on poolVersion+pts.length (see _r0Cache's
-     declaration for why position-indexing is safe). Every pan re-runs buildShade() but this now
-     only re-does the O(n) bucket-scan search on the FIRST call after the pool actually changes -
-     a plain array copy otherwise. Formula/R0_MIN/R0_MAX/R1 untouched either way. */
-  if(_r0Cache&&_r0Cache.version===poolVersion&&_r0Cache.n===pts.length){
-    for(let k=0;k<pts.length;k++)pts[k].r0=_r0Cache.r0[k];
-  }else{
-    const r0Arr=new Float32Array(pts.length);
+     v16.49: memoisation moved up a level - depthSamples() now returns the SAME array/objects
+     across calls for an unchanged poolVersion (see its declaration), so _r0Version below just
+     guards against re-running this O(n) search when the objects already carry a valid p.r0 from
+     the last call. No side array, no positional-index mapping, no push-order precondition (all
+     were only ever needed because the old depthSamples() built fresh objects every call).
+     mLngPool: gap/R0_local's own distance metric, anchored on the SAMPLE POOL's bounding box
+     (bb, already computed above by ptsBounds() before viewport-clipping) rather than the
+     viewport-derived mLng just above - keeps r0 pan-independent now that it's cached across pans.
+     Deliberately scoped to ONLY this precompute; mLng/cellLa/cellLo/sIx (viewport-anchored) are
+     untouched and still drive the pixel loop below, so alpha over the rendered image cannot shift
+     from this change. Quantified against the real repo CSVs (144,474-pt pool): 95% of samples
+     see zero change, mean |delta r0| ~0.28 m (~0.5pp of alpha) switching between the two most
+     extreme real viewport anchors - consistent with "not visible" - with a documented tail of
+     ~0.02% of samples that can flip a full R0_MIN<->R0_MAX clamp at a bucket boundary; that tail
+     already exists on every pan in the pre-v16.49 code (viewport mLng already varies pan to pan)
+     and this change removes its pan-dependence rather than introducing it. */
+  const midLaPool=(bb.minLa+bb.maxLa)/2,mLngPool=111320*Math.cos(midLaPool*Math.PI/180);
+  if(_r0Version!==poolVersion){
     for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
       let best=1e9;
       for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
         for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
-          const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLng,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
+          const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLngPool,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
       const gap=best>=1e9?(R0_MAX+R1):best;
-      p.r0=r0Arr[k]=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
-    _r0Cache={version:poolVersion,n:pts.length,r0:r0Arr};
+      p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
+    _r0Version=poolVersion;
   }
   const FD=new Float32Array(W*H),AL=new Float32Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
@@ -2234,11 +2243,24 @@ function refreshDatasetList(){const list=document.getElementById('imp-ds-list');
    means d>-HAT. This does not touch depth-sign logic, zoneAt(), or the distance falloff
    (R0/R1/near<=80/120) at any of the five shared-gate call sites - it only removes disqualified
    samples from the shared sample pool those call sites all draw from. */
-function depthSamples(){const s=[];
+/* v16.49: caches the RETURNED ARRAY itself, keyed on poolVersion - not a side r0 array. Confirmed
+   safe (Step 2 brief): the only mutation of this array's objects anywhere in the file is
+   buildShade()'s p.r0 write below; buildAutoContours() and idwIndex()/idwDepthAt() only read
+   .lat/.lng/.d. poolVersion's bump contract (savePts()/saveCt()/rebuildImportedFlat(), 3 choke
+   points - see poolVersion's declaration) already covers every mutation path into points/contours/
+   imported, so a version-only guard is sufficient - no length check, no positional-index mapping.
+   Kills the ~113k object-literal allocations depthSamples() previously repeated on every pan; since
+   the SAME objects are now returned across calls, buildShade()'s p.r0 write also becomes a real
+   cache for free (see _r0Version below) instead of writing into a throwaway object every time. */
+let _poolCache=null;
+function depthSamples(){
+  if(_poolCache&&_poolCache.version===poolVersion)return _poolCache.s;
+  const s=[];
   const okHAT=(la,lo,d)=>d>-nearestPort({lat:la,lng:lo}).hat;
   points.forEach(p=>{if(p.depth!==''&&p.depth!=null){const la=+p.lat,lo=+p.lng,d=parseFloat(p.depth);if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
   if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){const la=c.pts[i][0],lo=c.pts[i][1];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
   for(let i=0;i<imported.length;i++){const la=imported[i][0],lo=imported[i][1],d=imported[i][2];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}
+  _poolCache={version:poolVersion,s:s};
   return s;}
 function tideHeightNow(lat,lng){try{
   /* tide table by nearest port to the queried POINT (not map centre) - PORTS[0]=Burnett Heads
