@@ -21,6 +21,11 @@
   .verdict{font-size:19px;font-weight:600;line-height:1.4}
   a.back{display:block;text-align:center;margin-top:22px;padding:14px;background:#1b3242;border:1px solid #2c4a60;border-radius:10px;color:#8fd4c4;font-size:17px;text-decoration:none;font-weight:600}
   #s2run{width:100%;padding:13px;font-size:16px;border-radius:8px;border:1px solid #2c4a60;background:#1b3242;color:#dce8ee;font-weight:600}
+  .btn{width:100%;padding:13px;font-size:16px;border-radius:8px;border:1px solid #2c4a60;background:#1b3242;color:#dce8ee;font-weight:600}
+  .btn[disabled]{opacity:.55}
+  .btn.danger{border-color:#5a2c30;background:#3a1b1f;color:#e9b8b5}
+  input[type=number]{width:100%;box-sizing:border-box;padding:11px;font-size:16px;border-radius:8px;border:1px solid #2c4a60;background:#0e1c26;color:#dce8ee;margin:6px 0 10px}
+  label.fld{font-size:14px;color:#b7c8d2}
 </style>
 </head>
 <body>
@@ -50,6 +55,22 @@
 <div class="sec"><div class="lbl">Verdict — full-res Sunshine Coast import (5.34 MB)</div>
   <div id="verdict" class="verdict warn">Run the fill-test above first.</div>
   <div class="dim">"Fits with 2× margin" = measured headroom ≥ 10.68 MB, so the 5.34 MB import lands with at least the same amount free again — Brisbane River data will need this same store later.</div>
+</div>
+
+<div class="sec"><div class="lbl">4 · Reserve / clear headroom (gate testing)</div>
+  <div class="dim" id="resvStatus" style="margin-top:0;margin-bottom:10px">…</div>
+  <label class="fld" for="resvKb">Leave this much headroom free (KB):</label>
+  <input id="resvKb" type="number" inputmode="numeric" value="150" min="1">
+  <button class="btn" id="resvDo">Reserve headroom</button>
+  <button class="btn" id="resvClear" style="margin-top:8px">Clear reservation</button>
+  <div class="dim" id="resvOut"></div>
+  <div class="dim">Writes/deletes ONE throwaway key <code>__gate_test_filler__</code> only — never touches any Guya app key. Used to squeeze the container down to a known small headroom so a real on-device quota-failure can be provoked for the import-path gate.</div>
+</div>
+
+<div class="sec"><div class="lbl">5 · Legacy key cleanup</div>
+  <div class="dim" id="legacyStatus" style="margin-top:0;margin-bottom:10px">…</div>
+  <button class="btn danger" id="legacyDel" style="display:none">Delete legacy woongarra_imported_v1</button>
+  <div class="dim" id="legacyOut"></div>
 </div>
 
 <a class="back" href="index.html">← Back to Guya</a>
@@ -133,6 +154,107 @@
         v.textContent = 'NO — full-res import does not fit (' + achieved.toFixed(1) + ' MB headroom < 5.34 MB needed). Use the auto-thinned single import (0.55 MB).';
       }
     }, 60);
+  };
+
+  /* --- Section 4: reserve / clear headroom ---------------------------------
+     Everything here reads/writes exactly ONE throwaway key. No Guya app key is
+     ever touched. FILLER persists (that is the reservation); QTEST is transient. */
+  var FILLER = '__gate_test_filler__', QTEST = '__gate_headroom_probe__';
+  function repeat(n){ return n>0 ? new Array(n+1).join('x') : ''; }
+  /* max single-value length (chars ≈ bytes here) that still fits right now, ~1 KB precision */
+  function measureHeadroomBytes(){
+    try { localStorage.removeItem(QTEST); } catch(e){}
+    function fits(n){ try { localStorage.setItem(QTEST, repeat(n)); return true; } catch(e){ return false; } }
+    var CAP = 48*1024*1024, lo = 0, hi = 1024;
+    if (!fits(1024)) { try{localStorage.removeItem(QTEST);}catch(e){} return 0; }
+    lo = 1024;
+    while (hi < CAP) {                         /* exponential: find a size that FAILS */
+      var next = Math.min(hi*2, CAP);
+      if (fits(next)) { lo = next; hi = next; if (next === CAP) break; }
+      else { hi = next; break; }
+    }
+    while (hi - lo > 1024) {                    /* binary search to ~1 KB */
+      var mid = Math.floor((lo+hi)/2);
+      if (fits(mid)) lo = mid; else hi = mid;
+    }
+    try { localStorage.removeItem(QTEST); } catch(e){}
+    return lo;
+  }
+  function fillerBytes(){ var v = localStorage.getItem(FILLER); return v === null ? -1 : (v.length + FILLER.length); }
+  function updateResvStatus(){
+    var fb = fillerBytes(), el = document.getElementById('resvStatus');
+    if (fb >= 0) { el.innerHTML = '<span class="warn">● TEST MODE</span> — reservation active: <code>'+FILLER+'</code> holds ~'+(fb/1024).toFixed(1)+' KB.'; }
+    else { el.innerHTML = '<span class="yes">● NORMAL MODE</span> — no reservation active (<code>'+FILLER+'</code> not present).'; }
+  }
+  updateResvStatus();
+
+  document.getElementById('resvDo').onclick = function(){
+    var btn = this, out = document.getElementById('resvOut');
+    var kb = parseFloat(document.getElementById('resvKb').value);
+    if (!isFinite(kb) || kb < 1) { out.innerHTML = '<span class="no">Enter a headroom target of at least 1 KB.</span>'; return; }
+    btn.disabled = true; btn.textContent = 'Measuring…';
+    setTimeout(function(){
+      try { localStorage.removeItem(FILLER); } catch(e){}   /* always reserve from a clean baseline */
+      var H = measureHeadroomBytes();                        /* full headroom, filler removed */
+      var M = Math.round(kb*1024);
+      if (M >= H) {
+        out.innerHTML = '<span class="no">Nothing reserved — target margin '+kb.toFixed(0)+' KB ≥ measured headroom '+(H/1024).toFixed(1)+' KB. The container is already at or below that headroom.</span>';
+        updateResvStatus(); btn.disabled = false; btn.textContent = 'Reserve headroom'; return;
+      }
+      var want = H - M - FILLER.length;                      /* leave ~M free after the filler + its key name */
+      if (want < 0) want = 0;
+      var wrote = -1;
+      try { localStorage.setItem(FILLER, repeat(want)); wrote = fillerBytes(); }
+      catch(e){ out.innerHTML = '<span class="no">Write failed ('+(e&&e.name||'error')+'). Nothing reserved.</span>'; try{localStorage.removeItem(FILLER);}catch(e2){} updateResvStatus(); btn.disabled=false; btn.textContent='Reserve headroom'; return; }
+      var Y = measureHeadroomBytes();                        /* real remaining headroom on top of the filler */
+      out.innerHTML = 'Reserved: <b>'+(wrote/1024).toFixed(1)+' KB</b> in <code>'+FILLER+'</code>. Headroom now: <b>~'+(Y/1024).toFixed(1)+' KB</b> (target was '+kb.toFixed(0)+' KB).';
+      updateResvStatus(); btn.disabled = false; btn.textContent = 'Reserve headroom';
+    }, 60);
+  };
+
+  document.getElementById('resvClear').onclick = function(){
+    var btn = this, out = document.getElementById('resvOut');
+    if (fillerBytes() < 0) { out.innerHTML = 'No reservation was active — nothing to clear. Container is in normal mode.'; updateResvStatus(); return; }
+    btn.disabled = true; btn.textContent = 'Clearing…';
+    setTimeout(function(){
+      try { localStorage.removeItem(FILLER); } catch(e){}
+      var Y = measureHeadroomBytes();
+      out.innerHTML = 'Reservation cleared. Headroom restored to <b>~'+(Y/1024).toFixed(1)+' KB</b>.';
+      updateResvStatus(); btn.disabled = false; btn.textContent = 'Clear reservation';
+    }, 60);
+  };
+
+  /* --- Section 5: legacy woongarra_imported_v1 cleanup ---------------------
+     v1 is read by index.html ONLY as a one-time migration fallback, and ONLY when
+     the v2 store (woongarra_imported_v2) is empty. So it is safe to delete iff v2
+     is already populated — the migration can then never fire. The button guards on
+     that at click time and refuses otherwise; it touches only the two legacy keys. */
+  var V1_KEY = 'woongarra_imported_v1', V1_META = 'woongarra_imported_meta_v1', V2_KEY = 'woongarra_imported_v2';
+  function v2Populated(){ try { var o = JSON.parse(localStorage.getItem(V2_KEY)); return !!(o && o.datasets && Object.keys(o.datasets).length); } catch(e){ return false; } }
+  function updateLegacyStatus(){
+    var v1 = localStorage.getItem(V1_KEY), el = document.getElementById('legacyStatus'), btn = document.getElementById('legacyDel');
+    if (v1 === null) { el.innerHTML = '<span class="yes">Not present</span> — <code>'+V1_KEY+'</code> is not in this container. Nothing to clean up.'; btn.style.display = 'none'; return; }
+    var kb = ((v1.length + V1_KEY.length)/1024).toFixed(1), pop = v2Populated();
+    el.innerHTML = '<code>'+V1_KEY+'</code> present (~'+kb+' KB). v2 store '+(pop
+      ? '<span class="yes">is populated</span> — index.html will NOT read v1 again, so it is dead weight and safe to delete.'
+      : '<span class="no">is EMPTY</span> — index.html would still migrate FROM v1 on next load. Deleting now would lose the legacy import; delete is disabled.');
+    btn.style.display = 'block';
+    btn.disabled = !pop;
+    btn.textContent = 'Delete legacy '+V1_KEY+' ('+kb+' KB'+(pop ? ', confirmed unused' : ' — blocked, v2 empty')+')';
+  }
+  updateLegacyStatus();
+
+  document.getElementById('legacyDel').onclick = function(){
+    var out = document.getElementById('legacyOut');
+    if (!v2Populated()) { out.innerHTML = '<span class="no">Refused — v2 store is empty; v1 is still the live migration source.</span>'; updateLegacyStatus(); return; }
+    var v1 = localStorage.getItem(V1_KEY);
+    if (v1 === null) { out.innerHTML = 'Already gone.'; updateLegacyStatus(); return; }
+    var kb = ((v1.length + V1_KEY.length)/1024).toFixed(1);
+    if (!confirm('Delete legacy '+V1_KEY+' (~'+kb+' KB) and its companion '+V1_META+'?\n\nThe v2 store is populated, so index.html will not read these again. Your current imported depths (v2) are untouched. This cannot be undone from here.')) return;
+    try { localStorage.removeItem(V1_KEY); } catch(e){}
+    try { localStorage.removeItem(V1_META); } catch(e){}
+    out.innerHTML = 'Deleted <code>'+V1_KEY+'</code> + <code>'+V1_META+'</code>. Reclaimed ~'+kb+' KB. (Reload this page to refresh section 1.)';
+    updateLegacyStatus();
   };
 })();
 </script>
