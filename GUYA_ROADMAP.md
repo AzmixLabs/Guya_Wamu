@@ -1,4 +1,55 @@
 # Guya — Feature Backlog & Roadmap
+*v16.49.5 · 25 Jul 2026 — IMPORT-PATH DURABILITY ARC. Three code fixes shipped this session
+(builds 2026.07.25a → .25c) plus docs/data housekeeping. The whole import persistence path
+(MERGE / REPLACE / backup-restore) now writes-then-mutates. **NOT YET ON-DEVICE VERIFIED — this
+carries the same gate status the r0/pool cache had before v16.49.3 cleared it (see below).***
+
+**WHAT SHIPPED THIS SESSION (in order):**
+1. **Docs commit `8dd6e9e`** — CLAUDE.md repo-rename fix (`Guya` → `Guya_Wamu`, live URL, remote-
+   check hint, build-string-format `2026.MM.DDa` + no-collision rule) and roadmap catch-up to
+   v16.49.4. No code.
+2. **v1 CSV removal `bb8efce`** — `git rm data/brisbane_river_intertidal_ground_v1.csv` and
+   `data/sunshine_coast_intertidal_ground_v1.csv`. These were the PRE-drop-mask sets, superseded
+   by the v2 CSVs at `ef9385d` (11 Jul, "Drop-mask v2 CSVs") which applied the 44,427-cell
+   classifier-fault mask (BR 209,540 → 189,187; SC 188,855 → 168,461). v1 is
+   classifier-fault-contaminated and should not remain in the repo. They were already absent from
+   disk (out-of-band deletion); this formalised it in git. v2 CSVs untouched and remain the source.
+3. **UI-BUG-1/2 fix `2b6822f`** (build 2026.07.25a) — see v16.49.4 entry below. Stray `.keep` class.
+4. **MERGE/REPLACE write-then-mutate fix `b26c959`** (build 2026.07.25b) — the v16.49.2/.4
+   diagnostic (import quota failure leaves phantom in-memory points) resolved. Both actions now
+   build a candidate datasets object, `trySaveDatasetsObj(candidate)` FIRST, and only touch live
+   `datasets`/`imported`/`poolVersion` + snapshot-for-Undo on verified success. Harness proof
+   (verbatim source sliced into a vm context, `setItem` forced to throw): on failure poolVersion,
+   imported.length, panel count, live datasets, and the persisted copy all stay at pre-attempt
+   state, and the phantom point is not in `depthSamples()`; success path unaffected. Failure status
+   line changed from "do not trust this import yet" to "nothing changed, the previous data was kept."
+5. **Backup-restore write-then-mutate fix `36b16ec`** (build 2026.07.25c) — the restore-path
+   FINDING surfaced during v16.49.4 verification (grep found a 4th `saveDatasetsVerified()` caller
+   at what was line 2482). Unlike undo/clear-all/remove-region (which shrink or restore-previously-
+   fit, so quota-safe), backup-restore GROWS storage with an arbitrary backup and was mutate-then-
+   save with a **silent console.warn** on failure — same phantom bug class, confirmed by harness
+   (the 88.8 m point case). Now `trySaveDatasetsObj(newDatasets)` first, mutate only on success,
+   and the silent warn upgraded to a `showImpError()` banner. Harness proof: forced-throw restore
+   leaves poolVersion/live datasets/panel/persisted store at pre-restore state, 88.8 m point not
+   tap-readable, banner raised; no-throw success path still applies and persists. The line-2186
+   comment was corrected to name both disciplines (write-then-mutate vs mutate-then-save) and warn
+   against adding a storage-growing caller to the mutate-then-save group.
+
+**⚠ GATE — NOT YET ON-DEVICE VERIFIED. The import-path arc must clear an on-device gate before the
+flats layer proceeds, exactly as v16.49's pool cache did.** All three code fixes (`2b6822f`,
+`b26c959`, `36b16ec`) are proven by desktop Node/vm harness only. Per the standing rule that bit the
+r0-cache arc, a desktop proof of a persistence/cache invariant is NOT device-representative: iOS
+WebKit's localStorage container hits quota at a different (lower) ceiling and flushes to disk async,
+and the harness stubs `setItem` rather than exercising the real WebKit storage area. **On-device
+checklist (Aaron, before the flats layer goes near this cache):** force-close/reopen, confirm build
+`2026.07.25c`, then (1) MERGE a file large enough to hit real quota into a throwaway region — confirm
+the panel count, shading, and tap-read all REVERT to pre-merge (no phantom depth tap-readable) and
+the error banner shows; (2) REPLACE-fail the same way; (3) restore a backup larger than the container
+holds — confirm the banner appears (not just a console line) and the previously-loaded depths are
+intact on reload. Any step where a phantom depth survives the failed write is a fix that didn't hold
+on-device. **Until this gate clears, treat the import-path fixes as unverified and do not build the
+flats layer on top of this cache.**
+
 *v16.49.4 · 25 Jul 2026 — UI-BUG-1/2 fixed (build 2026.07.25a); import quota-failure diagnostic
 answered AT RISK; AusSeabed coverage spike (backlog item b) run and closed out.*
 
