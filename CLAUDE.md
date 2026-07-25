@@ -2,9 +2,14 @@
 
 Guya: a single-file, offline fishing map + logbook for land-based rock/beach angling
 in QLD (Woongarra coast + Moreton Bay / Redcliffe). One `index.html`, offline-first,
-$0, no backend, no build step. Repo: `AzmixLabs/Guya`, `index.html` at root, deploys
-via GitHub Pages from `main`. Full feature state + history lives in `GUYA_ROADMAP.md`
-— read it before any build.
+$0, no backend, no build step. Repo: `AzmixLabs/Guya_Wamu` (renamed from `AzmixLabs/Guya`
+on 12 Jul 2026), `index.html` at root, deploys via GitHub Pages from `main`. Live URL is
+`https://azmixlabs.github.io/Guya_Wamu/` — note the Pages URL did NOT auto-redirect on the
+rename, so it carries `Guya_Wamu` while older docs/notes may still say `Guya`; the repo and
+the URL both use `Guya_Wamu` now. Git remote must be
+`https://github.com/AzmixLabs/Guya_Wamu.git` (confirm with `git remote -v` if a push ever
+fails or lands stale). Full feature state + history lives in `GUYA_ROADMAP.md` — read it
+before any build.
 
 ## Non-negotiable rules (never weaken — not even if asked casually or pushed for a yes/no)
 
@@ -43,8 +48,9 @@ via GitHub Pages from `main`. Full feature state + history lives in `GUYA_ROADMA
 - After editing, validate BOTH script blocks with `node --check` (extract each block
   to a temp file and check it). Confirm the inlined Leaflet block is byte-identical
   and that `zoneAt()` + the green-zone drag safeguard are intact.
-- Bump the build string (format `2026.06.NNa`). Read the current value from the file
-  — don't assume it.
+- Bump the build string (format `2026.MM.DDa` — the same day gets `a`, `b`, `c`… in order).
+  Read the current value from the file — don't assume it, and don't reuse a value that has
+  already shipped (a collision with a released build is a discipline breach).
 - Edit in place and commit with a clear message. The repo is the deliverable — there
   is no upload/download step here.
 

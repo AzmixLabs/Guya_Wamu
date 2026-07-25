@@ -1,4 +1,213 @@
 # Guya — Feature Backlog & Roadmap
+*v16.49.4 · 25 Jul 2026 — UI-BUG-1/2 fixed (build 2026.07.25a); import quota-failure diagnostic
+answered AT RISK; AusSeabed coverage spike (backlog item b) run and closed out.*
+
+**FIX — UI-BUG-1 and UI-BUG-2, one root cause, not a handler bug.** Both sections' `.lbl` click
+binding and section wiring were always correct — every `.blk` in `.panel-body` is bound identically
+by the single generic collapse handler. The actual cause: two toggle `<label>`s carried a stray
+`class="toggle keep"`, and `.panel-body > .blk.collapsed > label.keep{display:flex!important}` forces
+those rows to stay visible regardless of the `.collapsed` class. In **Map layers** all four toggle
+rows (zone/FHA/streets/place-names) had `.keep`, so 100% of the section's content stayed visible on
+collapse — looked like the header did nothing. In **Fishing spots & catches** only the "Show spots"
+row had it, so the rest of the block correctly folded away but that one row stayed pinned open,
+reading as "does not collapse." `.keep` was used nowhere else in the app (confirmed by full-file
+grep), so removing it from both labels — plus the now-dead `label.keep`/`div.keep` CSS rules — brings
+both sections in line with the working ones (Zone legend, Safety, Backup), which never used `.keep`.
+Validated: both script blocks pass `node --check`; Leaflet block byte-diffed identical to HEAD;
+`zoneAt()` and the green-zone drag safeguard untouched (diff shows only the 4 `.keep`-related lines
+changed). Committed alone as `2b6822f`.
+
+**ANSWERED — the v16.49.2 quota-failure diagnostic question: AT RISK, not safe.** Traced the MERGE
+handler (`index.html` ~3104-3118): points are pushed into `datasets[region].points` in-memory, then
+`rebuildImportedFlat()` (line 2169) rebuilds the flat `imported` pool from `datasets` AND bumps
+`poolVersion` — **both happen before** `saveDatasetsVerified()` (line 2175, the function that actually
+calls `localStorage.setItem`) is ever invoked at line 3118. `depthSamples()` (line 2254-2255) caches
+purely on `poolVersion`, so the moment `rebuildImportedFlat()` bumps it, any tap-read/pan/shade
+rebuild serves the merged pool — including points that haven't reached disk yet. If `setItem` then
+throws `QuotaExceededError`, `saveDatasetsVerified()` catches it, shows the error banner, and returns
+`false`, but it does **not** revert `datasets`, `imported`, or `poolVersion`. `refreshImpPanel()` /
+`refreshDatasetList()` (line 2223-2232) read `imported.length` / `datasets[k].points.length` — live
+in-memory state, not localStorage — so the panel would show the post-merge (larger) counts too, not
+a "clean revert." **This contradicts the v16.49.2 desktop MN-merge note's claim of a clean revert to
+103,648/MN 13,705** — that observation was almost certainly taken after a reload (which re-reads
+`datasets` from the still-unwritten, pre-merge localStorage and looks like a revert), not from the
+live post-failure panel in the same session. Net: until reload, a failed MERGE quota write leaves
+tap-read/shading serving phantom un-persisted points — the exact risk v16.49's blast-radius note
+flagged. Not fixed this session (read-only per instruction); candidate fix is reordering to
+write-then-mutate (attempt `saveDatasetsVerified()` on a scratch/candidate `datasets` state, only
+call `rebuildImportedFlat()` on success) or an explicit revert of `datasets[region]`/`rebuildImportedFlat()`
+on `saveDatasetsVerified()` returning `false`.
+
+**AusSeabed coverage spike (backlog item b) — run, ~15 min, coverage-index only, nothing downloaded.**
+GetCapabilities on `warehouse.ausseabed.gov.au` WFS 1.1.0 identified the Compilations Coverage layer
+as `ausseabed:MARINEDATAREGISTER_COMPILATIONS_INDEX`. `DefaultSRS` is the URN form
+(`urn:x-ogc:def:crs:EPSG:4326`), so BBOX axis order is lat,lon — queried
+`-28.2,152.3,-24.7,153.7` (Bargara to the NSW border) and got 8 features back, no pagination
+truncation. **None of the 8 are SEQ-specific** — coverage over Bargara/Woongarra, Moreton
+Bay/Redcliffe/Bribie/Pumicestone, Sunshine Coast/Maroochy/Noosa, and Brisbane River all comes only
+from four national/continental compilations (AusBathyTopo Australia 2024 & 2023, Australian
+Bathymetry & Topography 2009 — all 250 m; Multibeam Compilation of Australia 2018 — 50 m). The
+nearest geographically-targeted feature is "Gold Coast Satellite-derived Bathymetry 2018" (EOMAP,
+individual survey), which sits south of Moreton Bay/Brisbane River mouth and doesn't reach into any
+of the four regions. Implication for the terrain/bathymetry pipeline ([[ELVIS]] remains the feeds for
+depth shading per CLAUDE.md): AusSeabed has nothing finer-grained than 50 m national for this coast —
+not a usable source for anything the app currently needs at higher resolution. Backlog item (b) is
+now answered and can be dropped from the low-priority list.
+
+---
+
+*v16.49.3 · 25 Jul 2026 — ON-PHONE INVALIDATION GATE CLEARED. v16.49 pool cache confirmed correct
+on device (build 2026.07.24a). No code shipped; this closes the gate that has blocked the next
+build since the r0-cache arc.
+
+Ran the REPLACE -> MERGE -> remove sequence on both desktop Chrome and the iOS home-screen PWA using
+the offshore smoketest CSVs (12 + 6 pts, ~1.5 km E of Bargara, 188 m min spacing, distinctive
+depths: file1 whole numbers 10-25 m, file2 .5 values 20.5-30.5 m). Results:
+ - REPLACE (file1): tap-read served the imported values. PASS.
+ - MERGE (file2): count 18, tap-read served the .5 values -> cache rebuilt to the merged set, not
+   stale. PASS.
+ - REMOVE (the load-bearing v16.49 check — a stale pool serving PHANTOM points that no longer exist
+   is the failure mode the whole gate exists for): after delete, tap returns "no survey data here",
+   not a cached depth. PASS.
+ - DURABILITY (iOS async localStorage flush — a write that succeeds in-session but never reaches
+   disk; structurally invisible on desktop): import persisted across force-close/reopen; deletion
+   persisted after reopen. This device's write path flushes to disk. PASS.
+ - COLLATERAL: zone popups (GUZ07 etc.) stayed hard-rule compliant throughout (zone type + ID +
+   not-authoritative warning + official link, no legality assertion) -> zoneAt() untouched by the
+   v16.49 edit, confirmed ON DEVICE not just by diff. Interpolation confidence label tracks
+   nearest-data distance correctly (low-confidence at 98 m, none flagged at 14 m).
+ - REAL POOL UNTOUCHED: smoketest went into a scoped "Smoke test" region via REPLACE, so
+   legacy/BR/SC/MN were never mutated; removing the region left the real store intact. No backup
+   restore was needed.
+
+**GATE STATUS: the "on-phone confirmation gate required before the next build" (open since the
+r0-cache arc) is CLOSED. The flats layer (next build item) is UNBLOCKED.**
+
+Belt-and-braces residual (not a blocker): the airtight deletion-durability proof is a reopen AFTER
+a delete showing it stayed gone. The import-survives-reopen result already proves this device
+flushes; one more force-close/reopen after a delete would close it completely if ever wanted.*
+
+*v16.49.2 · 25 Jul 2026 — desktop-session findings, no code shipped. Three items to note plus one
+diagnostic question for the next Claude Code read-only spike.*
+
+**UI-BUG-1 — MAP LAYERS section does not collapse.** The MAP LAYERS header carries a "+" affordance
+but its toggle list (Marine-park zones / FHA / Streets / Place & creek names) stays expanded when
+the header is actioned. Section-specific: ZONE LEGEND, SAFETY — CROCODILES, and BACKUP all collapse
+correctly in the same panel, so this is a missing/mis-bound collapse handler on this one section,
+not a global regression. Cosmetic, low priority. Reported on desktop; phone parity unverified.
+
+**UI-BUG-2 — FISHING SPOTS & CATCHES ("Show spots") does not collapse.** Same class as UI-BUG-1 —
+header present, content (Show spots toggle + count) does not fold away. Same likely cause (handler
+binding / section-ID mismatch). Bundle both into one Sonnet fix; a read-only check of the
+collapse-handler wiring for these two section IDs should locate it in one pass.
+
+**DESKTOP CONTAINER HAS DIVERGED FROM THE PHONE — desktop is NOT a state mirror.** Desktop pool =
+103,648 (legacy 51,224 "woongarra_depth…" + BR 20,794 + SC 17,925 + MN-v1 13,705). Two mismatches
+vs the phone's 113,557 stored: legacy differs (51,224 desktop vs 55,660 phone — older/different
+legacy import) and MN is v1 (13,705) not v2_appgrade (19,178). Implication: desktop is fine as a
+code-LOGIC screen but must NOT be treated as a state mirror of the field device. The phone remains
+source of truth.
+
+**QUOTA FAILURE ON DESKTOP MN MERGE — expected, failed SAFE, not a v16.49 issue.** MERGE-ing
+maroochy_noosa_bathy_v2_appgrade.csv onto the existing MN-v1 stacked both versions (MERGE cannot
+remove v1 — standing MN rule) -> 122,826 pts / ~3.43 MB -> QuotaExceededError on
+'woongarra_imported_v2'. Correct op is REPLACE scoped to the MN region (swaps v1->v2, ~109,121 pts
+/ ~3.05 MB). App caught the failed setItem and surfaced a clear, actionable error ("imported set
+may be too large — clear a region or import a smaller file"); panel reverted to the pre-merge
+103,648 / MN 13,705, i.e. no silent corruption. localStorage setItem is atomic per-key, so the
+persisted 'woongarra_imported_v2' is unchanged. The quota ceiling that tripped (~3.4 MB) is BELOW
+the phone's 4.77 MB incident point -> desktop Chrome localStorage headroom < iOS PWA container.
+Testing caveat: a desktop quota failure is NOT evidence the phone would fail.
+
+**DIAGNOSTIC Q for next read-only spike (v16.49 raised the stakes on this).** On a failed quota
+setItem during MERGE, confirm the in-memory `imported` array AND `poolVersion` are left consistent
+with the persisted (pre-merge) state — i.e. `rebuildImportedFlat()` did not bump `poolVersion` and
+rebuild the flat pool to the merged set while the write then failed, leaving the v16.49 cache
+serving points that aren't on disk. Panel evidence suggests a clean revert, but under v16.49 an
+in-memory/disk divergence would mean tap-read serves phantom points until reload — verify the
+mutate/write/bump ORDER in the import path, don't assume from the panel.*
+
+*v16.49.1 · 25 Jul 2026 — planning-chat correction to v16.49, no code shipped, build unchanged at
+2026.07.24a. v16.49's IMPLEMENTATION is accepted in full; two figures in its write-up are corrected
+here before they are cited as fact.
+
+**CORRECTION 1 — the 144,474 pool figure is a METHODOLOGY ARTEFACT, not dataset drift. 113,557
+STANDS as the on-phone stored-point count.** v16.49's harness ran `depthSamples()`/`okHAT` over the
+raw repo CSVs and omitted the app's 25k auto-thin loop, which every prior replica included (see
+v16.45 step 6, v16.44 at roadmap:861, v16.41 at :1190 — "real v2 CSVs through the app's own thin
+loop"). Diagnostic signature: MN v2 (19,178) is already under the 25k cap and passes through
+untouched in BOTH paths — hence the harness's own "MN kept 100%" — while SC (168,461 -> 17,925,
+9.40x) and BR (189,187 -> 20,794, 9.10x) are over the cap and get thinned on import. Only the
+over-cap datasets diverge. That is the thin loop's fingerprint.
+  **Independent falsification by storage:** holding those CSVs un-thinned needs 376,826 stored rows
+  x 27.91 B/pt (measured, v16.47.4) = 10.52 MB, + legacy 55,660 x 27.91 = 1.55 MB, total ~12.1 MB,
+  against a container that hit quota at 4.77 MB (v16.35). The phone is not holding this pool.
+  **Also note 113,557 is a STORED (pre-HAT) panel count** — 55,660 legacy + 20,794 BR + 17,925 SC +
+  19,178 MN — so the true post-HAT `depthSamples()` pool is somewhat SMALLER than 113,557, never
+  larger. The roadmap has been using 113,557 loosely as "the pool"; it is an upper bound.
+  **Impact on v16.49's own numbers:** heap estimate UNAFFECTED and now conservative (17.3 MiB at
+  113,557 is an upper bound; ~160 B/object measured stands and supersedes the brief's 88 B).
+  Equivalence test UNAFFECTED (float determinism is dataset-independent). Q4 quantification
+  directionally sound but computed over a superset. **TIMING NUMBERS ARE NOT DEVICE-REPRESENTATIVE**
+  — "BR 189,187 pts, 39.97 ms/pan" describes a pool ~9x the phone's, in Node on desktop V8, not iOS
+  JSC. The 34x RATIO is credible; the absolute ms are not. Do not quote them as phone figures.
+  **Standing rule, restated because it was just broken:** any replica of the on-phone pool runs the
+  v2 CSVs through the app's own auto-thin loop AND the real okHAT gate. Thin first, then gate.
+
+**CORRECTION 2 — v16.49's claim that "alpha over the rendered image cannot shift from this change"
+is FALSE as written** and contradicts its own next paragraph. `r0` feeds `distA` in the pixel loop,
+so alpha does shift. The accurate claim is narrower: the PIXEL LOOP'S OWN DISTANCE METRIC (`mLng`,
+`cellLa/cellLo`, `sIx`) is untouched; the alpha shift is exactly the quantified mLngPool effect —
+95% of samples unchanged, mean ~0.5 pp, with a ~0.02% clamp-flip tail. Read that way the entry is
+consistent and the conclusion (not visible) is unchanged.
+
+**BLAST-RADIUS NOTE — the invalidation contract now governs DATA CORRECTNESS, not just paint.**
+Under v16.48 a missed `poolVersion` bump produced a stale `r0`: an opacity error. Under v16.49 it
+produces a stale ENTIRE POOL, and `depthSamples()` also feeds `idwDepthAt()` (tap-to-read depth)
+and `buildAutoContours()` — both of which previously received a freshly built pool on every call.
+A missed bump therefore now means the app DISPLAYS A DEPTH FROM THE PREVIOUS DATASET. The three
+choke points (`savePts()`/`saveCt()`/`rebuildImportedFlat()`) were verified in v16.48 for a
+lower-stakes cache and carried into v16.49 unchanged and un-retested. Not asserted broken — flagged
+as now load-bearing. **ON-PHONE VERIFICATION IS A GATE ON THE NEXT BUILD, not optional housekeeping
+(checklist below).**
+
+**ON-PHONE INVALIDATION GATE — Aaron only, no Claude Code needed, run before any new build.**
+Force-close/reopen, confirm build `2026.07.24a`, then WITHOUT force-closing between steps:
+  1. Import a small CSV (the `guya_smoketest_import1.csv` / `_import2.csv` pair, or any few-dozen-
+     point file) via REPLACE into a throwaway `smoketest` region. Confirm the panel count updates,
+     the shading redraws, and tap-to-read over a new point returns a depth consistent with it.
+  2. MERGE the second small file into the same region. Confirm the count rises by the new unique
+     points only.
+  3. ✕-remove the `smoketest` dataset row. Confirm it leaves the list, the total drops, and
+     tap-to-read no longer returns those points' depths.
+  4. Clear-all (or the equivalent). Confirm shading and tap-to-read reflect the emptied pool.
+  Any step where the count, shading, or tap-to-read does NOT track the change is a missed
+  `poolVersion` bump — fix it before the flats layer goes near this cache. Cosmetic aside: ~18-38
+  samples can now sit at `R0_MAX=90` (3x disc radius) deterministically rather than jittering per
+  pan; note if seen, do not chase.
+
+**REMAINING FROM THE v16.48/49 PLAN — resolved and stated plainly** (v16.49's own next-session note
+left this vague): Steps 3 and 4 (equivalence/timing, build discipline) are DONE. **Step 5 — the
+AusSeabed read-only coverage query — was NOT run.** It stays on the low-priority backlog as item
+(b), unchanged, ~15 min, fold into whichever Sonnet session runs next.
+
+**NEW BACKLOG ITEM (c), cheap, not queued — the remaining per-pan O(n) work.** v16.49 removed the
+object-churn and the r0 precompute from the pan path, but `ptsBounds(pts)` and the
+`buildSampleIndex()`/`sIx` bucket build still run over the full pool on every `buildShade()`. Both
+are cacheable on the same `poolVersion` — `bb` trivially, `sIx` only if its cell sizing is
+re-anchored off the viewport-derived `mLng` first (same manoeuvre v16.49 just performed for the
+gap search). NOT queued: Aaron reports panning acceptable at v16.48. This is the first place to
+look if the flats layer or MN v3 makes panning slow again, rather than reopening R0.
+
+**SEQUENCING PUSHBACK — build the flats layer BEFORE the Option 3 mask.** Option 3's STRICT-AND
+gate (OSM water AND WOfS freq>=0.2) is designed to suppress paint on ground that is dry most of the
+time. That is a precise description of the intertidal flats the flats layer exists to render.
+Building Option 3 first risks masking exactly the data the flats layer wants to show, then
+partially un-masking it. The only stated reason for mask-before-MN-reexport is that the mask sources
+the OSM polygons the MN clip depends on — that argument does not reach the flats layer. The flats
+layer is also the biggest single win available and needs no new data. Reflected in the sequence
+below.*
+
 *v16.49 · 24 Jul 2026 — `depthSamples()` POOL CACHE SHIPPED (build 2026.07.24a), Step 2 of the
 v16.48 follow-up plan: the RETURNED ARRAY is now memoised on `poolVersion`, not just the r0 values.
 v16.48 (`_r0Cache`, a side `Float32Array` + positional-index copy) still paid `depthSamples()`'s
@@ -663,7 +872,9 @@ bookkeeping discarded):
   (OSM coastline sits at ~MHWS; WOfS goes nodata over surf). No tested scheme clears it.
   **AUTHORISED 21 Jul 2026 — RUNTIME PATH. See v16.47.3 entry at the head of this file.**
 
-**SEQUENCE (re-ordered this chat — supersedes prior next-job ordering):**
+**SEQUENCE (re-ordered this chat — SUPERSEDED by the current sequence in the v16.49.1 head entry;
+retained as the 21 Jul record. Items 0 and 1 are now DONE; the flats layer has since moved AHEAD of
+the Option 3 mask — see v16.49.1):**
   0. **MN offshore diagnostic** — read-only, Sonnet. Prompt drafted and dispatched 21 Jul.
      Confirms or refutes the grid-regularity hypothesis with measured numbers, verifies the
      offshore points are LADS and not fault residue, and re-measures bytes-per-point. **Do not
