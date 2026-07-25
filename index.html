@@ -869,8 +869,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .dlegend .bar{flex:1;height:9px;border-radius:5px}
   .dlegend .bar-shade{background:linear-gradient(90deg,#a6f0ce,#3ca8c4,#1c4e92,#102862)}
   .dlegend .bar-ct{background:linear-gradient(90deg,#ffe478,#ffb03c,#ff7832,#e6463c,#be285f)}
-  .panel-body > .blk.collapsed > label.keep{display:flex!important}
-  .panel-body > .blk.collapsed > div.keep{display:flex!important}
   .bb-in{flex:1;min-width:0;background:#0e1c26;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12.5px;padding:8px 9px;min-height:var(--tap)}
   .bb-out{font-size:12px;line-height:1.5}
   .bb-score{display:flex;align-items:center;gap:9px;margin-bottom:4px}
@@ -1032,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.24a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.25a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1068,10 +1066,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
     <div class="blk"><div class="lbl">Fishing spots &amp; catches</div>
       <div class="dp-actions"><button class="dp-btn" id="sp-add">+ Add spot</button><button class="dp-btn" id="sp-drop">Drop on map</button></div>
-      <label class="toggle keep" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
+      <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.24a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.25a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1092,7 +1090,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="blk"><div class="lbl">Base map</div>
       <div class="seg" id="baseseg"><button data-base="qld" class="on">QLD Aerial</button><button data-base="sat">Esri Sat</button><button data-base="osm">Streets</button></div>
     </div>
-    <div class="blk"><div class="lbl">Map layers</div><label class="toggle keep"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle keep"><input type="checkbox" id="fhatoggle"><span>Fish Habitat Areas</span></label><label class="toggle keep"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle keep"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
+    <div class="blk"><div class="lbl">Map layers</div><label class="toggle"><input type="checkbox" id="zonetoggle" checked><span>Marine-park zones</span></label><label class="toggle"><input type="checkbox" id="fhatoggle"><span>Fish Habitat Areas</span></label><label class="toggle"><input type="checkbox" id="labeltoggle" checked><span>Streets (online)</span></label><label class="toggle"><input type="checkbox" id="placetoggle" checked><span>Place &amp; creek names (offline)</span></label></div>
     <div class="blk"><div class="lbl">Tools</div>
       <button class="toolbtn" id="mbtn"><span class="ic"></span><span id="mbtn-label">Measure distance</span></button>
     </div>
