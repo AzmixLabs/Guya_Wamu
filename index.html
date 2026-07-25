@@ -1030,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.25b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.25c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1069,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.25b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.25c</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2183,10 +2183,13 @@ function trySaveDatasetsObj(dsObj){const want=countDsPts(dsObj);
     catch(e3){try{localStorage.removeItem(IMP_RECEIPT_KEY);}catch(e4){}} /* stale receipt would false-alarm on boot */
     clearImpError();return true;
   }catch(e){showImpError('Storage write failed ('+(e&&e.message||'unknown error')+') — the imported set may be too large. Clear a region’s data or import a smaller file.');return false;}}
-/* mutate-then-save is safe for callers (undo/clear-all/remove-region) that already hold the
-   only reference to the pre-change state via their own snapshot/rollback path; MERGE/REPLACE
-   below use trySaveDatasetsObj() directly on a candidate object instead, so a failed write never
-   touches live `datasets`/`imported`/`poolVersion` — see v16.49.4 diagnostic. */
+/* Two persistence disciplines share trySaveDatasetsObj(). WRITE-THEN-MUTATE — MERGE/REPLACE and
+   backup-restore — build the target state as a candidate object, trySaveDatasetsObj() it FIRST,
+   and touch live `datasets`/`imported`/`poolVersion` only on verified success, so a failed write
+   never leaves depthSamples()'s cache (or the panel) serving un-persisted points (v16.49.4/.5
+   diagnostic). MUTATE-THEN-SAVE — undo/clear-all/remove-region — is safe ONLY because each either
+   shrinks storage or restores a state that previously fit (so setItem cannot newly hit quota) and
+   each snapshots for Undo before mutating; do NOT add a storage-GROWING caller to this group. */
 function saveDatasetsVerified(){return trySaveDatasetsObj(datasets);}
 function impRbKey(region){return IMP_RB2_PREFIX+region;}
 function anyImpSnapshot(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(IMP_RB2_PREFIX)===0)return true;}}catch(e){}return false;}
@@ -2474,16 +2477,25 @@ function importBackup(file){
           importedAt:new Date().toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}),points:pts}}:{};
       }
       if(newDatasets){
-        /* restore replaces the whole store, so snapshot every region it touches (old ∪ new);
-           Undo then reverts them one region per press, newest slot first */
-        const affected={};Object.keys(datasets).forEach(function(k){affected[k]=1;});Object.keys(newDatasets).forEach(function(k){affected[k]=1;});
-        Object.keys(affected).forEach(snapshotImpRegion);
-        datasets=newDatasets;rebuildImportedFlat();
-        const ok=saveDatasetsVerified();
-        if(typeof refreshImpPanel==='function')refreshImpPanel();
-        if(typeof refreshDatasetList==='function')refreshDatasetList();
-        if(typeof refreshImpUndoBtn==='function')refreshImpUndoBtn();
-        if(!ok&&window.console&&console.warn)console.warn('Imported-depths restore did not verify against storage.');
+        /* write-then-mutate (v16.49.5): restore replaces the whole store with a storage-GROWING
+           payload, so it carries the same phantom-on-quota-failure risk MERGE/REPLACE had. Persist
+           the candidate (newDatasets is already a fresh, non-aliased whole-store object) FIRST; only
+           on verified success snapshot every affected region (old ∪ new) for Undo, swap live
+           `datasets`, and rebuild the pool. On failure the live pool/poolVersion/panel stay at the
+           pre-restore state and a banner is raised (was a silent console.warn — the reason the
+           divergence was invisible). */
+        const ok=trySaveDatasetsObj(newDatasets);
+        if(ok){
+          const affected={};Object.keys(datasets).forEach(function(k){affected[k]=1;});Object.keys(newDatasets).forEach(function(k){affected[k]=1;});
+          Object.keys(affected).forEach(snapshotImpRegion);
+          datasets=newDatasets;rebuildImportedFlat();
+          if(typeof refreshImpPanel==='function')refreshImpPanel();
+          if(typeof refreshDatasetList==='function')refreshDatasetList();
+          if(typeof refreshImpUndoBtn==='function')refreshImpUndoBtn();
+        }else{
+          if(typeof showImpError==='function')showImpError('Backup restore of imported depths did not persist — storage may be full. Your previously loaded depths are unchanged; clear a region or use a smaller backup.');
+          if(window.console&&console.warn)console.warn('Imported-depths restore did not verify against storage — live state left at pre-restore.');
+        }
       }
     }
     if(Array.isArray(d.sessions)){try{const cur=JSON.parse(localStorage.getItem('woongarra_sessions_v1'))||[];const by={};
