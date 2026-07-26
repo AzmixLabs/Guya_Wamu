@@ -1,4 +1,26 @@
 # Guya — Feature Backlog & Roadmap
+*v16.49.6 · 26 Jul 2026 — ON-DEVICE GATE TOOLING, no index.html change. storage_check.html gained a
+headroom reserve/clear utility + a guarded legacy-`woongarra_imported_v1` delete (commit 7b0fcf0).
+Two throwaway quota-gate test fixtures generated for Aaron to AirDrop — NOT committed (local-only via
+`.git/info/exclude`, disposable): `quota_test_dummy_12k.csv` (12,000 pts, sentinel depth 199.9 m,
+~327 KiB stored — for MERGE/REPLACE failure) and `quota_test_dummy_backup.json` (well-formed version:2
+backup carrying one ~9.72 MiB fake `quota_test_dummy` region, ~2.05× the ~4.75 MB cap — for restore
+failure).
+
+**⚠ SIZING CONFUSION POINT — "replace" means two different scopes; do not reuse one's sizing logic for
+the other.** REPLACE (CSV import, `imp-replace-btn`) is **region-scoped**: it swaps ONE region inside
+`datasets`, so its stored-size delta is just that region's growth vs whatever that region held before —
+a small file grows the store by a small amount, and it fails quota only if that delta exceeds free
+headroom. Backup-restore (`importBackup`) is **whole-store-scoped**: `datasets=newDatasets` swaps ALL
+of `datasets` in a single `trySaveDatasetsObj` write, so success/failure depends on the fake region's
+ABSOLUTE size against the total container cap, NOT a delta against current holdings. Consequence that
+bit the fixture sizing: a 335 KB "backup" can never fail on a device already holding ~3 MB of imports,
+because replacing 3 MB with 335 KB net-frees space. Hence Fixture 2 is sized oversized-beyond-cap
+(~9.7 MiB, ~2× cap) so it fails outright regardless of current pool size and needs no reservation —
+and because the write throws BEFORE `datasets=newDatasets` runs, the real imported pool is provably
+never clobbered by the test. A future session must NOT size a restore-failure test as "current pool +
+delta" (REPLACE's logic); use absolute-vs-cap.*
+
 *v16.49.5 · 25 Jul 2026 — IMPORT-PATH DURABILITY ARC. Three code fixes shipped this session
 (builds 2026.07.25a → .25c) plus docs/data housekeeping. The whole import persistence path
 (MERGE / REPLACE / backup-restore) now writes-then-mutates. **NOT YET ON-DEVICE VERIFIED — this
