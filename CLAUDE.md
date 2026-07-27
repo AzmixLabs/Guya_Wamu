@@ -65,9 +65,13 @@ before any build.
 
 ## Domain facts (load-bearing — don't re-derive or guess)
 
-- Tide datum: LAT. Tide port by region: Burnett Heads for Woongarra; Brisbane Bar for
-  Moreton Bay / Redcliffe (Redcliffe = +0:00 secondary, so Brisbane Bar timing
-  applies directly).
+- Tide datum: LAT. Tide ports by region: Woongarra/Bargara — Burnett Heads (Standard
+  Port). Moreton Bay/Redcliffe — Brisbane Bar (Standard Port; Redcliffe = +0:00
+  secondary, Brisbane Bar timing applies directly; Bongaree/Bribie ≈ +0:00/-0:15, not
+  yet wired as its own port). Sunshine Coast — Mooloolaba (BOM/NTC Standard Port, no
+  offset math). Noosa — Noosa Head (also a Standard Port per MSQ's 2024 Semidiurnal
+  Tidal Planes table, own harmonic prediction, no offset math needed; not yet wired
+  into the app).
 - Moreton Bay zoning: HPZ06 Redcliffe and HPZ08 Pine River are Habitat Protection
   Zones (dark-blue, NOT no-take). Real no-take (Marine National Park) on home water:
   MNP09 Deception Bay, MNP11 Hays Inlet, MNP12/13 Bramble Bay / Pine River mouth.
@@ -81,8 +85,17 @@ before any build.
 
 - Zoning = QSpatial legislated polygons only (feeds `zoneAt()`). ELVIS is NOT a
   zoning source.
-- Terrain / bathymetry = ELVIS (LiDAR + GA 30m). Feeds depth shading, contours, and
-  the DEA Intertidal exposure layer — never zone calls.
+- Terrain / bathymetry: ELVIS Point Clouds/AHD is the correct bucket to order (raw
+  classified LAS/LAZ, explicit datum) — but it is NOT a uniform depth source. It is
+  genuine bathymetric LiDAR only for Bargara/Woongarra and Maroochy/Noosa (2011 Fugro
+  survey). For Brisbane River, the rest of the Sunshine Coast delivery, and Moreton
+  Bay/Redcliffe, ELVIS Point Clouds are topographic NIR — class-2 ground returns
+  only, no water penetration — and must never be labelled "depth" or "bathymetry" in
+  code, roadmap, or UI. Before trusting class-2 "ground" data near open water, run
+  the class-9-adjacency density check (roadmap v16.17-v16.18) to catch the confirmed
+  classifier fault where open-water returns get mislabelled as ground. Feeds depth
+  shading, contours, and the DEA Intertidal exposure layer (subject to the above
+  caveats) — never zone calls.
 - Tides = MSQ QLD Tide Tables (CC BY 4.0, BoM NTC attribution), per port.
 - FHAs = separate polygon dataset; apply alongside (not instead of) zoning.
 
