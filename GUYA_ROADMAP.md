@@ -1,4 +1,102 @@
 # Guya — Feature Backlog & Roadmap
+*v16.49.7 · 27 Jul 2026 — ON-DEVICE GATE CLEARED + FLATS LAYER DESIGN LOCKED. No code shipped
+(build stays `2026.07.25c`); this entry closes the v16.49.5 gate and settles the flats-layer
+spec that gate was blocking.
+
+**GATE CLEARED — all three write-then-mutate fixes (MERGE/REPLACE/restore, v16.49.5) verified
+on real quota failures, on-device, not simulated.** Two throwaway fixtures (v16.49.6 tooling)
+used to force genuine `QuotaExceededError`s against a 150 KB reservation:
+- **REPLACE** (`quota_test_dummy_12k.csv`, 12,000 pts, sentinel 199.9 m, ~327 KiB): failed
+  cleanly against a brand-new region ("Smoke") that had never existed — in-app log confirmed
+  "12000 new points (0 total in Smoke). Save verification FAILED... nothing changed, the
+  previous data was kept." No phantom region created, not even at 0 pts.
+- **Positive control, run before trusting any "no data" result:** confirmed tap-to-read
+  genuinely queries the live interpolated pool, not a stub — a tap near Coral Reef Pk returned
+  "Est. depth here ≈6.4 m... now ~7.6 m water (tide +1.2)... nearest data 30 m away," the full
+  interpolation pipeline demonstrably running, not silently short-circuited.
+- **MERGE** (same fixture, merged into "Smoke02" which already held 12 legitimate points from
+  `guya_baseline_test.csv`): failed cleanly — panel count stayed at 12, never touched 12,012;
+  same status-line pattern, same banner.
+- **Restore** (`quota_test_dummy_backup.json`, ~9.72 MiB, ~2× the ~4.75 MB cap, sized
+  absolute-vs-cap per the v16.49.6 sizing-confusion note): failed cleanly with the
+  restore-specific banner text confirmed present verbatim — "Backup restore of imported depths
+  did not persist — storage may be full. Your previously loaded depths are unchanged..." —
+  distinct from the generic MERGE/REPLACE wording, confirming the fix's own error path fired
+  rather than a stale leftover banner.
+- **Force-close/reopen:** confirmed no residue from any of the three failed attempts; real pool
+  intact throughout at 113,569 (113,557 + Smoke02's 12) until Smoke02 was removed in cleanup,
+  dropping it back to 113,557.
+- **Cleanup completed:** storage reservation cleared (back to NORMAL MODE), Smoke02 region
+  deleted, both dummy fixtures deleted from the phone. Safety backup taken before testing
+  retained, unused.
+- **GATE STATUS: CLEARED.** The import-path durability arc (v16.49.5) is now fully verified,
+  not just harness-proven. **The flats layer is UNBLOCKED on both fronts** — design (below) and
+  import-path safety (this gate).
+
+**OPEN, NOT DONE THIS SESSION:** the v16.49.6 guarded legacy-`woongarra_imported_v1` delete
+button was never exercised — the ~519 KB legacy key may still be present on-phone. Cheap,
+one-tap, no urgency. Also still open from v16.49.4/.5: the two stale CLAUDE.md domain facts
+(ELVIS-as-depth-source line, tide-port line omitting Mooloolaba/Noosa) — FIXED this session
+(commit 27f116b): ELVIS-as-depth-source line now distinguishes bathymetric (Bargara/Woongarra,
+Maroochy/Noosa) from topographic NIR (BR/SC/Moreton); tide-port line now lists all four ports
+(Burnett Heads, Brisbane Bar, Mooloolaba, Noosa Head).
+
+**FLATS LAYER — full design locked, ready to scope for a build session.**
+- **Scope, confirmed exclusive:** Sunshine Coast (the topographic-NIR delivery only —
+  Maroochy/Noosa's real 2011 Fugro bathymetric survey is untouched and keeps genuine depth
+  shading), Brisbane River, Moreton Bay/Redcliffe. Bargara/Woongarra unaffected.
+- **No live/dynamic repaint.** A tide-driven runtime recolour was scoped and explicitly
+  rejected as unnecessary cost — the design is a static, one-time per-point classification,
+  computed once (bake-time or load-time), no ongoing tide dependency. Reuses the existing
+  per-port `PORTS[].hat` constant already built and validated for the land-overpaint gate
+  (Burnett Heads 3.70 m, Brisbane Bar 2.81 m, Mooloolaba 2.24 m) and the existing LAT=0 storage
+  datum — zero new sourcing for either outer bound.
+- **Tap-to-read removed for this layer.** No numeric answer is ever shown (hard constraint,
+  below), so a tap adds nothing the shading itself doesn't already convey — cut from spec.
+- **FINAL DESIGN — 4 bands, deliberately exceeding the standing "three-state at most" hard
+  constraint** (carried since the v14b DEA evaluation, reaffirmed for this delivery). **Aaron's
+  explicit, on-record override — not a drift, a decision:**
+  - Above HAT: not painted (dry land) — alone removes 63% of Sunshine Coast points and 74% of
+    Brisbane River points from the layer (per the existing land-overpaint diagnosis measurement),
+    a genuine visual simplification, not just a rule. *(Footnote: measured against on-phone
+    (already-thinned) counts, not v1/v2 directly; re-verified against v2 in STEP 1.)*
+  - **Band 1 (gold `#EF9F27`)** — HAT down to the 75%-of-range mark: dries earliest.
+  - **Band 2 (amber `#BA7517`)** — 75%-mark down to the 25%-mark: dries by roughly half tide.
+  - **Band 3 (teal `#1D9E75`)** — 25%-mark down to LAT: dries only near low tide.
+  - **Band 4 (blue `#378ADD`)** — strictly below true LAT: always covered. **Structurally
+    near-empty for this delivery** — NIR can't see underwater, so almost nothing in the source
+    data sits at or below LAT ([TO FILL — below-LAT count from v2, see STEP 1]). Will render mostly
+    blank, correctly — not a bug, matches the existing "no survey data" honesty elsewhere.
+  - **Boundary math validated, not guessed:** for a 3-band split, the boundaries that give each
+    band an equal SHARE OF TIDAL TIME — accounting for the tide's real non-linear speed (slow
+    near the extremes, fast through the middle, the same relationship behind the classic Rule of
+    Twelfths) — work out to be numerically identical to the simple 75%/25% height-quartiles of
+    the HAT–LAT range. Worked example, Brisbane Bar (HAT 2.81 m, LAT 0): boundaries at **2.11 m**
+    and **0.70 m**.
+  - **Refinement flagged for the build session, not resolved here:** the 75%/25% figures above
+    assume an idealised symmetric tide curve. The real embedded per-port tables (2026–2027,
+    already validated) carry genuine diurnal inequality — compute the true empirical 1/3 and 2/3
+    time-split points from the real tables per port instead of the idealised assumption. No new
+    sourcing, materially more accurate, cheap to add.
+  - **Colour scheme:** warm→cool 4-stop spectrum, gold → amber → teal → blue, confirmed liked.
+  - **Hard safety caveat, unchanged and still binding:** HAT is an astronomical-tide ceiling
+    only — no storm surge, no barometric setup, and critically **no river flood stage**, given
+    Brisbane River is one of the three regions. Label must state this explicitly; "dries
+    earliest" must never read as a flood or safety claim.
+- **Renderer implication:** needs a way to recognise "this is a flats-layer dataset" and paint
+  from the fixed 4-colour palette instead of the continuous depth gradient. Recommend pulling
+  forward the already-backlogged **`source_type` tag** (bathymetric / topographic / sonar —
+  Future-proofing item 6, SEQUENCE list) into this build rather than treating it as separate
+  later work — this is the first feature that actually needs it to render correctly.
+- **Logged, not acted on:** Aaron wants to revisit the normal-depth-shading colour ramp at some
+  point — unrelated to this build, its own future item.
+
+**NEXT BUILD — unchanged in sequence position (item 1), now spec-complete rather than an open
+design question.** Ready to scope for a dedicated Claude Code session per the existing
+"expensive — clean session" flag; not yet dispatched.*
+
+---
+
 *v16.49.6 · 26 Jul 2026 — ON-DEVICE GATE TOOLING, no index.html change. storage_check.html gained a
 headroom reserve/clear utility + a guarded legacy-`woongarra_imported_v1` delete (commit 7b0fcf0).
 Two throwaway quota-gate test fixtures generated for Aaron to AirDrop — NOT committed (local-only via
