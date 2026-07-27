@@ -38,8 +38,13 @@ Burnett Heads is computed for completeness only — Woongarra stays bathymetric 
   effect is a real quality win: thinning now selects from genuinely intertidal points instead of
   diluting them with ~64% dry land.
 - **Caught by cross-checking the JS banding against the Python export:** port must be resolved
-  **per point** via `nearestPort()`, not per region. 9,183 of Sunshine Coast's rows sit closer to
-  Brisbane Bar than to Mooloolaba, and the app's `okHAT` gate already routes per point. A first pass
+  **per point** via `nearestPort()`, not per region. **24,584 of Sunshine Coast's 168,461 source rows
+  (14.6%) sit closer to Brisbane Bar than to Mooloolaba**, and the app's `okHAT` gate already routes
+  per point. *(Figure corrected — the originally-committed "9,183" was not the geometric count but
+  the number of those rows that SURVIVE the above-HAT drop under per-point routing; an earlier
+  in-session "5,526" was the same survivor count under the buggy uniform HAT 2.24. Their difference,
+  9,183 − 5,526 = 3,657, is exactly the recovered-point figure below, which confirms both were
+  survivor counts rather than a contradiction.)* A first pass
   using a region-wide HAT 2.24 wrongly dropped **3,657 points** of SC's southern tail and mis-banded
   the rest. Regenerated with per-point routing; JS and Python now agree exactly on both regions.
 
@@ -167,6 +172,9 @@ Maroochy/Noosa) from topographic NIR (BR/SC/Moreton); tide-port line now lists a
     v2 denominators; the old "2 of 209,540" cited the deleted, classifier-fault-contaminated v1).
     Band 4 is therefore genuinely empty on SC and 2 px on BR. Will render mostly
     blank, correctly — not a bug, matches the existing "no survey data" honesty elsewhere.
+  - **SUPERSEDED by v16.50 — see empirical figures above; the 75%/25% idealised numbers below were
+    not what shipped.** (Applies to the Band 1/2/3 bullets above as well: their "75%-of-range mark"
+    and "25%-mark" wording is the idealised scheme, not the empirical boundaries that shipped.)
   - **Boundary math validated, not guessed:** for a 3-band split, the boundaries that give each
     band an equal SHARE OF TIDAL TIME — accounting for the tide's real non-linear speed (slow
     near the extremes, fast through the middle, the same relationship behind the classic Rule of
