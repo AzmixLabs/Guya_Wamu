@@ -1030,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.25c</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.27a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1069,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.25c</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.27a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1153,12 +1153,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.35">Each Navionics <b>route</b> imports as one depth line. Name the route with its depth (e.g. "3" or "2.5m") and it auto-labels &amp; colours; otherwise tap a line to set its depth.</div>
     </div>
     <div class="blk"><div class="lbl">Imported depths (LiDAR / survey CSV)</div>
-      <div class="dp-actions"><select class="dp-in" id="imp-region" style="flex:1"><option value="woongarra">Bargara / Woongarra</option><option value="brisbane_river">Brisbane River</option><option value="sunshine_coast">Sunshine Coast</option><option value="maroochy_noosa">Maroochy / Noosa</option><option value="other">Other…</option></select></div>
+      <div class="dp-actions"><select class="dp-in" id="imp-region" style="flex:1"><option value="woongarra">Bargara / Woongarra</option><option value="brisbane_river">Brisbane River</option><option value="sunshine_coast">Sunshine Coast</option><option value="maroochy_noosa">Maroochy / Noosa</option><option value="moreton_bay">Moreton Bay / Redcliffe</option><option value="other">Other…</option></select></div>
       <div class="dp-actions" id="imp-region-other-row" style="display:none"><input class="dp-in" id="imp-region-other" placeholder="region/dataset name" style="flex:1"></div>
       <input type="file" id="imp-file" accept=".csv,text/csv" hidden>
       <div class="dp-actions"><button class="dp-btn" id="imp-replace-btn">⭯ Replace this region</button><button class="dp-btn" id="imp-merge-btn">＋ Merge into this region</button></div>
       <div class="dp-actions" style="margin-top:6px"><input class="dp-in" id="imp-offset" inputmode="decimal" placeholder="datum offset m (optional)" style="flex:1;text-align:center"></div>
       <div style="font-size:10px;color:var(--ink-dim);margin-top:5px;line-height:1.35">Depths must be metres below <b>LAT</b> (negative = dries). If your file is AHD heights, leave it — ask the build chat to convert. Offset is added to every depth on import. <span id="imp-count">0</span> points loaded across all regions. <span id="imp-status"></span></div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;padding:5px 7px;border:1px solid rgba(239,159,39,.45);border-radius:6px;line-height:1.4"><b style="color:#EF9F27">Flats shading — tidal exposure, not depth.</b> Brisbane River, Sunshine Coast and Moreton Bay / Redcliffe are <b>topographic LiDAR</b> (class-2 ground returns, no water penetration), so they paint fixed exposure bands and give <b>no numeric readout</b>. Bands are set from <b>HAT — an astronomical-tide ceiling only</b>: it excludes storm surge, barometric setup, and (Brisbane River especially) <b>river flood stage</b>. “Dries earliest” describes tide exposure — it is <b>never</b> a flood, depth or safety claim.</div>
       <div id="imp-save-err" style="display:none;margin-top:6px;padding:5px 7px;border:1px solid #ff5d5d;border-radius:6px;color:#ff9d9d;font-size:10.5px;line-height:1.35"></div>
       <div class="dp-list" id="imp-ds-list" style="margin-top:8px"></div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="imp-undo" style="display:none">↩ Undo last replace/merge/remove</button><button class="dp-btn" id="imp-clear">Clear ALL regions</button></div>
@@ -1916,6 +1917,32 @@ function depthColor(d){ /* discrete chart-style bands - hue steps so each band r
   if(d<11)  return [11,30,84];
   return [8,20,62];
 }
+/* ---------- Flats layer (v16.50): topographic-NIR regions paint fixed bands, never depth ----------
+   source_type is REGION-level metadata. Topographic-NIR deliveries are class-2 ground returns with
+   no water penetration, so their values are exposure heights, NOT depth - they must never render as
+   a depth gradient or be read out as a number (see CLAUDE.md domain facts). Stored datasets from
+   before this build carry no sourceType field; regionSourceType() defaults them by region key, so
+   legacy data is migrated rather than orphaned. */
+const REGION_SOURCE={woongarra:'bathymetric',maroochy_noosa:'bathymetric',legacy_unknown:'bathymetric',
+  brisbane_river:'topographic',sunshine_coast:'topographic',moreton_bay:'topographic'};
+function regionSourceType(key,ds){if(ds&&ds.sourceType)return ds.sourceType;return REGION_SOURCE[key]||'bathymetric';}
+/* Empirical band boundaries per port: the heights below which the embedded 2026 table sits 1/3 and
+   2/3 of the time, computed with the SAME cosine interpolation tideHeightNow() uses (so there is no
+   second tide model to disagree with the rest of the app). These deliberately are NOT the idealised
+   75%/25% height-quartiles of the LAT-HAT span: that identity only holds for a symmetric sinusoid
+   spanning the full range, and the real tide never reaches either bound (Brisbane Bar's 2026 range
+   is 0.23-2.79 m against a 0-2.81 m span), so the two genuinely diverge.
+   Above-HAT points are already suppressed upstream by depthSamples()'s okHAT gate - never re-filter
+   them here. Band 4 (below LAT) is structurally near-empty for NIR data and renders blank by design. */
+const FLATS_BOUNDS={'Brisbane Bar':[1.002,1.653],'Mooloolaba':[0.775,1.234],'Burnett Heads':[1.407,2.176]};
+const FLATS_COLS=[[239,159,39],[186,117,23],[29,158,117],[55,138,221]]; /* gold, amber, teal, blue */
+const FLATS_LABELS=['dries earliest','dries by roughly half tide','dries only near low tide','always covered'];
+function flatsBand(d,lat,lng){const p=nearestPort({lat:lat,lng:lng}),b=FLATS_BOUNDS[p.name]||FLATS_BOUNDS['Brisbane Bar'],e=-d;
+  if(e<0)return 3;
+  if(e<=b[0])return 2;
+  if(e<=b[1])return 1;
+  return 0;}
+function flatsColor(d,lat,lng){return FLATS_COLS[flatsBand(d,lat,lng)];}
 /* Water mask from the legislated zone polygons — land (outside every zone) never gets shaded. */
 let _shadeFeats=null;
 function shadeMaskFeats(){
@@ -2054,17 +2081,17 @@ function buildShade(){
       p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
     _r0Version=poolVersion;
   }
-  const FD=new Float32Array(W*H),AL=new Float32Array(W*H);
+  const FD=new Float32Array(W*H),AL=new Float32Array(W*H),ST=new Uint8Array(W*H); /* ST: 1 where the nearest sample is topographic-NIR -> paint flats bands, not the depth ramp */
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
       const i0=y*W+x;
       let mSum=0;for(let dy2=-1;dy2<=1;dy2++)for(let dx2=-1;dx2<=1;dx2++)mSum+=mAt(x+dx2,y+dy2);
       const mA=mSum/9;
-      let num=0,den=0,near=1e9,nearD=0,nearR0=R0_MIN;
+      let num=0,den=0,near=1e9,nearD=0,nearR0=R0_MIN,nearST='bathymetric';
       const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
       for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
-          if(dist<near){near=dist;nearD=bk[k].d;nearR0=bk[k].r0;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+          if(dist<near){near=dist;nearD=bk[k].d;nearR0=bk[k].r0;nearST=bk[k].st;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
       if(!den){AL[i0]=0;continue;}
       /* v16.47: ramp uses the NEAREST sample's own adaptive r0, not a global constant. */
       const distA=near<=nearR0?1:(near>=R1?0:1-(near-nearR0)/(R1-nearR0));
@@ -2082,7 +2109,7 @@ function buildShade(){
          mA here would be a separate cleanup, not part of this fix. */
       const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
-      FD[i0]=num/den;AL[i0]=distA*maskA;}}
+      FD[i0]=num/den;AL[i0]=distA*maskA;ST[i0]=(nearST==='topographic')?1:0;}}
   /* smooth the field: dense survey imports make raw IDW near-nearest-neighbour, which is far too
      noisy for gradients (the old aspect view rendered as rainbow static). 2 passes ≈ 1-px gaussian. */
   smoothField(FD,AL,W,H,2,0.01);
@@ -2102,10 +2129,14 @@ function buildShade(){
     if(gs.length>20){gs.sort((a,b)=>a-b);const p90=gs[Math.floor(gs.length*0.9)];
       if(p90>1e-6)VE=Math.max(6,Math.min(60,1.2/p90));}
   }
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  for(let y=0;y<H;y++){const laP=maxLa-(maxLa-minLa)*(y/(H-1));
+  for(let x=0;x<W;x++){
     const i0=y*W+x,idx=i0*4,a=AL[i0];
     if(a<=0.01){da[idx+3]=0;continue;}
-    let c=depthColor(FD[i0]);
+    /* topographic-NIR pixels paint the fixed 4-colour flats palette; everything else keeps the
+       continuous depth ramp. Above-HAT ground never reaches here - depthSamples()'s okHAT gate
+       already removed it from the pool, so there is no second land-suppression rule to keep in sync. */
+    let c=ST[i0]?flatsColor(FD[i0],laP,minLo+(maxLo-minLo)*(x/(W-1))):depthColor(FD[i0]);
     if(slopeView){
       const xm=x>0?x-1:x,xp=x<W-1?x+1:x,ym=y>0?y-1:y,yp=y<H-1?y+1:y;
       /* substitute centre value at data edges instead of blanking the pixel */
@@ -2121,7 +2152,7 @@ function buildShade(){
       if(f>1.30)f=1.30;
       c=[Math.min(255,Math.round(c[0]*f)),Math.min(255,Math.round(c[1]*f)),Math.min(255,Math.round(c[2]*f))];
     }
-    da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}
+    da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}}
   ctx.putImageData(im,0,0);
   shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
 }
@@ -2166,7 +2197,11 @@ if(datasets.custom&&!datasets.maroochy_noosa){
   try{localStorage.setItem(IMP_DS_KEY,JSON.stringify({datasets:datasets}));}catch(e5){}
 }
 let imported=[]; /* flat view across every region's dataset - depthSamples()/compare-tool read this unchanged */
-function rebuildImportedFlat(){imported=[];Object.keys(datasets).forEach(function(k){const ds=datasets[k];if(ds&&Array.isArray(ds.points))for(let i=0;i<ds.points.length;i++)imported.push(ds.points[i]);});poolVersion++;}
+/* importedSrc[i] is the source_type of imported[i] - a parallel array, deliberately NOT a 4th slot
+   on the [lat,lng,depth] triple: that shape is what the CSV parser, the storage format and every
+   existing consumer already agree on, and widening it would be a stored-data migration for no gain. */
+let importedSrc=[];
+function rebuildImportedFlat(){imported=[];importedSrc=[];Object.keys(datasets).forEach(function(k){const ds=datasets[k];if(ds&&Array.isArray(ds.points)){const st=regionSourceType(k,ds);for(let i=0;i<ds.points.length;i++){imported.push(ds.points[i]);importedSrc.push(st);}}});poolVersion++;}
 rebuildImportedFlat();
 function countDsPts(dsObj){let n=0;Object.keys(dsObj).forEach(function(k){const ds=dsObj[k];if(ds&&Array.isArray(ds.points))n+=ds.points.length;});return n;}
 function showImpError(msg){const el=document.getElementById('imp-save-err');if(el){el.textContent='⚠ '+msg;el.style.display='block';}}
@@ -2213,7 +2248,7 @@ function undoLastImpReplace(){const snap=latestImpSnapshot();
   try{localStorage.removeItem(impRbKey(snap.region));}catch(e){}
   refreshImpUndoBtn();if(typeof refreshImpPanel==='function')refreshImpPanel();if(typeof refreshDatasetList==='function')refreshDatasetList();buildShade();
   alert(ok?'Restored.':'Restored in memory, but save verification failed — see the warning above.');}
-function regionLabel(key){const known={woongarra:'Bargara / Woongarra',brisbane_river:'Brisbane River',sunshine_coast:'Sunshine Coast',maroochy_noosa:'Maroochy / Noosa',legacy_unknown:'Legacy import (pre-region-tagging)'};
+function regionLabel(key){const known={woongarra:'Bargara / Woongarra',brisbane_river:'Brisbane River',sunshine_coast:'Sunshine Coast',maroochy_noosa:'Maroochy / Noosa',moreton_bay:'Moreton Bay / Redcliffe',legacy_unknown:'Legacy import (pre-region-tagging)'};
   if(known[key])return known[key];
   if(datasets[key]&&datasets[key].label)return datasets[key].label;
   return key;}
@@ -2263,9 +2298,11 @@ function depthSamples(){
   if(_poolCache&&_poolCache.version===poolVersion)return _poolCache.s;
   const s=[];
   const okHAT=(la,lo,d)=>d>-nearestPort({lat:la,lng:lo}).hat;
-  points.forEach(p=>{if(p.depth!==''&&p.depth!=null){const la=+p.lat,lo=+p.lng,d=parseFloat(p.depth);if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
-  if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){const la=c.pts[i][0],lo=c.pts[i][1];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}});
-  for(let i=0;i<imported.length;i++){const la=imported[i][0],lo=imported[i][1],d=imported[i][2];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d});}
+  /* st: your own soundings and hand-labelled contours are real depth readings, so they stay
+     'bathymetric' regardless of which region they sit in; only imported datasets carry a source_type. */
+  points.forEach(p=>{if(p.depth!==''&&p.depth!=null){const la=+p.lat,lo=+p.lng,d=parseFloat(p.depth);if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d,st:'bathymetric'});}});
+  if(typeof contours!=='undefined')contours.forEach(c=>{if(c.depth===''||c.depth==null)return;const d=parseFloat(c.depth),step=Math.max(1,Math.floor(c.pts.length/12));for(let i=0;i<c.pts.length;i+=step){const la=c.pts[i][0],lo=c.pts[i][1];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d,st:'bathymetric'});}});
+  for(let i=0;i<imported.length;i++){const la=imported[i][0],lo=imported[i][1],d=imported[i][2];if(okHAT(la,lo,d))s.push({lat:la,lng:lo,d:d,st:importedSrc[i]||'bathymetric'});}
   _poolCache={version:poolVersion,s:s};
   return s;}
 function tideHeightNow(lat,lng){try{
@@ -2296,19 +2333,26 @@ function idwIndex(){const s=depthSamples();
   _idwCache={n:s.length,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};
   return _idwCache;}
 function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
-  let num=0,den=0,near=1e9,nearD=0;
+  let num=0,den=0,near=1e9,nearD=0,nearST='bathymetric';
   const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
   for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
     for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+      if(dist<near){near=dist;nearD=bk[k].d;nearST=bk[k].st;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
   if(!den)return null;
-  return {d:num/den,near:near,nearD:nearD};}
+  return {d:num/den,near:near,nearD:nearD,st:nearST};}
 /* Shared depth-read popup. prefixHTML lets the zone layer prepend its classification so a tap
    inside a marine-park zone shows zone type/ID/warning AND the depth in one popup. */
 function openDepthRead(latlng,prefixHTML){
   const r=idwDepthAt(latlng.lat,latlng.lng);
   if(!r||r.near>150){
     if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within 150 m here.</div>').openOn(map);
+    return;}
+  /* Flats layer: topographic-NIR regions get NO numeric readout, ever - the value is a class-2
+     ground-return height, not a depth, and putting a number on it would be exactly the mislabelling
+     CLAUDE.md forbids. Zone classification must still surface (non-negotiable rule 1), so a zone tap
+     keeps its prefix and gains the band wording instead of a figure; a bare map tap opens nothing. */
+  if(r.st==='topographic'){
+    if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">Intertidal flats shading here — <b>'+FLATS_LABELS[flatsBand(r.d,latlng.lat,latlng.lng)]+'</b>. Exposure banding from topographic LiDAR; no depth reading available.</div>').openOn(map);
     return;}
   const body=(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d,latlng.lat,latlng.lng)+' \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d,latlng.lat,latlng.lng)+(r.near>80?' \u00b7 low confidence':'')+'</span>'))+'<button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>';
   const cfg=prefixHTML?{maxWidth:300,minWidth:240}:{maxWidth:170,className:'depth-pop'};
@@ -3068,6 +3112,8 @@ renderContours();
        and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint rule */
     if(!(inZ||(r&&r.near<=120))){el.style.display='none';return;}
     if(!r||r.near>150){el.textContent='no survey data here';}
+    /* same rule as the tap read: topographic-NIR carries no number, only the band wording */
+    else if(r.st==='topographic'){el.textContent=FLATS_LABELS[flatsBand(r.d,e.latlng.lat,e.latlng.lng)];}
     else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d,e.latlng.lat,e.latlng.lng)+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
     el.style.display='block';});
@@ -3132,7 +3178,10 @@ renderContours();
         candidatePoints=basePts.slice();
         for(let i=0;i<pts.length;i++){const k=pts[i][0]+':'+pts[i][1];if(!seen[k]){candidatePoints.push(pts[i]);added++;}}
       }
-      const candidateDs={region:region,label:label,importedAt:when,points:candidatePoints};
+      /* stamp source_type from the region key so the renderer knows whether this dataset is depth
+         (bathymetric ramp) or exposure (flats bands). Region-key default, not prevDs, so a REPLACE
+         always re-asserts the correct type rather than inheriting a stale one. */
+      const candidateDs={region:region,label:label,importedAt:when,points:candidatePoints,sourceType:regionSourceType(region,null)};
       /* write-then-mutate (v16.49.4 diagnostic fix): attempt the persist against a candidate
          datasets object FIRST. Only on verified success do we touch the live datasets/imported
          pool + bump poolVersion - a failed write must never leave depthSamples()'s cache (or the

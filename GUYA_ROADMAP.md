@@ -1,4 +1,99 @@
 # Guya — Feature Backlog & Roadmap
+*v16.50 · 27 Jul 2026 — FLATS LAYER PHASE A+B SHIPPED for Brisbane River + Sunshine Coast.
+Build `2026.07.27a`. Moreton Bay deliberately NOT in this build — see "next job".
+
+**Empirical band boundaries computed and adopted (the v16.49.7 refinement note, now resolved).**
+Reconstructed each port's curve from the embedded table using the SAME cosine interpolation
+`tideHeightNow()` uses (no second tide model), sampled at 1-min steps, took the heights below which
+the tide sits 1/3 and 2/3 of the time:
+| Port | H1 (⅓ below) | H2 (⅔ below) | idealised 25% | idealised 75% |
+|---|---|---|---|---|
+| Brisbane Bar | **1.002 m** | **1.653 m** | 0.703 m | 2.107 m (−0.455) |
+| Mooloolaba | **0.775 m** | **1.234 m** | 0.560 m | 1.680 m (−0.446) |
+| Burnett Heads | **1.407 m** | **2.176 m** | 0.925 m | 2.775 m (−0.599) |
+Burnett Heads is computed for completeness only — Woongarra stays bathymetric and never bands.
+- **The divergence from the idealised figures is large, and is NOT a bug** (the build brief predicted
+  it would be small and called a big gap a bug — that prediction was wrong). The height-quartile ==
+  equal-tidal-time identity holds *only* for a symmetric sinusoid spanning the full LAT–HAT range.
+  Real tides carry diurnal inequality **and never reach either bound** — Brisbane Bar's 2026 range is
+  0.23–2.79 m against a 0–2.81 m span, so HAT/LAT are rare astronomical envelopes, not the operating
+  range. Tide-time therefore concentrates far more tightly around mid-range than the idealised model
+  assumes. Confirmed not a rival tide model: interpolation matches `tideHeightNow()` exactly.
+- **Idealised was rejected on evidence, not preference:** it collapses teal to 5.7% (BR) / 0.5% (SC)
+  of painted points, making "dries only near low tide" effectively invisible — the exact failure the
+  v16.49.7 refinement note was written to prevent.
+
+**Phase A — two REPLACE CSVs generated, ready for Aaron's phone-side import:**
+| CSV | Source | Written | Dropped >HAT | gold / amber / teal / blue |
+|---|---|---|---|---|
+| `data/brisbane_river_flats_v1.csv` | `brisbane_river_intertidal_ground_v2.csv` (189,187) | **68,591** (1.92 MB) | 120,596 (63.7%) | 33,865 / 17,617 / 17,107 / **2** |
+| `data/sunshine_coast_flats_v1.csv` | `sunshine_coast_intertidal_ground_v2.csv` (168,461) | **57,565** (1.61 MB) | 110,896 (65.8%) | 41,576 / 12,855 / 3,134 / **0** |
+- Both go in as **REPLACE** (MERGE cannot remove the existing mislabelled "depth" data).
+- CSVs stay `lat,lng,depth` — the exact 3-column shape the existing parser consumes. Banding is
+  applied as a **data drop only** (above-HAT points removed); colour bands resolve at render time
+  from the constants above, so the boundaries stay ONE source of truth in code and never need a
+  re-import if they are ever retuned. The roadmap's own spec permits this ("bake-time **or
+  load-time**"), so this is within design, not a deviation.
+- Existing import-time auto-thin (`MAXP=25000`) handles device sizing — no new decimation logic. Net
+  effect is a real quality win: thinning now selects from genuinely intertidal points instead of
+  diluting them with ~64% dry land.
+- **Caught by cross-checking the JS banding against the Python export:** port must be resolved
+  **per point** via `nearestPort()`, not per region. 9,183 of Sunshine Coast's rows sit closer to
+  Brisbane Bar than to Mooloolaba, and the app's `okHAT` gate already routes per point. A first pass
+  using a region-wide HAT 2.24 wrongly dropped **3,657 points** of SC's southern tail and mis-banded
+  the rest. Regenerated with per-point routing; JS and Python now agree exactly on both regions.
+
+**Phase B — renderer (`index.html`, build `2026.07.27a`):**
+- **`source_type` region metadata pulled forward** (Future-proofing item 6) — `REGION_SOURCE` +
+  `regionSourceType()`. Defaults: Woongarra / Maroochy-Noosa / legacy = `bathymetric`; Brisbane
+  River / Sunshine Coast / Moreton Bay = `topographic`. Datasets stored before this build carry no
+  field and are defaulted by region key — migrated, never orphaned. Stamped onto every new import.
+- **New region:** Moreton Bay / Redcliffe added to the import picker + `regionLabel()`, ready for its
+  CSV.
+- **Renderer:** `buildShade()` carries the nearest sample's source_type through the existing IDW loop
+  (`nearST`, one assignment inside the existing `dist<near` branch — no extra pass, no new cost) into
+  a per-pixel `ST` mask; topographic pixels paint `flatsColor()` instead of `depthColor()`.
+  Per-pixel rather than per-region so it stays correct for custom regions and overlapping data.
+- **HAT land-overpaint confirmed already present and NOT duplicated** — `depthSamples()`'s `okHAT`
+  gate (v16.44) removes above-HAT points upstream, so the renderer needs no second suppression rule.
+- **Tap-to-read removed for topographic regions, numeric readout gone entirely** — both the tap popup
+  and the hover readout. Zone taps still surface full zone classification (non-negotiable rule 1) and
+  now show band wording instead of a figure; a bare map tap over topographic data opens nothing. The
+  "Deepest within 100 m" button is unreachable there by construction.
+- **Safety label shipped** in the Imported-depths panel, stating verbatim that HAT is an
+  astronomical-tide ceiling only — excludes storm surge, barometric setup, and Brisbane River flood
+  stage — and that "dries earliest" is never a flood, depth or safety claim.
+- Validated: `node --check` PASS on both script blocks; inlined Leaflet block **byte-identical**
+  (sha256 verified against HEAD); `zoneAt()` most-protective ordering and the green-zone dragend
+  re-check both intact.
+
+**Corrections folded in this session (stale facts, now fixed):**
+1. Above-HAT figures were "63% SC / 74% BR" — **flipped and wrong**; real v2 figures are 65.8% SC /
+   63.7% BR.
+2. Below-LAT count cited deleted v1 ("2 of 209,540") — now **2 of BR's 189,187, 0 of SC's 168,461**.
+3. Tide tables are **2026 only (365 days)**, not "2026–2027" as claimed in the roadmap and the build
+   brief. Percentile maths unaffected; provenance claim corrected.
+4. Recorded why empirical and idealised genuinely diverge (above) rather than leaving it as an
+   unexplained mismatch.
+5. CLAUDE.md's two stale domain facts fixed in commit `27f116b` (ELVIS depth-source, tide ports).
+
+**NEXT JOB — Moreton Bay / Redcliffe Phase A (its own session; long-run).** Discovery done: the
+delivery was never missing, it is **193 unique tiles** (93× `MoretonBay_2014_LGA`, 100×
+`Moreton_Bay_2018_LGA`), MGA56 E505000–519000 / N6976000–7021000, inside five `DATA_*.zip` archives
+**misfiled** under `data/raw/Sunshine-Coast/` and `data/raw/Brisbane-River/` (110.6 GB total, which
+also contains non-Moreton tiles). Pending cleanup: same-volume rename into `data/raw/Moreton-Bay/`
+before the run. This delivery has **never** had the class-9-adjacency density check (v16.17–v16.18)
+run on it — mandatory, drop flagged points, never reclassify. >100 tiles and multi-hour, so LONG-RUN
+DISCIPLINE is confirmed required: smoke test on a small subset first, progress print every N tiles
+with flush, atomic checkpoint every N, resume-from-checkpoint, real PID reported. Reuse the exact
+banding + renderer logic already proven here — Brisbane Bar port, no drift. Output: one new-region
+**MERGE** CSV (`moreton_bay`, source_type already wired).
+
+**Also still open (unchanged):** the v16.49.6 guarded legacy-`woongarra_imported_v1` delete button
+was never exercised — the ~519 KB legacy key may still be on-phone. Cheap, one-tap, no urgency.*
+
+---
+
 *v16.49.7 · 27 Jul 2026 — ON-DEVICE GATE CLEARED + FLATS LAYER DESIGN LOCKED. No code shipped
 (build stays `2026.07.25c`); this entry closes the v16.49.5 gate and settles the flats-layer
 spec that gate was blocking.
@@ -56,16 +151,21 @@ Maroochy/Noosa) from topographic NIR (BR/SC/Moreton); tide-port line now lists a
 - **FINAL DESIGN — 4 bands, deliberately exceeding the standing "three-state at most" hard
   constraint** (carried since the v14b DEA evaluation, reaffirmed for this delivery). **Aaron's
   explicit, on-record override — not a drift, a decision:**
-  - Above HAT: not painted (dry land) — alone removes 63% of Sunshine Coast points and 74% of
-    Brisbane River points from the layer (per the existing land-overpaint diagnosis measurement),
-    a genuine visual simplification, not just a rule. *(Footnote: measured against on-phone
-    (already-thinned) counts, not v1/v2 directly; re-verified against v2 in STEP 1.)*
+  - Above HAT: not painted (dry land) — alone removes **65.8% of Sunshine Coast points and 63.7%
+    of Brisbane River points** from the layer, a genuine visual simplification, not just a rule.
+    *(Corrected v16.50: the previously-recorded "63% SC / 74% BR" was wrong on both counts — the
+    figures were flipped AND the BR number was never reproducible. Old figures came from on-phone
+    already-thinned counts; these are measured directly against the v2 files. SC's 65.8% is with
+    per-point `nearestPort()` routing, matching what the app's okHAT gate actually does — a single
+    region-wide HAT 2.24 would read 68.0% and wrongly discard SC's southern tail, see v16.50.)*
   - **Band 1 (gold `#EF9F27`)** — HAT down to the 75%-of-range mark: dries earliest.
   - **Band 2 (amber `#BA7517`)** — 75%-mark down to the 25%-mark: dries by roughly half tide.
   - **Band 3 (teal `#1D9E75`)** — 25%-mark down to LAT: dries only near low tide.
   - **Band 4 (blue `#378ADD`)** — strictly below true LAT: always covered. **Structurally
     near-empty for this delivery** — NIR can't see underwater, so almost nothing in the source
-    data sits at or below LAT ([TO FILL — below-LAT count from v2, see STEP 1]). Will render mostly
+    data sits at or below LAT (**2 of Brisbane River's 189,187; 0 of Sunshine Coast's 168,461** —
+    v2 denominators; the old "2 of 209,540" cited the deleted, classifier-fault-contaminated v1).
+    Band 4 is therefore genuinely empty on SC and 2 px on BR. Will render mostly
     blank, correctly — not a bug, matches the existing "no survey data" honesty elsewhere.
   - **Boundary math validated, not guessed:** for a 3-band split, the boundaries that give each
     band an equal SHARE OF TIDAL TIME — accounting for the tide's real non-linear speed (slow
@@ -74,10 +174,13 @@ Maroochy/Noosa) from topographic NIR (BR/SC/Moreton); tide-port line now lists a
     the HAT–LAT range. Worked example, Brisbane Bar (HAT 2.81 m, LAT 0): boundaries at **2.11 m**
     and **0.70 m**.
   - **Refinement flagged for the build session, not resolved here:** the 75%/25% figures above
-    assume an idealised symmetric tide curve. The real embedded per-port tables (2026–2027,
-    already validated) carry genuine diurnal inequality — compute the true empirical 1/3 and 2/3
-    time-split points from the real tables per port instead of the idealised assumption. No new
-    sourcing, materially more accurate, cheap to add.
+    assume an idealised symmetric tide curve. The real embedded per-port tables (**2026 only —
+    365 days, `2026-01-01`..`2026-12-31`; the long-standing "2026–2027" claim is wrong, corrected
+    v16.50**, and repeated in the v16.50 build brief) carry genuine diurnal inequality — compute the
+    true empirical 1/3 and 2/3 time-split points from the real tables per port instead of the
+    idealised assumption. One year still spans every spring/neap and seasonal cycle, so the
+    percentile computation stands unaffected — only the provenance claim was wrong. No new
+    sourcing, materially more accurate, cheap to add. **Done in v16.50.**
   - **Colour scheme:** warm→cool 4-stop spectrum, gold → amber → teal → blue, confirmed liked.
   - **Hard safety caveat, unchanged and still binding:** HAT is an astronomical-tide ceiling
     only — no storm surge, no barometric setup, and critically **no river flood stage**, given
