@@ -84,15 +84,29 @@ Burnett Heads is computed for completeness only — Woongarra stays bathymetric 
 
 **NEXT JOB — Moreton Bay / Redcliffe Phase A (its own session; long-run).** Discovery done: the
 delivery was never missing, it is **193 unique tiles** (93× `MoretonBay_2014_LGA`, 100×
-`Moreton_Bay_2018_LGA`), MGA56 E505000–519000 / N6976000–7021000, inside five `DATA_*.zip` archives
-**misfiled** under `data/raw/Sunshine-Coast/` and `data/raw/Brisbane-River/` (110.6 GB total, which
-also contains non-Moreton tiles). Pending cleanup: same-volume rename into `data/raw/Moreton-Bay/`
-before the run. This delivery has **never** had the class-9-adjacency density check (v16.17–v16.18)
-run on it — mandatory, drop flagged points, never reclassify. >100 tiles and multi-hour, so LONG-RUN
+`Moreton_Bay_2018_LGA`), MGA56 E505000–519000 / N6976000–7021000, spread across five `DATA_*.zip`
+archives (110.6 GB total). *(Corrected: these are legitimate multi-region ELVIS order bundles, NOT
+Moreton-specific deliveries misfiled under the wrong directory — the earlier "misfiled" claim was
+wrong. Moreton tiles are a minority slice of each: 9 of 819 tiles in `DATA_2047341.zip` (the rest is
+625 Brisbane + 185 Ipswich), 17 of 74, 47 of 92, 85 of 152, 138 of 150. `audit_class2.py` selects
+tiles by manifest (`AUDIT_MANIFEST`), not by directory, so no move was needed or performed.)*
+**Rename investigated and REJECTED:** manifest `src` paths are hardcoded absolute
+(`D:/Claude Code/data/raw/Brisbane-River`, `.../Sunshine-Coast`) across all 1,375 entries, so moving
+the zips would orphan every manifest entry and fail every tile. If bundle-accurate directory naming
+is wanted later for human readability, that is a separate deliberate job (rename dirs + regenerate
+manifests to match) — not a Moreton prerequisite, not scheduled.
+This delivery has **never** had the class-9-adjacency density check (v16.17–v16.18)
+run on it — mandatory, drop flagged points, never reclassify. **Smoke test passed** (4 tiles spanning
+3 different bundles including the 64 GB one): 3 HIT / 1 `clean_by_absence`, same misclassified-water
+signature as BR/SC (e.g. class-2 median −0.56 m against class-9 median −0.70 m in the same 25 m cell,
+1,428 ground points) — the fault is confirmed present in this delivery, though affected areas per
+tile are small (0.001–0.023 km²). >100 tiles and multi-hour, so LONG-RUN
 DISCIPLINE is confirmed required: smoke test on a small subset first, progress print every N tiles
 with flush, atomic checkpoint every N, resume-from-checkpoint, real PID reported. Reuse the exact
-banding + renderer logic already proven here — Brisbane Bar port, no drift. Output: one new-region
-**MERGE** CSV (`moreton_bay`, source_type already wired).
+banding + renderer logic already proven here — **per-point `nearestPort()`, NOT a region-wide port**:
+Moreton tiles span lat −27.335..−26.928 and split **122 Mooloolaba / 71 Brisbane Bar**, so a
+region-wide "Brisbane Bar throughout" would repeat the Sunshine Coast bug at 63% instead of 14.6%.
+Output: one new-region **MERGE** CSV (`moreton_bay`, source_type already wired).
 
 **Also still open (unchanged):** the v16.49.6 guarded legacy-`woongarra_imported_v1` delete button
 was never exercised — the ~519 KB legacy key may still be on-phone. Cheap, one-tap, no urgency.*
