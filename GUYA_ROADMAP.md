@@ -1,4 +1,68 @@
 # Guya — Feature Backlog & Roadmap
+*v16.51 · 28 Jul 2026 — MORETON BAY / REDCLIFFE PHASE A COMPLETE. Data only — **no `index.html`
+change, build stays `2026.07.27a`**; the v16.50 renderer already handles `moreton_bay` and its
+`source_type` was wired then. One new CSV ready for Aaron's phone-side import.
+
+**`data/moreton_bay_flats_v1.csv` — import as MERGE into "Moreton Bay / Redcliffe"** (new region, so
+MERGE is correct here; BR/SC needed REPLACE only because they had mislabelled "depth" data to
+displace). **33,751 points, 0.95 MB.** Device auto-thin (`MAXP=25000`) applies as usual.
+
+**This delivery is markedly more fault-affected than BR/SC — the class-9-adjacency check earned its
+keep here.** Full audit over all 193 tiles (`audit_class2.py`, reused unmodified, PID 1514, ~8 min):
+- **149 of 193 tiles HIT (77%)**, 38 `clean_by_absence` (no class-9 points at all), 6 `clean`.
+- **6,365 flagged cells, 3.978 km²** of misclassified water surface, max density 4,797 ground points
+  in a single 25 m cell.
+- Mask re-scan (`hybrid_mask.py`, PID 1239, 353 s) dumped every flagged cell key: **6,365 cells,
+  0 count mismatches** against the audit — clean cross-validation, same as BR/SC.
+- Flagged points were **dropped, never reclassified**. 6,861 of 88,768 extracted cells removed
+  (7.73%).
+
+**Pipeline (extract → mask → band → CSV), faithful to BR/SC with two approved deviations:**
+- class-2 ground only, elevation clipped −3.0..+5.0 m AHD, 25 m cells, rank priority (2018 rank 1
+  beats 2014 rank 2; equal rank pools z and takes the median) — identical to `process_tiles.py`.
+- **Deviation 1:** outer zip resolved from `tile['src']` instead of the hardcoded `SUNSHINE_DIR`.
+  No behaviour change for the 184 Sunshine-Coast-bundle tiles; without it the 9 Brisbane-River-bundle
+  tiles fail outright.
+- **Deviation 2:** AHD→LAT offset taken from the manifest's **per-tile** `offset` (184 tiles at 1.26
+  Beachmere, 9 at 1.32 Brisbane Bar), not `export_csv.py`'s latitude-bucket function — that function
+  buckets every Moreton tile to 1.26 and was built for the SC/Noosa delivery. Same "per-group, not
+  blanket" principle as Brisbane River's Brisbane Bar/Bremer split.
+- Banding uses **per-point `nearestPort()`** against the `FLATS_BOUNDS` already shipped in
+  `index.html` — no new tide computation. Port split of the written points: **Mooloolaba 24,025 /
+  Brisbane Bar 9,726**, confirming a region-wide port would have been wrong for 71% of this region.
+
+**Moreton's own figures, computed fresh against this delivery (NOT carried over from BR/SC):**
+| Metric | Moreton Bay / Redcliffe |
+|---|---|
+| cells extracted | 88,768 |
+| dropped by flagged-cell mask | 6,861 (7.73%) |
+| post-mask points | 81,907 |
+| **dropped above HAT** | **48,156 (58.8% of post-mask)** |
+| **written** | **33,751** (0.95 MB) |
+| **below LAT** | **0** |
+| gold / amber / teal / blue | **22,357 / 9,489 / 1,905 / 0** |
+Above-HAT at 58.8% is lower than BR (63.7%) and SC (65.8%) — this delivery sits closer to the
+intertidal zone. Band 4 (blue) is again **empty**, consistent with NIR's inability to see underwater;
+that is now 3 regions running (BR 2, SC 0, Moreton 0) and should be treated as the expected result.
+
+**JS/Python cross-check performed again, and it caught something again.** First pass disagreed by
+3 points (teal↔amber). Cause: the build script banded on the **unrounded** depth while the CSV ships
+values rounded to 2 dp — and 247 points sit within 6 mm of Mooloolaba's 0.775 m boundary. Re-banding
+in Python **from the written CSV** reproduces `flatsBand()` exactly (22,357 / 9,489 / 1,905 / 0, and
+0 rows above HAT). The CSV was never wrong — only the first summary was. **Lesson worth keeping:
+band counts must be computed from the rounded values that actually ship, since that is all the
+renderer ever sees.** Do not skip this cross-check; it has now found a real discrepancy on 2 of 3
+regions.
+
+**NEXT JOB:** import the three CSVs on-device and eyeball the flats layer in the field — that is the
+first real visual confirmation the 4-band scheme reads correctly at the map scale Aaron actually
+uses. Everything upstream is now shipped and verified. **Also still open:** the v16.49.6 guarded
+legacy-`woongarra_imported_v1` delete button was never exercised (~519 KB legacy key possibly still
+on-phone; cheap, one-tap, no urgency). Bundle-accurate raw-directory renaming remains deliberately
+unscheduled (see v16.50).*
+
+---
+
 *v16.50 · 27 Jul 2026 — FLATS LAYER PHASE A+B SHIPPED for Brisbane River + Sunshine Coast.
 Build `2026.07.27a`. Moreton Bay deliberately NOT in this build — see "next job".
 
