@@ -1,4 +1,169 @@
 # Guya — Feature Backlog & Roadmap
+
+*v16.53 · 30 Jul 2026 — **OPTION 3 STRICT-AND LAND/WATER MASK SHIPPED (runtime path). Build
+`2026.07.30a`.** Closes the v16.47.3 authorisation. A sample now counts as paint/read evidence only
+where OSM water polygons AND DEA WOfS frequency ≥ `WOFS_FREQ_MIN` (0.2) BOTH call it water —
+additive to the v16.44 HAT gate and the v16.25 R0/R1 ramp, neither of which was touched.
+
+**HEADLINE, read this before opening the app: the mask removes 51.7% of the HAT-surviving pool**
+(177,898 → 85,894 across the repo-visible on-device datasets). Per-dataset: BR flats 68,246 → 32,426
+(−52.5%), SC flats 57,050 → 18,807 (−67.0%), Moreton flats 33,424 → 15,483 (−53.7%), MN v2 19,178 →
+19,178 (−0%, exempt). This is the intended effect — that population is the sub-HAT "messy tier"
+Option A knowingly kept painting — but **expect visibly less flats paint on BR/SC/Moreton**, not a
+subtle change. Consistent with the spike: strict-AND retains only ~30% of the messy tier (measured
+28.16% here vs the spike's 30%).
+
+**Wired as ONE conjunct in `depthSamples()`, not five call-site edits** (Aaron's call after Step 0
+recon). The v16.44 HAT gate was already a single pool filter, and all five v16.25 gate call sites
+draw from that pool — `buildShade()` (`index.html:2007`), tap-to-read (`:2442-2443` handler →
+`openDepthRead()` `:2425`), `findDeepest()` (`:2454`, inner probe `:2460`), `buildAutoContours()`
+(`:2485`), desktop hover-readout (`:3189`) — all via `depthSamples()` directly or through
+`idwDepthAt()` (`:2414`) → `idwIndex()` (`:2409`). The slope-chain tool (`:1868`) inherits it for free
+exactly as it already inherits okHAT. One conjunct reaches all of them by construction, inherits
+`_poolCache`'s `poolVersion` memoisation with no new cache machinery, and makes "can only remove
+evidence" structural rather than five things to verify. Lines touched (and ONLY these):
+`REGION_MASK_EXEMPT`/`importedEx` `:2215-2216`, `rebuildImportedFlat()` `:2217`,
+`LANDMASK`+`lmBits()`+`maskWater()` `:2289-2377`, `depthSamples()`'s `okMASK` declaration `:2379` and
+its single use `:2384`. Build string `:1033` + `:1072`.
+
+**`source_type` could NOT carry the bathymetric exemption — this was a real trap.** `REGION_SOURCE`
+maps `legacy_unknown:'bathymetric'`, and `depthSamples()` hardcodes `st:'bathymetric'` for own pins
+and contours, so `'bathymetric'` is simultaneously the genuine-sounding tag AND the untagged default.
+A literal `st!=='bathymetric'` skip would have exempted the 55,660-pt legacy blob — the one dataset
+this was made runtime to reach. Exemption is therefore keyed on REGION: `REGION_MASK_EXEMPT=
+{woongarra:1,maroochy_noosa:1}`, plus own pins/hand contours (deliberately: deleting depths Aaron
+placed himself because a 30 m raster disagrees would be wrong). `'sonar'` does not exist anywhere in
+the codebase — only `bathymetric`/`topographic`.
+
+**Measured figures, from the ACTUAL SHIPPED JS decoder** (a Node harness loading the real `LANDMASK`
+block + `lmBits()` + `maskWater()` out of `index.html`, not the offline Python — the two agreed on
+**0 / 13,231** points):
+  - **dry→water (false paint): 32/3,684 = 0.87%** (spike 0.79%)
+  - **wet→water (coverage kept): 7,940/7,981 = 99.49%** (spike 99.74%)
+  - messy→water: 426/1,513 = 28.16% (spike 30%)
+  - Fidelity vs the spike's per-point vector verdicts: 97.78% agreement (292 disagreements of 13,178)
+  - All 4 named dry probes → land ✓ (Twin Waters GC, Sunshine Motorway, Bli Bli, Maroochydore CBD)
+  - **All 9 v16.41 stale-popup offshore locations → water ✓** (coverage preserved where it matters)
+  - Maroochy Wetland Sanctuary 36-pt defect grid: **35 land / 1 water** — defect class suppressed,
+    beating the spike's OSM 31 / WOfS 34. The single water cell is the grid centre, which the spike
+    also scored water (its own probe: OSM `water(poly)`, WOfS 0.98) — matched behaviour, not a regression.
+  - **Real payload: +93.7 kB (0.092 MB)** — `index.html` 2,149,778 → 2,245,730 B. Comfortably inside
+    the 0.3–0.8 MB budget, so no resolution coarsening was needed (per-region boxes alone did it).
+  - Perf: RLE decode 9 ms cold (once), 159,907 `maskWater()` calls in 12 ms (0.08 µs/pt), 907 kB
+    bitmap RAM. Runs on pool rebuild only — never per frame, never per pixel.
+
+**Known accepted residual, and it is INERT:** the "Maroochy River mouth channel" probe
+(−26.6555, 153.099) reads land where water is expected — the spike scored it identically (OSM `land`,
+WOfS 0.0031), so it is inherited, not new. It is not an MN point (nearest MN sounding 167 m away), so
+the bathymetric exemption does not cover it; the 110 `sunshine_coast` samples within 150 m are all
+`d ≤ −2.24` and **already excluded by the v16.44 HAT gate**, so the mask removes 0 additional samples
+there. Logged and not chased further, per instruction.
+
+**Structural no-regression: PASS.** HAT+mask pool ⊆ HAT pool for every dataset, 0 violations — the
+mask is a pure conjunct after the HAT test, so nothing excluded can reappear. Caveat stated honestly:
+this holds for paint *extent*; interpolated *values* (`FD`) inside the surviving extent do shift as
+dry-land contributors drop out of the IDW — that is the intended improvement, not a no-op.
+
+**Two build defects found and fixed during the run — both would have silently shipped a wrong mask:**
+  1. `overpass.osm.ch` is a **Switzerland-only** Overpass instance that answers Australian bboxes with
+     HTTP 200 + zero elements. It silently wiped central Brisbane and Mooloolaba/Maroochy in the first
+     full fetch. Removed; an empty result now requires either a second mirror's agreement or an
+     independent WOfS open-water confirmation before being accepted.
+  2. The ocean flood-fill **leaked**: seeding from wet box-edge cells let inland dams on the land side
+     seed the fill, and land is one connected region, so 99.8%/93.2%/99.3% of each box filled as
+     "ocean" — collapsing STRICT-AND onto WOfS-alone (2.04% false paint) and discarding the OSM half
+     entirely. Replaced with OSM's actual coastline-direction invariant (land on left, sea on right;
+     `cross = dx*vy − dy*vx < 0` ⇒ seaward), which is purely local and so immune to ways clipped at
+     box edges. Also switched polygon rasterisation to `all_touched=False`: dilation was inflating
+     false paint to 1.28%.
+
+**Tooling now lives in the repo, deliberately:** `tools/landmask_fetch.py`, `tools/landmask_build.py`,
+`tools/landmask_validate.py`. The v16.43 spike's `score_landmask.py`/`cohorts.js` were lost with the
+session scratchpad because `data/raw/` is gitignored — the raw pulls and `score_results.json` survived
+(all 13,178 labelled cohort points + 17 probes, which is what made this validation possible at all).
+Do not put build scripts under `data/raw/` again. Long-run discipline: progress per tile with flush,
+atomic checkpoint (tmp + `os.replace`) after every tile, resume verified by a real restart, smoke
+tested before the full run; 15 tiles, 1,607 s, pids 12796 (smoke) / 16160 / 240 / final run 3.
+
+**Mask geometry:** three boxes, not one — woongarra (−24.98..−24.66, 152.30..152.60), seq_coast
+(−27.35..−26.34, 153.02..153.22; SC+Moreton merged, their union is smaller than two separate boxes),
+brisbane_river (−27.66..−27.27, 152.72..153.34). 0.54 deg² total vs 3.1 deg² for one combined box.
+Outside every box `maskWater()` returns **true (pass)** — load-bearing: MN reaches north to −25.89,
+past every box, and a future region must not silently go unpainted.
+
+**ON-PHONE CHECK FOR AARON (build `2026.07.30a`):**
+  1. **Should NO LONGER paint:** Sunshine Motorway golf course / Twin Waters GC (≈ −26.627, 153.083),
+     Bli Bli suburb, Maroochydore CBD, Brighton-side suburban pockets. Tap → expect no depth read.
+  2. **Should STILL paint:** all 9 v16.41 stale-popup offshore spots (e.g. −26.71118, 153.14156;
+     −26.3636, 153.09836) — these validated as water. Maroochy/Noosa soundings must be COMPLETELY
+     unchanged (region-exempt) — this is the fastest single check that the exemption is working.
+  3. **Expect a big visible reduction** in BR/SC/Moreton flats paint (~52–67%). Confirm it looks like
+     dry-pocket removal, not holes punched in genuine channels/mudflats.
+  4. **Legacy Woongarra depths — the one thing not verifiable offline.** The 55,660-pt legacy blob is
+     `legacy_unknown`, which is NOT exempt, and it is presumed to span Bargara/BR/SC. It is phone-only
+     and not in the repo (`quota_test_dummy_backup.json` is a 398k synthetic fixture, not it), so it
+     could not be scored. **Check Bargara/Woongarra rock-ledge depths still read.** If Woongarra
+     depths have thinned, add `legacy_unknown:1` to `REGION_MASK_EXEMPT`.
+  5. Feel-check panning at Redcliffe and Maroochydore for any new slowdown — none expected (mask runs
+     on pool rebuild only), so any lag is a real finding worth reporting.
+
+**NEXT JOB:** MN v3 clip (≤200 m / native 25 m) — it wanted Option 3's OSM polygons, which now exist
+in `data/raw/_landmask_spike/tiles/`. Then Noosa tide-port wiring (mechanical, BoM TP021). **New
+low-priority backlog item (not in scope, logged so it isn't lost): `_idwCache` (`index.html:2408`,
+invalidation check `:2410`)
+keys on `s.length`, not `poolVersion`** — a pool change that happens to preserve length would not
+invalidate the read index. Pre-existing, untouched by this build, but the mask changes pool length so
+it sits adjacent. Also still open: Redcliffe 2021 Hydrographic Survey extents inspection.*
+
+---
+
+*v16.52 · 29 Jul 2026 — planning chat, no build. FIELD VERIFICATION CLOSES v16.51's NEXT JOB: all
+three flats-layer imports (BR REPLACE 68,591 pts, SC REPLACE 57,565 pts, Moreton MERGE 33,751 pts)
+confirmed correct on-device — depths read OK, persisted through force-close/reopen (iOS
+async-flush check passed). Legacy `woongarra_imported_v1` guarded delete button exercised — ~519 KB
+reclaimed, closes the item open since v16.49.6. Version:2 backup exported post-import per standing
+habit. Flats-layer arc (Phase A+B BR/SC + Phase A Moreton) is now fully shipped AND field-verified —
+nothing pending on it. Build stays `2026.07.27a`; no code shipped this chat.
+
+**NEXT JOB, build prompt drafted this session, ready to dispatch: Option 3 (STRICT-AND land/water
+mask, runtime path, authorised v16.47.3).** Unblocked now the flats layer is done (per the
+flats-before-mask reorder logged mid-arc). Full build prompt handed to Aaron for Claude Code; key
+requirements captured here so this entry stands alone if the prompt itself isn't kept:
+  - Spec unchanged from the v16.43 spike / v16.47.3 authorisation: a sample counts as
+    paintable/readable water only if OSM water polygons AND DEA WOfS (frequency ≥ 0.2, named
+    tunable constant) both agree it is water. Expect ~0.79% false-paint / 99.74% wet-coverage kept
+    — measure against the real shipped code, don't assume the spike's number transfers unchanged.
+  - Runtime, not bake-time — the only way to reach the untagged legacy 55,660-pt blob (phone
+    localStorage only, not in the repo, cannot be re-exported).
+  - Cache the OSM+WOfS verdict **per sample, keyed on `poolVersion`** — same pattern as the
+    `.r0`/`_r0Cache` memoisation — so this doesn't reopen the per-pan performance cost the
+    r0/pool-cache arc just closed. Evaluated once per unique point on import/replace/clear, not
+    per render frame.
+  - Wire in as an ADDITIONAL required condition at all FIVE `v16.25` gate call sites
+    (`buildShade()`, tap-to-read, `findDeepest()`, `buildAutoContours()`, desktop hover-readout) —
+    additive to the existing HAT gate (v16.44) and R0/R1 distance ramp, never a replacement.
+  - Reuse the v16.43 spike's proven OSM/WOfS sourcing+scoring code (`data/raw/_landmask_spike/`)
+    rather than re-deriving from scratch.
+  - Never touches `zoneAt()`, zone determination, or any legality assertion — cosmetic paint/read
+    gate only.
+  - Data budget: +0.3–0.8 MB on the single file, combined bbox = the four current regions
+    (Woongarra/Bargara, Moreton Bay/Redcliffe/Bribie/Pumicestone, Sunshine Coast/Maroochy/Noosa,
+    Brisbane River) — report the real payload size, don't assume it lands in-budget.
+  - Re-validate on the real shipped runtime code (not just trust the offline spike): the same
+    13,178 pilot points, all named dry probes, all 9 stale-popup locations, the Maroochy Wetland
+    Sanctuary 36-pt defect grid — AND confirm genuine bathymetric soundings (MN, Woongarra) are not
+    false-negatived by the mask, since those datasets weren't the spike's main focus.
+  - Standard discipline: both script blocks `node --check`; Leaflet block byte-identical;
+    `zoneAt()`/dragend safeguard confirmed absent from the diff by `grep`, not eyeballed; build
+    string bumped; `git status` clean at close. Apply LONG-RUN DISCIPLINE (progress/checkpoint/
+    resume, PID reported) if the OSM/WOfS fetch+processing exceeds ~100 files or ~10 minutes.
+
+MN v3 clip (≤200 m/native 25 m) sits behind this build (needs Option 3's OSM polygons); Noosa
+tide-port wiring (mechanical, BoM TP021, independent of the above) sits behind that. Backlog aside,
+cheap, no urgency: Redcliffe 2021 Hydrographic Survey extents inspection (item a).*
+
+---
+
 *v16.51 · 28 Jul 2026 — MORETON BAY / REDCLIFFE PHASE A COMPLETE. Data only — **no `index.html`
 change, build stays `2026.07.27a`**; the v16.50 renderer already handles `moreton_bay` and its
 `source_type` was wired then. One new CSV ready for Aaron's phone-side import.
