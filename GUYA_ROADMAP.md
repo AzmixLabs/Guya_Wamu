@@ -1,5 +1,65 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.59 · 31 Jul 2026 — housekeeping + one correction. No build, no code, no data. Build stays
+**2026.07.30a**. Repo clean at `28c3fff` (v16.58); project knowledge confirmed at v16.58 by direct
+search before this entry was written, so v16.58 is the verified common base on both surfaces — the
+fork v16.58 resolved has not reopened.
+
+**Two stale-tracking loose ends closed — but one of them did NOT close the way it was reported,
+and the difference matters.**
+
+- **`guya_species_qld_v3.md` — open item 13 CLOSED as a tracking item, but the standing note that
+  contradicts it is only now being tagged.** The file is tracked and committed. It did not sit out
+  of the repo and then get deliberately admitted: it was swept in by **v16.48's STEP 0 REPO
+  HYGIENE** (22 Jul), which committed it alongside the pending roadmap edit and described it as
+  benign species-passport seed data, read in full before committing, unrelated to that build. True
+  as far as it goes — but it treated a **deliberate exclusion as accidental cruft.** Two places on
+  record say the opposite: the standing **Species seed** note immediately above the `## Design
+  rules` divider ("kept in project knowledge (private), not the repo. Repo stays just the shipped
+  `index.html`"), and the earlier baked-data commit entry, which lists the file under
+  **Deliberately left out** — "by design — project knowledge only, never the repo." So the correct
+  status is not "no action needed." It is: **a design decision was silently reversed, and the
+  roadmap still asserted the pre-reversal position in a live, untagged section.** That Species-seed
+  note is now tagged `[SUPERSEDED — see v16.59]` in place — the same treatment v16.58 gave
+  v16.53's two stale claims, for the same reason: so a top-to-bottom Claude Code pass can't read it
+  as current.
+  **Left to Aaron, deliberately not decided here — whether the file should stay in the repo.**
+  The content is benign, but the original note's parenthetical was "project knowledge
+  (**private**)", which reads as a visibility decision rather than a tidiness one. If
+  `AzmixLabs/Guya_Wamu` is public (it serves GitHub Pages; **not verified in this chat — the API
+  check was rate-limited, so this is an open question, not a finding**), the sweep made the seed
+  list public. Resolve one of two ways: accept it as a change and delete the superseded note, or
+  `git rm --cached` it and add it to `.gitignore` so the next hygiene sweep can't re-commit it.
+  Doing neither leaves a third independently-drifting copy of a project-knowledge file — the same
+  multi-surface divergence class as the v16.58 sync incident, just with a smaller file.
+
+- **Two contaminated pre-drop-mask CSVs re-deleted from the working tree.**
+  `brisbane_river_intertidal_ground_v1` and `sunshine_coast_intertidal_ground_v1` resurfaced
+  untracked; confirmed byte-identical to the v1 files already formally removed from the repo
+  (classifier-fault contaminated, superseded by the v2 CSVs at `ef9385d`). Re-deleted, `git status`
+  clean. **No new information** — same files, not a fresh export, so nothing about the mask or the
+  v2/v3 lineage changes. Worth one line only because they came back once and can come back again:
+  they are **not gitignored**, so anything that re-materialises them (an old export script re-run,
+  a restore from a scratch folder) leaves them one careless `git add -A` from re-entering the repo.
+  Cheap prophylactic if it recurs: add `*_intertidal_ground_v1.csv` to `.gitignore`.
+
+**Unchanged and still open — the v16.58 process fix has NOT been actioned.** Route planning deltas
+to the repo copy first, commit, then re-upload to project knowledge: one direction, one
+authoritative copy. It requires an edit to this project's own custom instructions, which only Aaron
+can make. Until it exists, every full-file handoff — including this one — depends on the manual
+"delete old, upload new" step that already failed once at v16.57.
+
+**Next build session — sequence unchanged from v16.58**, restated only so this entry is
+self-contained: (1) `poolVersion`-keyed cache on `ptsBounds()`/`buildSampleIndex()`, on its own,
+on-phone gate; (2) storage prune — REPLACE BR/SC/Moreton with mask-surviving points only, after a
+`storage_check.html` run that records an actual **quota** figure and not just usage; (3) Option 3
+coverage-boundary toggle, edge-detect implementation, opt-in and default OFF; (4) MN v3 Noosa-OSM
+fetch → MN v3 clip, plus Noosa tide-port wiring — order-agnostic between themselves, independent
+of 1–3.*
+
+---
+
+
 *v16.58 · 31 Jul 2026 — planning chat, no build. **SYNC INCIDENT, resolved.** A separate planning
 chat, opened from this chat's handoff prompt, found project knowledge stuck at v16.55 with no
 v16.56/v16.57 — the full v16.57 file this chat produced and presented was never actually re-
@@ -2800,9 +2860,13 @@ first job, ahead of the Option A build — superseded by v16.43.1, which closed 
     (confirmed v16.5, re-confirmed v16.19) — same pattern as Redcliffe following Brisbane Bar in
     2a. Cheap, not urgent.
 12. Gold Coast stays parked.
-13. **New (v16.26):** `guya_species_qld_v3.md` sits untracked in the repo (surfaced by `git status`
-   during the deploy-incident fix) — origin and whether it belongs are undecided. Small, standalone,
-   no dependency on anything above.
+13. **CLOSED as a tracking item, REOPENED as a decision (v16.59).** Was: *"New (v16.26) —
+   `guya_species_qld_v3.md` sits untracked in the repo (surfaced by `git status` during the
+   deploy-incident fix) — origin and whether it belongs are undecided."* It is now tracked and
+   committed — but by **v16.48's STEP 0 repo-hygiene sweep**, not by a decision, and against a
+   standing "project knowledge only, never the repo" note that is only now tagged superseded.
+   Nothing left to track. What remains is Aaron's call: accept it in the repo and delete the
+   superseded note, or `git rm --cached` + `.gitignore`. See v16.59.
 14. **Maroochy/Noosa real bathymetric LiDAR — PIPELINE SHIPPED (v16.33), import decision
    pending.** Was: "New (v16.28) — target dataset identified, Aaron's step to order." Now:
    order placed, delivery inspected, pipeline built and run. Corrections to the original
@@ -2949,7 +3013,7 @@ manual-order handoff, per the ROUTING rules:** check the datum field on the prod
 in the ELVIS UI itself before submitting the Bathymetry (3 m) order — not a Claude Code task, not
 worth further searching.
 
-**Species seed:** `guya_species_qld_v3.md` — kept in project knowledge (private), not the repo. Repo stays just the shipped `index.html`.
+**Species seed:** `guya_species_qld_v3.md` — kept in project knowledge (private), not the repo. Repo stays just the shipped `index.html`. **[SUPERSEDED — see v16.59. The file WAS committed to the repo by v16.48's STEP 0 repo-hygiene sweep on 22 Jul 2026 and is tracked there now. The sentence above describes the pre-reversal intent, not current state. Whether it stays in the repo is an open decision for Aaron — do not act on this line as written.]**
 
 **Phase 1 spine (items 1 → 2 → 3) is complete.** Keystone journal, best-bets/range, and personal
 patterns all ship. Remaining Phase 1 work is the collection/passport layer (4, 5, 6 — **4c profiles
