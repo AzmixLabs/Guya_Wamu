@@ -1,11 +1,304 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.58 · 31 Jul 2026 — planning chat, no build. **SYNC INCIDENT, resolved.** A separate planning
+chat, opened from this chat's handoff prompt, found project knowledge stuck at v16.55 with no
+v16.56/v16.57 — the full v16.57 file this chat produced and presented was never actually re-
+uploaded to project knowledge (a file-swap failure, not a delta-application failure: the download
+was generated and offered, but the "delete old, upload new" step didn't happen). That chat also
+found the **repo** stuck at v16.53 (`a3bb30d`), meaning the build-authoritative copy still carries
+both of v16.53's two highest-prominence errors as unmarked fact. Both quotes it flagged checked out
+verbatim against the real file — **both now tagged inline, in place, so Claude Code can't read them
+as current on a top-to-bottom pass:** the 51.7%/177,898→85,894 headline (`[SUPERSEDED — see
+v16.56]`) and the "MN v3 clip... OSM polygons... now exist" NEXT JOB line (`[CORRECTED — see
+v16.54]`). **Action: re-download THIS file (v16.58) and use it for both the project-knowledge
+re-upload and the repo overwrite** — it descends cleanly from the real v16.55 base, verified
+insertions-only, no mid-file hunks, matching the diff gate the other chat correctly insisted on
+before any overwrite.
+
+**Corrections accepted from that chat's review, applied here:**
+
+- **Option 2 (cosmetic edge softening) dropped from the pending-decision list.** A linear alpha
+  falloff between R0 and R1 already exists (`distA = near<=R0 ? 1 : (near>=R1 ? 0 :
+  1-(near-R0)/(R1-R0))`, per that chat's citation of `index.html:2014`, v16.47.x) — R0 was
+  deliberately raised (30→35→56 in the MN work) specifically to close visible gaps, so "soften the
+  edge" now would mean either changing the curve shape or lowering R0, i.e. partially reversing a
+  three-sub-version-old decision and reopening the hole-rate v16.47.4 measured. Not verified against
+  the live `index.html` in this chat (no repo access here) but consistent with everything on record;
+  Claude Code should confirm the current curve at build time and stop here if it disagrees.
+- **Option 3 pinned to a specific implementation, not left for Claude Code to pick:** edge-detect
+  the painted alpha buffer and stroke the boundary of what's actually painted (interior holes
+  included) — not a convex hull (implies coverage over gaps) or a concave/alpha-hull (fiddly,
+  introduces a tuning parameter). Tautologically correct, O(pixels) not O(points). **Ship as an
+  opt-in layer toggle, default OFF** — the default path stays lean; this is chrome for interrogating
+  a specific blob, not always-on cost.
+- **Bundling rejected — build the perf cache alone, gate it on-phone, decide the blob display
+  after.** Two reasons: mixing a pixel-paint-loop change into the same build as the perf fix would
+  make an on-phone "still feels laggy" report unattributable to either change (same one-variable
+  discipline the r0 harness artefact already taught this project); and Option 3 wasn't build-ready
+  as originally stated (three implementations with very different honesty profiles) until pinned
+  above.
+- **Storage note corrected — it was one figure in two units, not two figures.** "4995.5 KB / 4.88
+  MB" is the same usage number (4995.5 ÷ 1024 = 4.878), not usage-vs-quota. **No actual quota
+  figure has ever been recorded** — next `storage_check.html` run should capture it explicitly, not
+  just usage, especially now that usage is confirmed non-trivial.
+- **MN v3's storage-note direction was backwards — corrected.** v16.47's own entry mandates REPLACE
+  on `maroochy_noosa`: ~535 KB of existing 19,178-pt data comes OUT before the new ~491 KB clip goes
+  in. Net effect is **≈ −44 KB, not +491 KB** as the v16.55 backlog note carried it forward. The
+  clip is a storage *saving*, not a cost, at the projected (≤60k-pt, native-25m) branch size.
+
+**Checked, not accepted as stated:** the claimed self-contradiction in the MN v3 grid-ladder entry
+("check quota first" for the 60k–150k branch vs "quota risk is negligible" in the same entry) does
+NOT hold up against the actual text — they apply to different branches (the 40m-thin contingency
+vs the currently-projected ≤60k/native-25m case), not a flat contradiction. That said, the
+practical concern underneath it is real and this chat isn't dismissing it: the same entry admits
+the real clipped count could land 2–3× over the geometric estimate (which is exactly what would
+push it into the 60k–150k branch), and today's storage findings (below) mean "negligible" deserves
+re-checking against an actual measured quota, not the projected best case, regardless of which
+branch it lands in.
+
+**Open, not resolved — flagged rather than asserted:** the 64,306 real-runtime-pool figure DOES
+reconcile exactly to a per-dataset breakdown (it was computed that way in v16.56, from the start:
+legacy_unknown 20,533 + BR 9,420 + SC 5,947 + MN 19,178 + Moreton 9,228 = 64,306) — the other chat
+flagged it as unreconciled only because it never received the real v16.56/57 file, not because the
+arithmetic was actually missing. But the number underneath — `legacy_unknown` losing ~63.1% (55,660
+→ 20,533) to HAT+mask — is a fair question to leave open rather than wave through: it's real
+Bargara bathymetric LiDAR by original description, which should mostly sit below HAT and survive.
+Plausible explanation: `legacy_unknown` is a pre-region-tagging blob that also contains untagged
+BR/SC-area data (v16.24.2), and BR/SC's known contamination — classifier-fault topographic returns
+mislabelled as depth — is exactly the population HAT+mask are supposed to strip. Plausible, not
+confirmed; no per-subregion breakdown of the blob exists to settle it either way.
+
+**New backlog item, sequenced behind the cache build and the reconciliation above, ahead of MN
+v3:** a one-time storage prune — REPLACE each of BR/SC/Moreton with mask-surviving points only.
+134,372 stored vs 64,306 real runtime pool = 70,066 points that never render, ≈1.87 MB of dead
+localStorage (≈38% of current usage) — pruning it both resolves the quota risk outright and halves
+the baseline pan-rebuild N before the `poolVersion` cache even ships. Risk: bakes in a mask that's
+already had one measurement error; mitigated by the v3 CSVs still being on disk for re-import if a
+third error surfaces. **Separately worth a look, not yet investigated:** the `storage_check.html`
+key list shows `brisbane_river`/`sunshine_coast` **rollback** backup keys (kept for "Undo last
+replace/merge/remove") totalling over 1.1 MB between them — additional reclaimable headroom if
+those backups are past their useful window, unconfirmed.
+
+**Process-fix suggestion, not actioned — needs Aaron, not Claude:** route planning deltas to the
+repo copy first, commit, then re-upload to project knowledge — one direction, one authoritative
+copy, retiring this whole failure class. This is a change to this project's own custom
+instructions, which only Aaron can edit (via Settings) — this chat can draft the exact wording if
+wanted, but can't apply it.
+
+**Confirmed sequence for the next build session, once Aaron says go:**
+1. Cache: `poolVersion`-keyed memoisation of `ptsBounds()`/`buildSampleIndex()`, same pattern as
+   `_r0Cache`/`_idwCache`. On-phone gate: full-pool wide pan, auto-contours off — expect near-zero
+   on repeat rebuilds.
+2. Storage prune (BR/SC/Moreton REPLACE with mask-surviving points only) — new item, see above.
+3. Option 3 coverage-boundary toggle (edge-detect implementation, opt-in, default off) — build once
+   1–2 are shipped and stable, kept out of the perf-measurement build for the one-variable reason
+   above.
+4. MN v3 Noosa-OSM fetch, then MN v3 clip; Noosa tide-port wiring — unchanged, order-agnostic
+   between the two, both independent of 1–3.*
+
+---
+
+
+*v16.57 · 31 Jul 2026 — planning chat, no build. Tasks 3 and 4 dispatched same session as Task
+1/2 (v16.56), results at `data/raw/_landmask_validation/task{3,4}_results.md`.
+
+**Task 3 — corrects v16.56's "2× `buildSampleIndex()` per pan" framing.** The `:2505` call isn't
+inside `buildShade()` — it's inside `buildAutoContours()`, which `buildShade()` only invokes when
+BOTH `shadeOn` AND `autoCtOn` are true (both default false). Real baseline cost (shading on,
+auto-contours off — the default, almost certainly Aaron's normal config): full-pool pan ≈ 0.79 +
+49.3 ≈ **~50ms** (not ~100ms), single-region pan ≈ 0.05 + 4.83 ≈ **~5ms** (not ~10ms) — using
+v16.56's own per-call timings, corrected for the single real call. The ~10x scaling ratio holds;
+the absolute figures don't. When auto-contours IS on, the double call is confirmed real and pure
+redundant work (identical inputs, no order-dependent side effects) — but the already-queued
+`poolVersion`-keyed cache subsumes this automatically (second call becomes a cache hit), so no
+separate dedupe patch is needed; one fix covers both cases.
+
+**Task 4 — "circle blob" density investigation, river-mouth/mangrove-terrain hypothesis
+REFUTED.** R0 is per-sample adaptive (30–90m), hard cutoff at R1=120m — no fill attempted past
+that, by design. >90% of points merge into continuous coverage even at the tightest radius; the
+sparse tail causing visible gaps is ~1–9% of points. BR is structurally sparser overall than
+Moreton (median 3 vs 9 pts/250m cell) — but BR's DENSE cells are 4x more likely to fall inside
+HPZ02 (Port of Brisbane, the zone in Aaron's screenshot) than sparse ones — that area is one of
+BR's better-surveyed patches, not worse; BR's sparse coverage skews upstream instead. Separately:
+Moreton's dataset doesn't geographically reach HPZ02 at all — the blob in Aaron's screenshot is BR
+data rendering under a Moreton Bay Marine Park zone label (independent overlays, expected).
+Conclusion: ordinary patchy LiDAR flight-line coverage, not a systematic terrain-class artefact —
+doesn't justify a general R1 increase. A 250m grid can't rule out a genuinely sparse patch at the
+exact screenshotted coordinate though; pinning that down needs the lat/lng-readout backlog item or
+a manual coordinate check.
+
+**Aaron's "make it uniform" request reframed as three options, decision pending:**
+1. Raise R1 to bridge gaps further — **rejected**: paints extent the survey doesn't support,
+   conflicts with the "no data beats wrong data" principle the class-9-adjacency check already
+   settled the other way.
+2. Cosmetic-only edge softening (gradient falloff instead of a hard circle boundary) — same real
+   extent, less visually jarring.
+3. Surface the real coverage boundary explicitly, using Task 4's NN-gap percentiles — the safe
+   version of Aaron's earlier "5m offshore, water begins here" idea: a boundary showing where the
+   *surveyed extent* ends, not a depth or water-onset claim.
+
+Recommended: (3), optionally layered with (2). **NEXT:** Aaron decides which option(s) to build;
+build session then covers the `poolVersion` cache (fixes the baseline pan-lag and subsumes the
+conditional double-call) plus whichever blob-display option is chosen. MN v3 Noosa-OSM fetch and
+Noosa tide-port wiring remain queued, unaffected, order-agnostic.*
+
+---
+
+
+*v16.56 · 31 Jul 2026 — planning chat, no build. Tasks 1 and 2 from v16.55 completed via Claude
+Code, results written to `data/raw/_landmask_validation/task{1,2}_results.md`.
+
+**Task 1 — real Option 3 mask table, supersedes v16.53's headline:**
+
+| Dataset | Stored | HAT-surviving | Mask-surviving | Removed (of HAT-surviving) |
+|---|---|---|---|---|
+| BR | 21,126 | 20,970 | 9,420 | 55.08% |
+| SC | 17,806 | 17,561 | 5,947 | 66.14% |
+| Moreton | 20,602 | 20,353 | 9,228 | 54.66% |
+
+v16.53's claimed HAT-surviving figures (68,246/57,050/33,424) exceed the real stored counts for
+all three — structurally impossible, confirms the v16.55 wrong-dataset diagnosis (harness ran
+against pre-thin v3 CSV exports, not on-device data). **The removal RATE was correct all along**
+(55.08/66.14/54.66% real vs 52.5/67.0/53.7% claimed) — only the absolute population was wrong, by
+roughly 3x on BR/SC and 3.6x on Moreton (real mask-surviving counts run about a third of what
+v16.53 implied).
+
+**Minor inconsistency caught in task1_results.md, logged not re-run:** its method section
+describes `legacy_unknown` as "exempt by REGION_MASK_EXEMPT, out of scope per spec," grouping it
+with `woongarra`. That's not accurate — `REGION_MASK_EXEMPT` keys are only `woongarra` and
+`maroochy_noosa`; `legacy_unknown`'s region tag doesn't match either, so it IS mask-filtered, same
+as BR/SC/Moreton (confirmed independently and correctly in Task 2's own method section, which
+computed its real post-filter N as 20,533). Doesn't affect Task 1's reported BR/SC/Moreton numbers
+— it just wasn't asked to measure legacy_unknown — but the stated justification for skipping it is
+wrong and shouldn't be reused as a reference next time legacy_unknown needs measuring.
+
+Real total runtime pool, all 5 datasets combined post-HAT+mask (using Task 2's correct
+legacy_unknown figure): legacy_unknown 20,533 + BR 9,420 + SC 5,947 + MN 19,178 (HAT-only,
+mask-exempt, passes at 100%) + Moreton 9,228 = **64,306**, down from 134,372 stored — ~48% overall
+survival.
+
+**Raised, then resolved same session: does `WOFS_FREQ_MIN=0.2` still match the accuracy bar now
+the true (smaller) surviving population is visible?** Resolved as NOT an open decision — the
+density Aaron reviewed and accepted in v16.55's item-3 visual check (residual blobs = legitimate
+canal/lake water agreeing under both OSM and WOfS, not under- or over-removal) was already
+produced by these exact real numbers; nothing rendered on-device has changed between "before this
+diagnostic" and "after." No threshold change queued.
+
+**Task 2 — pan-lag timing measured, both passes agree on pool-size-not-viewport scaling** (~7x N →
+~8.3–8.5x `buildSampleIndex()` time, stored-count pass and real-post-filter pass consistent). Real
+per-pan cost estimated at the time: full-pool pan ≈78–100ms, single-region pan ≈9–10ms — **NOTE:
+this estimate double-counts a call and is corrected downward in v16.57**, see below. Caveat stood
+from the start: Node/V8 desktop timings, not iOS JSC — relative scaling expected to transfer,
+absolute ms unconfirmed on-device. Not built this session, measurement only —
+`poolVersion`-keyed caching (same pattern as `_r0Cache`/`_idwCache`) is the indicated fix, pending
+Task 3's follow-up.
+
+**NEXT:** Task 3 (confirm whether `buildShade()`'s two `buildSampleIndex()` calls share identical
+inputs) and Task 4 (investigate a "circle blob" density pattern Aaron flagged at Port of Brisbane
+on desktop) dispatched same session — see v16.57. MN v3 Noosa-OSM fetch and Noosa tide-port
+wiring remain queued, unaffected, order-agnostic.*
+
+---
+
+
+*v16.55 · 31 Jul 2026 — planning chat, no build. Build stays `2026.07.30a`. ON-PHONE CHECK for the
+Option 3 mask (per the v16.53 checklist) reviewed against 18 screenshots. **Items 2 and 4 PASS,
+closed.** MN unchanged: exactly 19,178pt in the Imported-depths panel, matching the v16.34 export
+size — exempt by construction (`okMASK` never calls `maskWater()` for `maroochy_noosa`), confirmed
+live. Legacy Bargara/Woongarra depths intact: Innes Park / Nudibranch Tip taps (CPZ06, Great Sandy
+MP) both returned live depths (≈5.2–5.7 m across two taps at different tide states). Panel confirms
+there is NO separate `woongarra`-tagged dataset — all Bargara-area data sits inside "Restored
+backup (pre-region-tagging)" (`legacy_unknown`, 55,660pt, unchanged). **The `woongarra` mask box
+(`−24.98..−24.66, 152.30..152.60`) therefore has zero dataset customers by construction** — the
+only points ever mask-tested inside that bbox belong to something other than the exempt
+`woongarra`/`maroochy_noosa` regions, and the only candidate present is `legacy_unknown`, which
+passed. Not urgent to remove; logged for awareness.
+
+**MAJOR — v16.53's measured mask-effect figures were validated against the wrong dataset, need
+re-measurement.** Real on-device stored counts, read directly off the Imported-depths panel (sum
+matches the app's own "134372 points loaded across all regions" label exactly): legacy_unknown
+55,660 / Brisbane River 21,126 / Sunshine Coast 17,806 / Maroochy·Noosa 19,178 / Moreton
+Bay·Redcliffe 20,602. v16.53's "HAT-surviving pre-mask" figures (BR 68,246 / SC 57,050 / Moreton
+33,424) each EXCEED these totals — structurally impossible, since a HAT-surviving subset can't
+outnumber the full stored pool it's drawn from. Most likely root cause, matching the same bug class
+the r0 session already caught once (144,474-vs-113,557, harness omitting the app's 25k-per-CSV-parse
+auto-thin loop): the v16.53 validation harness almost certainly ran against the pre-thin v3 CSV
+export files, which do match the 68,591/57,565/33,751-point sizes logged at v16.52 import time — not
+against on-device storage after the app's per-parse cap thinned BR/SC/Moreton further on import.
+Maroochy/Noosa was unaffected because its bake-time export was already pre-thinned to 19,178 (under
+the 25k cap), so CSV size and on-device size happen to coincide there. **The 51.7% removal / 0.87%
+false-paint / +93.7 kB headline from v16.53 is therefore unverified against real stored data —
+re-run the harness against the actual 21,126/17,806/20,602-point datasets before citing those
+figures again.**
+
+**Item 5 (pan feel-check): FAIL, new finding.** Real, reported lag on a wide-zoom pan spanning
+Brisbane River → Bargara. Not expected — the mask runs on pool rebuild only, never per-frame, so
+it's unlikely to be the direct cause; prime suspect is the pre-flagged v16.51 backlog item (c):
+`ptsBounds(pts)` and `buildSampleIndex()`/`sIx` inside `buildShade()` still run O(n) over the full
+pool on every call, uncached on `poolVersion` — and the pool is now larger post-flats-layer and
+post-mask than when that item was logged as "not queued, Aaron reports panning acceptable." Open
+scoping question before dispatch: is a LOCAL single-region pan (e.g. around Redcliffe) still fine,
+or is it slow everywhere now — determines whether this is the bounds/index full-scan theory or
+something else.
+
+**Item 3 (visual scan): qualitative pass, with one refinement and one new finding.** Most of the
+"random inland blobs" Aaron flagged are canal estates and permanent lakes (Twin Waters/Bli Bli
+corridor, Minyama) — genuinely wet under BOTH OSM and WOfS, so STRICT-AND is correctly painting
+them; this is not mask residual, since the two sources agree there (unlike the golf-lake/canal-
+estate disagreement case the v16.43 spike used to justify AND over either source alone — here both
+sources are simply right). Separately: **Edgewater Village Lake** (near Bli Bli/David Low Way)
+shows a HAT-based tidal-exposure tag ("dries earliest") despite appearing, from the imagery, to be
+a landlocked residential/ornamental lake with no visible tidal channel to Petrie Creek. If
+unconnected, this is a scope gap in the flats-layer HAT-banding logic — it labels any water body the
+mask passes as tidally exposed, without checking tidal connectivity — not a land/water mask defect,
+since the lake is genuinely wet and correctly painted. Can't confirm connectivity from imagery
+alone; needs the lat/lng-readout backlog item below or a manual coordinate check. Low priority —
+cosmetic mislabel, no legality/safety assertion involved.
+
+**Confirmed clean:** `woongarra_imported_v1` and `woongarra_imported_rollback_v1` both absent from
+`storage_check.html` — the v16.51/v16.52 cleanups held. **New backlog, low priority:** lat/lng
+readout on the depth-tap popup (Aaron's request — makes future on-phone checks reportable with
+coordinates instead of screenshots, would also resolve the Edgewater Village Lake question
+directly); storage headroom — `storage_check.html` now reports 4995.5 KB / 4.88 MB across 20 keys,
+entering the same range that caused the v16.35 quota-exceeded incident — recheck before the MN v3
+clip (+~491 kB projected) or the Noosa OSM-only fetch land.*
+
+---
+
+
+*v16.54 · 30 Jul 2026 — planning chat, no build. Reviewed the Option 3 build (v16.53): build is
+sound — measured figures reconcile arithmetically (177,898→85,894 = 51.7% removal checks out;
++93.7 kB matches the 2,149,778→2,245,730 byte delta; per-dataset percentages all correct), two
+real bugs were caught and fixed mid-build rather than shipped, and residual/caveat framing is
+honest throughout. **ONE CORRECTION to v16.53's "NEXT JOB" claim, applied here before it gets
+cited as fact:**
+
+**MN v3 clip does NOT yet have full OSM coverage — v16.53 overstated readiness.** MN is EXEMPT
+from Option 3's mask (`REGION_MASK_EXEMPT={woongarra:1,maroochy_noosa:1}`), so `okMASK` returns
+`true` for it without ever calling `maskWater()` — meaning no OSM tiles were fetched for MN's own
+footprint. The `seq_coast` box built for SC/Moreton (`−27.35..−26.34`) only reaches as far north
+as Bli Bli/Maroochydore; MN's full extent runs to `−25.89` (Noosa). So
+`data/raw/_landmask_spike/tiles/` has OSM coverage for roughly the SOUTHERN HALF of Maroochy/Noosa
+(where it overlaps `seq_coast`), not the Noosa half. **MN v3 clip needs a supplementary OSM-only
+fetch (`~−26.34..−25.89`, reuse `tools/landmask_fetch.py`'s OSM path, no WOfS/mask-build needed)
+for the Noosa gap before it can assume full coverage** — correct MN v3 prerequisite: confirm/
+extend OSM coverage first, don't assume v16.53's tiles are sufficient as-is.
+
+Noosa tide-port wiring is unaffected by this (mechanical, BoM TP021, no OSM dependency) and can
+proceed independently, in either order.*
+
+---
+
+
 *v16.53 · 30 Jul 2026 — **OPTION 3 STRICT-AND LAND/WATER MASK SHIPPED (runtime path). Build
 `2026.07.30a`.** Closes the v16.47.3 authorisation. A sample now counts as paint/read evidence only
 where OSM water polygons AND DEA WOfS frequency ≥ `WOFS_FREQ_MIN` (0.2) BOTH call it water —
 additive to the v16.44 HAT gate and the v16.25 R0/R1 ramp, neither of which was touched.
 
 **HEADLINE, read this before opening the app: the mask removes 51.7% of the HAT-surviving pool**
+**[SUPERSEDED — see v16.56 for real figures: BR/SC/Moreton mask-surviving 9,420/5,947/9,228, real
+runtime pool 64,306. The 51.7% REMOVAL RATE below is still correct; the ABSOLUTE counts are not —
+this harness measured pre-thin CSV exports, not on-device data.]**
 (177,898 → 85,894 across the repo-visible on-device datasets). Per-dataset: BR flats 68,246 → 32,426
 (−52.5%), SC flats 57,050 → 18,807 (−67.0%), Moreton flats 33,424 → 15,483 (−53.7%), MN v2 19,178 →
 19,178 (−0%, exempt). This is the intended effect — that population is the sub-HAT "messy tier"
@@ -108,7 +401,9 @@ past every box, and a future region must not silently go unpainted.
      on pool rebuild only), so any lag is a real finding worth reporting.
 
 **NEXT JOB:** MN v3 clip (≤200 m / native 25 m) — it wanted Option 3's OSM polygons, which now exist
-in `data/raw/_landmask_spike/tiles/`. Then Noosa tide-port wiring (mechanical, BoM TP021). **New
+in `data/raw/_landmask_spike/tiles/`. **[CORRECTED — see v16.54: this OSM coverage only reaches the
+SOUTHERN half of Maroochy/Noosa. The Noosa half needs a supplementary OSM-only fetch first — do not
+assume these tiles are sufficient as-is.]** Then Noosa tide-port wiring (mechanical, BoM TP021). **New
 low-priority backlog item (not in scope, logged so it isn't lost): `_idwCache` (`index.html:2408`,
 invalidation check `:2410`)
 keys on `s.length`, not `poolVersion`** — a pool change that happens to preserve length would not
