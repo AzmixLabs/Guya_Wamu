@@ -1030,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.07.30a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.02a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1069,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.07.30a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.02a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1962,6 +1962,25 @@ function inWaterFast(feats,lat,lng){
 function buildSampleIndex(pts,cellLa,cellLo){const ix={};
   for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
   return ix;}
+let _sampleIndexCache=null,_sampleIndexVersion=-1;
+/* v16.60: poolVersion-keyed cache OVER buildSampleIndex(), not INSIDE it. buildShade() and
+   buildAutoContours() now compute IDENTICAL pool-anchored cellLa/cellLo (same bb=ptsBounds(pts),
+   same mLat/mLngMin formula - see their call sites), so one shared cache correctly serves both
+   without a compound key. Deliberately NOT added inside buildSampleIndex() itself: idwIndex()
+   and impIndex() also call buildSampleIndex() directly, with a different, FIXED (-24.85-anchored)
+   cellLa/cellLo that never varies with poolVersion or viewport. A poolVersion-only cache living
+   inside buildSampleIndex() itself couldn't tell those callers apart from buildShade/
+   buildAutoContours - whichever call site ran first in a given poolVersion would silently hand
+   its own index back to every other caller, corrupting depth reads for the callers that didn't
+   run first. This wrapper is used ONLY at buildShade's and buildAutoContours's own call sites;
+   idwIndex (keeps _idwCache) and impIndex (untouched, button-triggered) keep calling
+   buildSampleIndex() directly, exactly as before. */
+function pooledSampleIndex(pts,cellLa,cellLo){
+  if(_sampleIndexVersion===poolVersion&&_sampleIndexCache)return _sampleIndexCache;
+  _sampleIndexCache=buildSampleIndex(pts,cellLa,cellLo);
+  _sampleIndexVersion=poolVersion;
+  return _sampleIndexCache;
+}
 /* Masked 3x3 weighted blur over the interpolated field — kills per-sample IDW noise from dense
    survey imports so gradients (relief/contours) are coherent. Only valid pixels (vAt>thr) mix. */
 function smoothField(F,V,W,H,passes,thr){
@@ -1982,14 +2001,24 @@ function smoothField(F,V,W,H,passes,thr){
     const t=src;src=dst;dst=(t===F)?new Float32Array(W*H):t;}
   if(src!==F)F.set(src);
 }
+let _boundsCache=null,_boundsVersion=-1;
 /* O(n) sample bbox. NEVER Math.min.apply / spread here: both pass the array as literal call
    arguments, and iOS JSC's argument ceiling (~65,536) is far below desktop V8's — with 113k+
-   samples the old apply-based bbox threw RangeError silently and no shading ever painted. */
-function ptsBounds(pts){let minLa=Infinity,maxLa=-Infinity,minLo=Infinity,maxLo=-Infinity;
+   samples the old apply-based bbox threw RangeError silently and no shading ever painted.
+   v16.60: poolVersion-keyed cache guard at the top, same pattern as depthSamples()'s _poolCache
+   (v16.49). Safe with a version-only key (no length check, no positional-index mapping needed):
+   ptsBounds() has exactly two callers (buildShade, buildAutoContours), both always pass
+   pts=depthSamples(), which is itself the SAME array reference across calls while poolVersion is
+   unchanged - confirmed Step 0/A3, no other caller exists to invalidate that assumption. */
+function ptsBounds(pts){
+  if(_boundsVersion===poolVersion&&_boundsCache)return _boundsCache;
+  let minLa=Infinity,maxLa=-Infinity,minLo=Infinity,maxLo=-Infinity;
   for(let i=0;i<pts.length;i++){const p=pts[i];
     if(p.lat<minLa)minLa=p.lat;if(p.lat>maxLa)maxLa=p.lat;
     if(p.lng<minLo)minLo=p.lng;if(p.lng>maxLo)maxLo=p.lng;}
-  return {minLa:minLa,maxLa:maxLa,minLo:minLo,maxLo:maxLo};}
+  _boundsCache={minLa:minLa,maxLa:maxLa,minLo:minLo,maxLo:maxLo};
+  _boundsVersion=poolVersion;
+  return _boundsCache;}
 let _zoneFaded=null;
 /* v16.49: depthSamples() (below) now caches its own returned array on poolVersion, so pts here is
    the SAME array/objects across calls whenever poolVersion hasn't changed - the v16.48 side
@@ -2045,8 +2074,38 @@ function buildShade(){
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));mask[y*W+x]=inWaterFast(feats,la,lo)?1:0;}}
   const mAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?0:mask[y*W+x];
-  /* pass 2a: interpolated field (bucketed IDW) */
-  const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
+  /* pass 2a: interpolated field (bucketed IDW)
+     v16.60 (build 2026.08.02a): cellLo is now POOL-anchored, not viewport-anchored - derived from
+     mLngMin, the smallest mLng any point in the pool bbox (bb, computed above by ptsBounds()
+     before viewport-clipping) can have. cos(lat) shrinks as |lat| grows and every point in this
+     app's pool sits at a negative (southern-hemisphere) latitude, so the pool's own MOST NEGATIVE
+     latitude (maxAbsLatPool) gives the smallest mLng, hence the smallest per-degree metre width.
+     Structural invariant, true for ANY pool - does not need re-verifying when regions are added:
+     mLngMin is by construction <= mLng(p) for every point p in the pool, so physical cellLo =
+     cellLo_deg*mLng(p) = 120*mLng(p)/mLngMin >= 120 = R1 everywhere in the pool. This matters
+     because the lookup loop below (and the R0 precompute's own 3x3 search just past it) has NO
+     explicit dist>R1 guard - R1 is enforced only IMPLICITLY, by the 3x3 bucket search never
+     needing to reach past one cell width in the worst case (see buildSampleIndex()'s ci/cj
+     bucketing just below). Before this build cellLo used the viewport-derived mLng right above
+     (from whatever midLa the current pan/zoom landed on), which could shrink to ~118.5 m at the
+     southern end of a Bargara-to-Redcliffe pool - 1.5 m SHORT of that R1=120 guarantee - and it
+     shifted pan to pan since midLa shifts pan to pan. Measured (Step B harness against the real
+     sliced buildSampleIndex()/lookup loop, synthetic pool spanning the real -24.7475..-27.6428
+     on-phone range): the old scheme missed a genuinely-within-120m sample on 2/385 eligible
+     spread queries and 2/8 targeted boundary cases, always at the southern extreme, under BOTH
+     narrow zoom centred on the pool AND wide zoom - not only a wide-zoom edge case. Pool-anchoring
+     doesn't add rendering variance that wasn't already there - it REMOVES the pan-to-pan cell-
+     boundary shift the viewport anchor caused. Cell size is now a pure function of the pool bbox:
+     a still-more-southerly region added later would widen cells everywhere in the pool (~133 m at
+     Bargara's own latitude if the pool ever reached -35) - by the same invariant, never narrower
+     than R1. cellLa is UNCHANGED and needs no anchoring: mLat=111320 is a bare constant (no
+     cos(lat) term - meridional degree length doesn't depend on which way you're facing), so it
+     was never viewport-dependent in the first place (confirmed Step A'3). The pixel loop's own
+     distance metric below (dx=...*mLng) and the R0-precompute's mLngPool just past it are
+     DELIBERATELY untouched and still viewport/mid-pool-anchored respectively - changing either
+     would shift alpha or R0, out of scope for this build. */
+  const maxAbsLatPool=Math.max(Math.abs(bb.minLa),Math.abs(bb.maxLa)),mLngMin=111320*Math.cos(maxAbsLatPool*Math.PI/180);
+  const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
   /* per-sample adaptive R0 (v16.47): reuses the SAME bucketed index above (no second index
      built) to find each sample's own nearest-OTHER-sample gap, then sets that sample's own
      r0 via the v16.46 midpoint-alpha=0.5 criterion, clamped to [R0_MIN,R0_MAX]. O(n) over the
@@ -2059,17 +2118,22 @@ function buildShade(){
      guards against re-running this O(n) search when the objects already carry a valid p.r0 from
      the last call. No side array, no positional-index mapping, no push-order precondition (all
      were only ever needed because the old depthSamples() built fresh objects every call).
-     mLngPool: gap/R0_local's own distance metric, anchored on the SAMPLE POOL's bounding box
-     (bb, already computed above by ptsBounds() before viewport-clipping) rather than the
-     viewport-derived mLng just above - keeps r0 pan-independent now that it's cached across pans.
-     Deliberately scoped to ONLY this precompute; mLng/cellLa/cellLo/sIx (viewport-anchored) are
-     untouched and still drive the pixel loop below, so alpha over the rendered image cannot shift
-     from this change. Quantified against the real repo CSVs (144,474-pt pool): 95% of samples
-     see zero change, mean |delta r0| ~0.28 m (~0.5pp of alpha) switching between the two most
-     extreme real viewport anchors - consistent with "not visible" - with a documented tail of
-     ~0.02% of samples that can flip a full R0_MIN<->R0_MAX clamp at a bucket boundary; that tail
-     already exists on every pan in the pre-v16.49 code (viewport mLng already varies pan to pan)
-     and this change removes its pan-dependence rather than introducing it. */
+     mLngPool: gap/R0_local's own distance metric, anchored on the pool bbox's MID-latitude -
+     deliberately a DIFFERENT anchor than mLngMin above, which uses the pool's MOST NEGATIVE
+     latitude as a floor chosen to guarantee cellLo>=R1 everywhere. Using mLngMin here too would
+     systematically inflate every sample's measured gap and push R0 toward R0_MAX more than the
+     v16.46/47 alpha criterion intends; mid-lat stays the representative anchor a genuine distance
+     measurement needs. Still pool-anchored rather than viewport-anchored (v16.49, unchanged by
+     this build) - keeps r0 pan-independent now that it's cached across pans.
+     v16.60 update: the sentence this replaced said "mLng/cellLa/cellLo/sIx (viewport-anchored)
+     are untouched" - no longer true for cellLo (see above). mLng (the pixel loop's own distance
+     metric, two lines below) is still viewport-anchored and still untouched by either change.
+     Quantified against the real repo CSVs (144,474-pt pool): 95% of samples see zero change,
+     mean |delta r0| ~0.28 m (~0.5pp of alpha) switching between the two most extreme real
+     viewport anchors - consistent with "not visible" - with a documented tail of ~0.02% of
+     samples that can flip a full R0_MIN<->R0_MAX clamp at a bucket boundary; that tail already
+     exists on every pan in the pre-v16.49 code and this change removes its pan-dependence rather
+     than introducing it. */
   const midLaPool=(bb.minLa+bb.maxLa)/2,mLngPool=111320*Math.cos(midLaPool*Math.PI/180);
   if(_r0Version!==poolVersion){
     for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
@@ -2502,7 +2566,13 @@ function buildAutoContours(){
   const W=Math.max(110,Math.min(360,Math.round(extM/60))),H=W;
   const latAt=y=>maxLa-(maxLa-minLa)*(y/(H-1)),lngAt=x=>minLo+(maxLo-minLo)*(x/(W-1));
   const feats=shadeMaskFeats(),F=new Float32Array(W*H),OK=new Uint8Array(W*H);
-  const cellLa=120/mLat,cellLo=120/mLng,sIx=buildSampleIndex(pts,cellLa,cellLo);
+  /* cellLo is POOL-anchored (mLngMin, from bb computed above by ptsBounds() before viewport-
+     clipping) - same v16.60 fix, same structural invariant, as buildShade's cellLo; see the full
+     comment there. cellLa/mLat unchanged (bare constant, never viewport-dependent). mLng just
+     above stays viewport-anchored and untouched - it feeds extM's sizing above AND the lookup
+     loop's own distance metric below, deliberately left as-is, same as buildShade. */
+  const maxAbsLatPool=Math.max(Math.abs(bb.minLa),Math.abs(bb.maxLa)),mLngMin=111320*Math.cos(maxAbsLatPool*Math.PI/180);
+  const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
   for(let y=0;y<H;y++){const la=latAt(y);
     for(let x=0;x<W;x++){const lo=lngAt(x);
       let num=0,den=0,near=1e9,nearD=0;
