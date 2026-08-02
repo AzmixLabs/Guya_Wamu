@@ -1,5 +1,60 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.60 · 2 Aug 2026 — poolVersion-keyed memoisation of ptsBounds()/buildSampleIndex(), on-phone
+sequence item (2). Build bumped to **2026.08.02a**. Repo head `5d99dcc` (tooling commit `7db40e8`
+before it: storage_check.html rollback-key delete + the item-13 hygiene commit `dff2999`, all v16.59
+follow-through, no index.html changes in that pair).
+
+**What shipped:** `buildShade()` and `buildAutoContours()` rebuilt a fresh O(n) bucket index over
+the FULL point pool on every map pan (`map.on('moveend', …)`, 350ms debounce) — cost scaled with
+pool size (64,306-pt real runtime pool), not viewport. A naive poolVersion-only cache around
+`buildSampleIndex()` was blocked by a real finding: `cellLo` (bucket cell width) was derived from
+the VIEWPORT's own `midLa`, which changes every pan independently of `poolVersion` — caching would
+have served a stale index built at the wrong cell size. Root-caused and fixed at the source instead
+of working around it: `cellLo` now derives from `mLngMin` (the pool bbox's most-negative latitude,
+i.e. its smallest possible `mLng`), making it a pure function of the pool alone — structurally
+`>= R1=120m` everywhere in the pool, for any pool, no re-verification needed as regions are added.
+`cellLa` needed no change (`mLat=111320` is a bare constant, never viewport-dependent). This wasn't
+purely a latent-bug fix bundled in for its own sake: the OLD viewport-anchored scheme, measured via
+a harness that slices the real `buildSampleIndex()`/lookup loop into a Node `vm` context (synthetic
+pool spanning the real -24.7475..-27.6428 on-phone span), missed a genuinely-within-120m sample on
+2/385 eligible spread queries and 2/8 targeted boundary cases — always at the southern (Moreton
+Bay/Redcliffe) extreme, under BOTH narrow zoom centred on the pool AND wide zoom, not only a
+wide-zoom edge case. The new scheme: zero misses, confirmed twice — once against a hand-derived S3
+formula (pre-implementation proof), once (Step C2) re-sliced from the actually-edited file, byte-
+identical results both times. `poolVersion`-keyed caches then added: `ptsBounds()` caches inside
+its own body (its only two callers always pass the same `depthSamples()`-cached array, confirmed
+no other caller exists); `buildSampleIndex()` is cached via a `pooledSampleIndex()` WRAPPER at
+`buildShade`'s/`buildAutoContours`'s call sites only, deliberately NOT inside `buildSampleIndex()`
+itself — `idwIndex()`/`impIndex()` (the Navionics-comparison tool) also call `buildSampleIndex()`
+directly with a different, fixed (-24.85°-anchored) `cellLo` that a body-level poolVersion-only
+cache would have silently corrupted (whichever caller ran first in a given `poolVersion` would hand
+its own index to every other caller). `idwIndex`/`_idwCache` and `impIndex` left untouched, exactly
+as scoped. `R0_local`/`R0_MIN`/`R0_MAX`/`R1`/HAT gate/`okHAT`/`okMASK`/`REGION_MASK_EXEMPT`/
+`WOFS_FREQ_MIN`/`zoneAt()`/`ORDER`/green-zone dragend safeguard/`spotsUnlocked`/both `<style>`
+blocks/inlined Leaflet block: untouched, confirmed absent from the diff. `git diff --stat`: 1 file
+(`index.html`), 89 insertions / 19 deletions, fully scoped to the cache/cellLo change plus the two
+build-string lines. Verified: `node --check` both script blocks (exit 0, before and after the
+build-string bump); Leaflet SHA-256 unchanged (`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`);
+both `<style>` blocks byte-identical to the pre-session HEAD by direct string comparison. Pushed
+(`7db40e8..5d99dcc`); `gh` unavailable in this environment, so the Pages Actions run itself was NOT
+confirmed here — check `https://github.com/AzmixLabs/Guya_Wamu/actions` directly. Not claimed:
+on-phone "feels faster" — that's Aaron's gate, not measured here.
+
+**Next session:** on-phone gate this build (confirm shading/contours still render correctly panning
+across Bargara↔Redcliffe, and that pan responsiveness actually improved) before touching sequence
+items (3)/(4). If the gate passes, next up per the still-unchanged v16.58 sequence: (2 done) → (3)
+storage prune — REPLACE BR/SC/Moreton with mask-surviving points only, after a `storage_check.html`
+run that records an actual **quota** figure and not just usage (NOTE: storage_check.html's own
+Step 1 diagnostic this session found "0.0 MB" fill-test headroom is GENUINE zero, not a rounding
+artefact — the quota ceiling is real and current); (4) Option 3 coverage-boundary toggle,
+edge-detect implementation, opt-in and default OFF; (5) MN v3 Noosa-OSM fetch → MN v3 clip, plus
+Noosa tide-port wiring. The v16.58 process fix (route planning-deltas to the repo copy first) is
+STILL not actioned — still requires an edit to this project's own custom instructions, which only
+Aaron can make.*
+
+---
+
 *v16.59 · 31 Jul 2026 — housekeeping + one correction. No build, no code, no data. Build stays
 **2026.07.30a**. Repo clean at `28c3fff` (v16.58); project knowledge confirmed at v16.58 by direct
 search before this entry was written, so v16.58 is the verified common base on both surfaces — the
