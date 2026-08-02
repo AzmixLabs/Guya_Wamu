@@ -73,6 +73,11 @@
   <div class="dim" id="legacyOut"></div>
 </div>
 
+<div class="sec"><div class="lbl">6 · Rollback-key cleanup <span style="color:#6f8794;font-weight:400;text-transform:none;letter-spacing:0">— tool rev 2026.08.02a</span></div>
+  <div id="s6box"><div class="dim">…</div></div>
+  <div class="dim">Deletes ONLY keys whose name starts with <code>woongarra_imported_rollback_v2:</code> (including the colon). One key per delete, each behind a confirm naming that exact key. Never touches <code>woongarra_imported_v2</code>, spots, profiles, photos, or the import receipt.</div>
+</div>
+
 <a class="back" href="index.html">← Back to Guya</a>
 
 <script>
@@ -256,6 +261,80 @@
     out.innerHTML = 'Deleted <code>'+V1_KEY+'</code> + <code>'+V1_META+'</code>. Reclaimed ~'+kb+' KB. (Reload this page to refresh section 1.)';
     updateLegacyStatus();
   };
+
+  /* --- Section 6: guarded rollback-key delete -------------------------------
+     Deletes ONLY keys starting with ROLLBACK_PREFIX (colon included). Every
+     delete re-verifies the prefix immediately before removeItem, plus an
+     explicit protected-key assertion, so a caller bug elsewhere can never
+     reach a real app key through this path. */
+  var ROLLBACK_PREFIX = 'woongarra_imported_rollback_v2:';
+  var PROTECTED_EXACT = ['woongarra_imported_v2', 'woongarra_spots_v1', 'woongarra_profiles_v1', 'woongarra_imported_receipt'];
+  var PROTECTED_PREFIXES = ['woongarra_photos'];
+
+  function isProtectedKey(key){
+    if (PROTECTED_EXACT.indexOf(key) !== -1) return true;
+    for (var i = 0; i < PROTECTED_PREFIXES.length; i++) {
+      if (key.indexOf(PROTECTED_PREFIXES[i]) === 0) return true;
+    }
+    return false;
+  }
+
+  function deleteRollbackKey(key){
+    if (key.indexOf(ROLLBACK_PREFIX) !== 0) {
+      throw new Error('refused — "' + key + '" does not start with ' + ROLLBACK_PREFIX);
+    }
+    if (isProtectedKey(key)) {
+      /* unreachable given the prefix check above (no protected key starts with
+         ROLLBACK_PREFIX) — asserted explicitly anyway, not left to construction */
+      throw new Error('refused — "' + key + '" is on the protected-key list');
+    }
+    localStorage.removeItem(key);
+  }
+
+  function rollbackKeyKiB(key){
+    var v = localStorage.getItem(key) || '';
+    return (key.length + v.length) / 1024;
+  }
+
+  function renderRollbackSection(){
+    var box = document.getElementById('s6box');
+    var keys = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k.indexOf(ROLLBACK_PREFIX) === 0) keys.push(k);
+    }
+    if (!keys.length) {
+      box.innerHTML = '<div class="dim"><span class="yes">None found</span> — no key in this container starts with <code>' + ROLLBACK_PREFIX + '</code>. Nothing to clean up.</div>';
+      return;
+    }
+    var rows = keys.map(function(k){ return [k, rollbackKeyKiB(k)]; });
+    rows.sort(function(a, b){ return b[1] - a[1]; });
+    var total = 0;
+    var html = '<table>';
+    rows.forEach(function(r){
+      var key = r[0], kib = r[1];
+      total += kib;
+      html += '<tr><td>' + key.replace(/</g,'&lt;') + '</td>'
+        + '<td style="text-align:right;white-space:nowrap;padding-left:10px;font-variant-numeric:tabular-nums">' + kib.toFixed(1) + ' KiB</td>'
+        + '<td style="text-align:right;white-space:nowrap;padding-left:10px"><button class="btn danger" data-key="' + key.replace(/"/g,'&quot;') + '" style="width:auto;padding:6px 10px;font-size:13px">Delete</button></td></tr>';
+    });
+    html += '<tr class="tot"><td>TOTAL (' + rows.length + ' keys)</td><td style="text-align:right;white-space:nowrap;padding-left:10px">' + total.toFixed(1) + ' KiB</td><td></td></tr>';
+    html += '</table>';
+    box.innerHTML = html;
+
+    var btns = box.querySelectorAll('button[data-key]');
+    for (var j = 0; j < btns.length; j++) {
+      btns[j].onclick = function(){
+        var key = this.getAttribute('data-key');
+        var kib = rollbackKeyKiB(key);
+        if (!confirm('Delete rollback key\n\n' + key + '\n\n(~' + kib.toFixed(1) + ' KiB)? This cannot be undone from here.')) return;
+        try { deleteRollbackKey(key); }
+        catch (e) { alert('Refused: ' + e.message); return; }
+        renderRollbackSection(); /* re-enumerate + re-render from live localStorage, not a cached list */
+      };
+    }
+  }
+  renderRollbackSection();
 })();
 </script>
 </body>
