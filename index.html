@@ -1030,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.06a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.07a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1069,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.06a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.07a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1206,7 +1206,16 @@ const STYLES = {
 const ORDER=["MNP","CPZ","HPZ","GUZ"];
 const map=L.map('map',{zoomControl:false,maxZoom:21,tap:true}).setView([-27.2275,153.0950],12);
 L.control.zoom({position:'topright'}).addTo(map);
-L.control.scale({imperial:false,position:'bottomleft'}).addTo(map);
+map.attributionControl.setPrefix(false); /* v16.63: drop only the "Leaflet" credit link - _update() still joins each active tile layer's own attribution: string (OSM/CARTO/QLD), untouched */
+const scaleCtl=L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
+/* v16.63: moved off bottomleft - clipped by the screen edge on narrow (~390px) iPhone viewports,
+   leaving only "km" visible, not the number. bottomright is the only corner with no competing UI:
+   .panel occupies topleft, the zoom control occupies topright (and is pushed down 64px on narrow
+   screens to clear the header - see the max-width:600px rule), bottomright previously held only
+   the attribution strip. */
+const zoomReadout=L.DomUtil.create('div','leaflet-control-scale-line',scaleCtl.getContainer());
+zoomReadout.textContent='z'+map.getZoom().toFixed(1);
+map.on('zoomend',()=>{zoomReadout.textContent='z'+map.getZoom().toFixed(1);});
 map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('labels').style.pointerEvents='none';
 const labels=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',{subdomains:'abcd',pane:'labels',maxZoom:21,maxNativeZoom:20,attribution:'Labels © OpenStreetMap, © CARTO'});
 labels.addTo(map);

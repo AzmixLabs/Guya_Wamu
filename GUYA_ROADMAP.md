@@ -1,5 +1,44 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.63 · 7 Aug 2026 — MAP CONTROL LAYOUT SHIPPED (cosmetic only). Build bumped to
+**2026.08.07a**. Repo head `d8e6248` at session start.
+
+**Problem:** the scale control (bottom-left) was clipped by the screen edge on narrow (~390px)
+iPhone viewports — only the "km" unit was visible, not the number, which breaks the on-phone gate
+protocol since it depends on reading zoom/scale accurately. Root cause of the left-edge clipping
+itself was not chased down (out of scope for a cosmetic, one-variable build); the fix relocates the
+control rather than diagnosing why bottom-left clips.
+
+**What shipped (`index.html:1208-1218`):**
+- Scale control moved `bottomleft` → `bottomright` — the only corner with no competing UI: `.panel`
+  occupies topleft, the zoom control occupies topright (pushed down 64px on narrow screens per the
+  existing `max-width:600px` rule to clear the header), bottomright previously held only the
+  attribution strip.
+- New zoom-level readout appended directly into the scale control's own container via
+  `L.DomUtil.create('div','leaflet-control-scale-line', scaleCtl.getContainer())` — reuses the
+  scale text's own CSS class verbatim (same border/padding/background/font, so same visual weight
+  by construction, zero new CSS), reads `z<zoom to 1 decimal>`, set on load and updated on
+  `map.on('zoomend', …)` only, matching the spec exactly (no extra `'zoom'`/animation binding).
+- Attribution compacted via `map.attributionControl.setPrefix(false)` — confirmed against the
+  inlined `_update()` source that this only omits the "Leaflet" credit link (a falsy-prefix check,
+  `this.options.prefix&&i.push(...)`); the per-layer `attribution:` strings are joined independently
+  and untouched. **Attribution text remaining on screen: "Labels © OpenStreetMap, © CARTO" (from
+  the always-on CARTO labels layer) + "Aerial imagery © State of Queensland (Dept of Resources)"
+  (default QLD aerial base) + whichever of "© OpenStreetMap contributors" / "Imagery © Esri, Maxar,
+  Earthstar Geographics · cached offline" if the user has switched base layer to OSM/satellite.**
+  OSM, CARTO and State of Queensland attributions confirmed present in every base-layer state; only
+  "Leaflet" was removed.
+- Zoom control (topright) untouched, still present.
+
+**Not verified on-device this session** (no phone access) — the corner choice is reasoned from the
+CSS/DOM layout (documented above), not confirmed against an actual narrow-viewport screenshot.
+**Next job:** on-phone gate — confirm the full scale number is visible bottom-right, the zoom
+readout reads correctly and updates on pinch/double-tap zoom, and attribution still shows the three
+required credits with the current base layer. If v16.62's atomic-swap fix hasn't been gated yet
+either, both can be checked in the same session.
+
+---
+
 *v16.62 · 6 Aug 2026 — ATOMIC OVERLAY SWAP SHIPPED. Build bumped to **2026.08.06a**. Repo head
 `c1684fd` at session start.
 
