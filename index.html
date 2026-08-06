@@ -1030,7 +1030,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.02a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.06a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1069,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.02a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.06a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2031,23 +2031,29 @@ function buildShade(){
   _idwCache=null; /* data changed - rebuild read index lazily */
   try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
   if(typeof buildAutoContours==='function')buildAutoContours();
-  if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}
-  if(!shadeOn)return;
+  if(!shadeOn){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
+  /* v16.62: atomic overlay swap - shadeOverlay is no longer torn down up front. Everything from
+     here to the swap at the end is wrapped so a throw mid-rebuild leaves the map showing the
+     PREVIOUS overlay rather than bare while the next one computes; branches that end with
+     genuinely nothing to show still clear it, matching prior final-state behaviour. */
+  try{
   const pts=depthSamples();
-  if(pts.length<3)return;
+  if(pts.length<3){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
   const bb=ptsBounds(pts);
   let minLa=bb.minLa,maxLa=bb.maxLa,minLo=bb.minLo,maxLo=bb.maxLo;
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
   /* render only the visible window when zoomed in - keeps pixels small and bands crisp */
+  let _degenerate=false;
   try{const mb=map.getBounds();
     const vs=mb.getSouth(),vn=mb.getNorth(),vw=mb.getWest(),ve=mb.getEast();
     const vS=vs-(vn-vs)*0.3,vN=vn+(vn-vs)*0.3,vW=vw-(ve-vw)*0.3,vE=ve+(ve-vw)*0.3;
     if((vN-vS)<(maxLa-minLa)||(vE-vW)<(maxLo-minLo)){
       minLa=Math.max(minLa,vS);maxLa=Math.min(maxLa,vN);
       minLo=Math.max(minLo,vW);maxLo=Math.min(maxLo,vE);
-      if(minLa>=maxLa||minLo>=maxLo)return;}
+      if(minLa>=maxLa||minLo>=maxLo)_degenerate=true;}
   }catch(e){}
+  if(_degenerate){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
   const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
   const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
@@ -2218,7 +2224,10 @@ function buildShade(){
     }
     da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}}
   ctx.putImageData(im,0,0);
-  shadeOverlay=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
+  const _newShade=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
+  if(shadeOverlay)map.removeLayer(shadeOverlay);
+  shadeOverlay=_newShade;
+  }catch(e){ /* rebuild threw partway through - leave the existing shadeOverlay (if any) in place rather than leave the map bare */ }
 }
 let shadeOp=0.75;try{const v=parseFloat(localStorage.getItem('woongarra_shade_op'));if(isFinite(v)&&v>=0.25&&v<=1)shadeOp=v;}catch(e){}
 (function(){const r=document.getElementById('shade-op'),o=document.getElementById('shade-op-val');if(!r)return;
@@ -2544,23 +2553,26 @@ function findDeepest(lat0,lng0){
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
 function buildAutoContours(){
-  if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}
-  if(!autoCtOn)return;
+  if(!autoCtOn){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
+  /* v16.62: atomic overlay swap - see buildShade() for the same pattern/rationale. */
+  try{
   const pts=depthSamples();
-  if(pts.length<3)return;
+  if(pts.length<3){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   const bb=ptsBounds(pts); /* same iOS JSC argument-ceiling hazard as buildShade - see ptsBounds */
   let minLa=bb.minLa,maxLa=bb.maxLa,minLo=bb.minLo,maxLo=bb.maxLo;
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
   minLa-=padLa;maxLa+=padLa;minLo-=padLo;maxLo+=padLo;
   /* render only the visible window when zoomed in - keeps pixels small and bands crisp */
+  let _degenerate=false;
   try{const mb=map.getBounds();
     const vs=mb.getSouth(),vn=mb.getNorth(),vw=mb.getWest(),ve=mb.getEast();
     const vS=vs-(vn-vs)*0.3,vN=vn+(vn-vs)*0.3,vW=vw-(ve-vw)*0.3,vE=ve+(ve-vw)*0.3;
     if((vN-vS)<(maxLa-minLa)||(vE-vW)<(maxLo-minLo)){
       minLa=Math.max(minLa,vS);maxLa=Math.min(maxLa,vN);
       minLo=Math.max(minLo,vW);maxLo=Math.min(maxLo,vE);
-      if(minLa>=maxLa||minLo>=maxLo)return;}
+      if(minLa>=maxLa||minLo>=maxLo)_degenerate=true;}
   }catch(e){}
+  if(_degenerate){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   const midLa=(minLa+maxLa)/2,mLat=111320,mLng=111320*Math.cos(midLa*Math.PI/180),R1=120;
   const extM=Math.max((maxLa-minLa)*mLat,(maxLo-minLo)*mLng);
   const W=Math.max(110,Math.min(360,Math.round(extM/60))),H=W;
@@ -2586,13 +2598,13 @@ function buildAutoContours(){
       const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))?1:0;}}
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
-  if(mxD<=mnD)return;
+  if(mxD<=mnD){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   const stepL=(mxD-mnD)>4?1:0.5,levels=[];
   let v0=Math.ceil(mnD/stepL)*stepL;if(v0<0)v0=0; /* 0 = LAT waterline; no contours above water */
   for(let v=v0;v<mxD;v+=stepL)levels.push(+v.toFixed(1));
-  if(!levels.length)return;
+  if(!levels.length){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   if(!autoCtRenderer)autoCtRenderer=L.canvas({padding:0.5});
-  autoCtLayer=L.layerGroup();
+  const _newCtLayer=L.layerGroup();
   const clamp01=t=>(isFinite(t)?Math.max(0,Math.min(1,t)):0.5);
   levels.forEach(lv=>{const segs=[];
     for(let y=0;y<H-1;y++)for(let x=0;x<W-1;x++){
@@ -2619,8 +2631,11 @@ function buildAutoContours(){
     const col=(typeof ctColor==='function')?ctColor(lv):'#ffb03c';
     const pl=L.polyline(segs,{color:col,weight:1.3,opacity:0.95,dashArray:'5,4',renderer:autoCtRenderer});
     pl.bindTooltip(lv===0?'LAT waterline (auto)':('\u2248 '+lv+' m (auto contour)'),{sticky:true});
-    autoCtLayer.addLayer(pl);});
-  autoCtLayer.addTo(map);
+    _newCtLayer.addLayer(pl);});
+  _newCtLayer.addTo(map);
+  if(autoCtLayer)map.removeLayer(autoCtLayer);
+  autoCtLayer=_newCtLayer;
+  }catch(e){ /* rebuild threw partway through - leave the existing autoCtLayer (if any) in place rather than leave the map bare */ }
 }
 (function(){const t=document.getElementById('ac-toggle');if(!t)return;
   t.onchange=e=>{autoCtOn=e.target.checked;

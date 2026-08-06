@@ -1,5 +1,390 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.62 · 6 Aug 2026 — ATOMIC OVERLAY SWAP SHIPPED. Build bumped to **2026.08.06a**. Repo head
+`c1684fd` at session start.
+
+**Diagnosis this session (stated as settled by Aaron before the build, superseding v16.61 §1):**
+an on-phone re-gate with zoom held constant found NO Bargara-vs-Brisbane difference (both-off
+4.5/4.5, depths-only 3.5/3.5, both-on 2.8/2.8 subjective /5) — falsifying v16.61's polygon-
+complexity and local-bucket-occupancy candidates as the differentiator, and the rating scaling
+with the *number* of visible overlays rather than geography. Drag itself was confirmed smooth; the
+complaint is **both overlays going ABSENT for ~1-2s after each pan settles**. Two read-only steps
+(Step A / Step A2, this session, no code changed) narrowed the cause before any fix was written:
+
+- `moveend` + 350ms debounce was already confirmed (not a raw `move` binding), ruling out
+  per-frame rebuild during the drag itself.
+- Leaflet's own `ImageOverlay`/`Canvas` renderer classes (inlined, byte-identical, unedited) don't
+  reposition per-frame during a pan either — both ride the shared `mapPane` CSS transform; only
+  `Canvas._update` fires on `moveend` to resize/redraw existing paths, independent of our own
+  debounce.
+- Step A2 confirmed the actual defect: `buildShade()` (`index.html:2034`, pre-fix) and
+  `buildAutoContours()` (`index.html:2547`, pre-fix) both **removed the existing overlay/layer at
+  the START of every rebuild**, before the replacement was ready — a genuine destroy-then-rebuild
+  gap, not a compute-cost problem. This is a DIFFERENT root cause than v16.61 §1's three
+  compute-cost candidates (mask pass / IDW bucket occupancy / `smoothField` GC churn) — those were
+  never confirmed or denied by a compute measurement in this session; the originally-sequenced
+  Step B `performance.now()` instrumentation build (§9 item 2 below) was **not run**. If the
+  absent-overlay symptom is gone after this build but jitter/lag persists, Step B's segment timing
+  is still the owed next diagnostic — this build did not do compute profiling.
+
+**What shipped:** `buildShade()` and `buildAutoContours()` now build the replacement overlay/layer
+into a local variable, add it to the map, and only then remove the previous one — old content stays
+visible for the entire rebuild instead of a bare gap. Both wrapped in try/catch so a thrown
+exception mid-rebuild leaves the prior overlay in place rather than leaving the map bare. Explicit
+toggle-off (`shadeOn`/`autoCtOn` false) and the "genuinely nothing to show for this view" branches
+(pts<3, degenerate viewport-clip, `mxD<=mnD`, empty `levels`) still clear immediately — final-state
+pixels for those branches are unchanged from before, only the successful-rebuild path's ordering
+changed. No debounce/W-H-sizing/`pooledSampleIndex`/`smoothField`/pixel-output change — confirmed
+by diff scope (index.html:2034-2228, 2556-2638 only) and Leaflet-block byte-identity
+(sha256 `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`, unchanged).
+
+**Next job:** on-phone gate this build — confirm the ~1-2s absent-overlay window is gone (old
+overlay visibly persists through the ~350ms debounce + rebuild, then swaps in one step). If jitter
+or lag still shows up as a *feel*, not an absence, resume §9 item 2 (the originally-sequenced
+`performance.now()` instrumentation of `buildShade()`'s bounds/mask/IDW/`smoothField` segments,
+extended per v16.61's correction to also cover `buildAutoContours()`) — that measurement was never
+run this session and remains the way to settle whether v16.61 §1's compute-cost candidates matter
+at all once the ordering bug is out of the way.
+
+---
+
+*v16.61 · 2 Aug 2026 — planning + on-device measurement. No build, no code. Build stays
+**2026.08.02a**. Repo head `c1684fd` at session start; roadmap version verified by direct
+`project_knowledge_search` before this entry was written (found v16.59 on project knowledge,
+v16.60 committed by the build session in between). **Storage ceiling measured for the first time.
+Rollback keys deleted. Storage prune CANCELLED. Item 13 closed. On-phone gate on v16.60: PARTIAL
+PASS — pan jitter remains, and its geography identifies the residual.**
+
+---
+
+**1. ON-PHONE GATE ON v16.60 — PARTIAL PASS. "Still feels a little jittery, more noticeable
+around Brisbane than Bargara."**
+
+The cache did its job: the O(n) index rebuild that scaled with the full pool is gone. What
+remains does NOT scale with pool size — and the geography proves it. Bargara and Brisbane draw
+from the same 64,306-point pool, so anything scaling with the pool would feel identical at both.
+It doesn't. The residual is therefore **viewport-local work**, and there are three candidates,
+all inside `buildShade()`'s per-pan path:
+
+- **(a) The mask pass — `inWaterFast(feats,la,lo)` per pixel.** `W`/`H` are `Math.max(110,
+  Math.min(360, Math.round(extM/60)))`, so up to 360×360 = **129,600 point-in-polygon tests per
+  pan**. Cost scales with *polygon complexity*, and Moreton Bay's OSM water geometry (Hays Inlet,
+  Pine River, Bramble Bay, the river channel, islands) is vastly more intricate than Bargara's
+  open coast. **Strongest fit for the Brisbane-vs-Bargara asymmetry.**
+- **(b) The IDW pixel loop — 3×3 bucket scan per pixel.** Cost ∝ *local* bucket occupancy. Global
+  mean occupancy is 1.135 (measured, v16.60 Step B), but that average is over the whole pool bbox
+  including empty ocean; local occupancy around Brisbane is far higher than around Bargara.
+  **Second-strongest fit.**
+- **(c) `smoothField()` allocation churn.** It allocates `new Float32Array(W*H)` on each
+  ping-pong swap — ~518 KB per allocation at 360×360, several per pan. GC pressure produces
+  *hitches* rather than uniform slowness, which is what "jittery" describes. **Not
+  geography-dependent, so it can't explain the asymmetry on its own — but it may be what makes
+  the residual feel like jitter rather than lag.**
+
+**Architecturally this is the right shape and it matters for multi-region (#15):** none of
+(a)/(b)/(c) grows with the *number* of regions. They grow with local density and local geometry
+complexity. Adding Gold Coast or Hervey Bay does not make Bargara slower. The pool-scaling
+problem is genuinely solved.
+
+**NEXT BUILD IS A MEASUREMENT BUILD, NOT A FIX.** Diagnose before patch. Instrument `buildShade()`
+with `performance.now()` around four segments — bounds/index (expected ~0 now the caches are in),
+mask pass, IDW pixel loop, `smoothField` — and surface the four numbers plus `W`, `H` and pixel
+count. One pan at Bargara, one at Brisbane, both reported. Writing an optimisation before that
+would be guessing between three plausible causes.
+
+**Unseparated variable:** the gate report did not state whether auto-contours was ON or OFF.
+`buildAutoContours()` chains from `buildShade()` and runs its own full pixel loop plus its own
+`smoothField` — if it was ON, roughly half the observed cost may be that second path. **Re-test
+with it explicitly OFF, then explicitly ON, before the measurement build.**
+
+**Also unconfirmed:** Aaron did not report seeing build string `2026.08.02a` in the panel. The
+gate result is being recorded on the assumption the new build was live. Confirm on the next
+phone session.
+
+---
+
+**2. STORAGE — THE CEILING IS MEASURED. FIRST REAL BOUND IN THE PROJECT'S HISTORY.**
+
+**Sequence run this session:** `storage_check.html` on the phone (home-screen container,
+confirmed by its own section 0) → fill-test → guarded rollback-key delete tooling built and
+shipped → deletes executed → fill-test re-run.
+
+**Reading 1 (pre-delete):** 20 keys, 4,995.5 KiB. Fill-test **0.0 MB**. Container at ceiling.
+
+**The quota trap — do not repeat this mistake.** `navigator.storage.estimate()` reported
+**usage 2.27 MB of quota 39,321.6 MB**. That 39.3 GB figure is the **StorageManager origin
+quota** — disk-derived, governing IndexedDB and the Cache API. **localStorage on WebKit has a
+separate per-origin ceiling that StorageManager does not report.** Recording "quota = 39.3 GB"
+would read as "storage is a non-issue" and is the exact wrong inference. Section 3 is also
+internally incoherent: its caption claims the estimate reads *higher* than section 1 because it
+covers localStorage + IndexedDB, but it reads 2.27 MB against section 1's 4.88 MB — **lower**,
+and that is before ~1 MB of photo data. Section 3 cannot be used as a localStorage measurement.
+**Fix the caption on the next tooling pass.**
+
+**Section 1 IS accurate — verified independently.** Serialising the `datasets` object exactly as
+the app stores it gives **3,849.69 KiB** against section 1's reported **3,849.7 KiB**. Exact to
+0.01 KiB. Everything below rests on that.
+
+**The fill-test's 1 MiB granularity — v16.60's claim corrected.** The test builds
+`chunk = new Array(MB+1).join('x')` with `MB = 1024*1024`, appends whole chunks, and never
+retries smaller after a failure; `achieved = filled.length/MB` displayed `.toFixed(1)`. So its
+**display floor is 1 MiB**. "0.0 MB" means *headroom < 1,024 KiB* and nothing more precise.
+v16.60's "GENUINE zero, not a rounding artefact" is wrong and is tagged superseded in that entry.
+
+**Cap bracket — the first real bound:**
+
+```
+pre-delete  usage 4,995.5 KiB, first 1 MiB append failed
+              → cap < 4,995.5 + 1,024 = 6,019.5 KiB
+            current contents obviously fit
+              → cap >= 4,995.5 KiB
+post-delete usage 3,871.6 KiB, fill-test returned 1.0 MB
+              → cap >= 3,871.6 + 1,024 = 4,895.6 KiB
+              → cap <  3,871.6 + 2,048 = 5,919.6 KiB
+            ─────────────────────────────────────────
+            cap in [4,995.5 , 5,919.6) KiB
+```
+
+**5,120 KiB (5 MiB) is the only round figure in that window** and is the conventional WebKit
+per-origin localStorage ceiling. Plan against it; do not record it as measured. **The ~4.75 MB
+cap figure carried since v16.35 is SUPERSEDED** — the container sat at 4.88 MB without failing.
+
+A precise cap needs a KiB-granular binary search after the coarse 1 MiB pass. Worth adding to
+`storage_check.html` on a later tooling pass; not worth a build on its own.
+
+---
+
+**3. ROLLBACK-KEY DELETE — SHIPPED AND EXECUTED. 1,123.9 KiB FREED, NON-DESTRUCTIVELY.**
+
+`storage_check.html` had no path to delete these keys (its section 5 targets only legacy
+`woongarra_imported_v1`, confirmed absent since v16.55), and Safari remote inspection is not
+available from Windows. New **section 6** built and shipped in commit `7db40e8` — no
+`index.html` change, no build-string bump, tool rev stamp `2026.08.02a` in the heading.
+
+Enumerates keys prefixed `woongarra_imported_rollback_v2:` (colon required), one delete button
+per key behind a `confirm()`, no delete-all, prefix re-verified immediately before every
+`removeItem` plus an explicit protected-key assertion, re-enumerates from live localStorage after
+each delete.
+
+Deleted on-device, smallest-first so a fault would surface on a 0.4 KiB key rather than a
+602 KiB one:
+
+| key | KiB |
+|---|---:|
+| `:brisbane_river` | 602.3 |
+| `:sunshine_coast` | 519.3 |
+| `:smoke_test` | 0.6 |
+| `:smoketest` | 0.6 |
+| `:smoke02` | 0.5 |
+| `:smoke` | 0.4 |
+| `:moreton_bay` | 0.1 |
+| `:custom` | 0.1 |
+| **total** | **1,123.9** |
+
+4,995.5 − 1,123.9 = **3,871.6 KiB**, 12 keys. Fill-test 0.0 → **1.0 MB**. Four of the eight were
+leftover smoke-test debris from earlier tooling runs.
+
+**Tooling wart found:** section 1 renders once at page load and does NOT re-render after a
+section 6 delete, so it keeps showing pre-delete totals while section 6 correctly shows "None
+found". Section 5 at least prints "(Reload this page to refresh section 1.)"; section 6 doesn't.
+This nearly produced a wrong conclusion on-device. **Add the reload hint on the next tooling
+pass.**
+
+**Second wart:** the VERDICT panel tests against a **full-res Sunshine Coast import at 5.34 MB**
+— a v16.28-era scenario superseded by the v2 drop-mask CSVs and the Option 3 mask. Nothing in the
+current sequence needs 5.34 MB. It is a stale hardcoded threshold that would push a future
+session into thinning something that doesn't need thinning. **Remove it on the next tooling
+pass.** Ignore it until then.
+
+---
+
+**4. STORAGE PRUNE — CANCELLED. The destructive option frees LESS than the free one.**
+
+Measured from the verified 2 Aug backup, at real serialised bytes-per-point:
+
+| dataset | stored | survives mask | dead | B/pt | stored KiB | **dead KiB** |
+|---|---:|---:|---:|---:|---:|---:|
+| `legacy_unknown` | 55,660 | 20,533 | 35,127 | 28.92 | 1,571.8 | 992.0 |
+| `brisbane_river` | 21,126 | 9,420 | 11,706 | 29.66 | 611.8 | 339.0 |
+| `sunshine_coast` | 17,806 | 5,947 | 11,859 | 29.64 | 515.4 | 343.2 |
+| `maroochy_noosa` | 19,178 | 19,178 | 0 | 29.56 | 553.6 | 0.0 |
+| `moreton_bay` | 20,602 | 9,228 | 11,374 | 29.65 | 596.4 | 329.3 |
+| **total** | **134,372** | **64,306** | **70,066** | | **3,849.1** | **2,003.5** |
+
+Stored total and the 64,306 runtime pool both reconcile exactly to prior figures. **Measured
+bytes-per-point is 29.6, not the 27.91 carried since v16.47.4** — that figure was MN-specific and
+excluded the datasets-object wrapper.
+
+**The prune's saving was overstated by roughly half.** The roadmap treated "≈1.87 MB of dead
+localStorage" as the payoff. That is the *total* dead weight. The prune as specified only reaches
+BR/SC/Moreton:
+
+```
+BR + SC + Moreton dead = 339.0 + 343.2 + 329.3 = 1,011.5 KiB   ← reachable by REPLACE
+legacy_unknown dead    =                          992.0 KiB   ← no source CSV, unreachable
+                                                 ──────────
+total dead                                       2,003.5 KiB
+```
+
+| | frees | destructive | build | re-import |
+|---|---:|---|---|---|
+| Rollback-key delete | **1,123.9 KiB** | no | no | no |
+| BR/SC/Moreton REPLACE | 1,011.5 KiB | **yes** | yes | yes |
+
+**The non-destructive option freed more than the destructive one would have, and it is already
+done.** No case survives for the prune. **CANCELLED — do not reopen without a new measured
+justification.**
+
+**Opportunity the backup unlocks, if headroom is ever needed again:** `legacy_unknown`'s points
+now exist off-device for the first time. They could be run through the HAT+mask pipeline offline
+and re-imported as a masked CSV, converting that 992.0 KiB from unreachable to reachable. Only
+worth doing if a future measurement says it's needed.
+
+---
+
+**5. `legacy_unknown` — OPEN QUESTION FROM v16.56 CLOSED. It is not Bargara data.**
+
+v16.56 asked why the blob loses ~63.1% to HAT+mask when it is "real Bargara bathymetric LiDAR by
+original description, which should mostly sit below HAT and survive." The backup answers it.
+
+```
+Bargara/Woongarra (lat > -25.5)   10,452   18.8%
+SEQ               (lat <= -25.5)  45,208   81.2%
+```
+
+**Four fifths of the blob is SEQ** — Sunshine Coast, Moreton and Brisbane River latitudes. The
+original description is wrong. v16.56's alternative hypothesis (untagged BR/SC-area data mixed
+in, which is exactly what HAT+mask are built to strip) is **confirmed on geography**. The 63.1%
+loss rate is expected behaviour, not an anomaly.
+
+**Second signature, unexpected:** the two halves have opposite depth profiles. The Bargara
+fraction is **71.4% above datum, up to +15.92 m** — topographic ground elevation, not bathymetry.
+The SEQ fraction is uniformly below datum (max +0.19 m). So even the Bargara portion of the "real
+bathymetric LiDAR" blob mostly isn't bathymetry.
+
+**Loss apportionment:** the SEQ half is entirely below datum and therefore cannot be touched by
+the HAT gate. So at minimum 35,127 − 10,452 = **24,675 points, ≥70% of the loss, comes from the
+mask dropping SEQ legacy points** — i.e. the mask is dropping over half of a below-datum
+population. Not a blocker, but **do not treat `legacy_unknown` as clean data** without looking at
+this once.
+
+---
+
+**6. BACKUP VERIFIED — and it is ~5× larger than it needs to be.**
+
+`woongarra-backup-2026-08-02.json`, `version: 2`, exported `2026-08-02T04:23:49Z`. Carries 20
+spots, all 5 datasets summing to 134,372 points, 1 photo (1.08 MB), profiles. Reconciles exactly
+to section 1. **Sound safety net** — it is what made the rollback-key delete a zero-risk
+operation.
+
+**Inefficiency, low priority:** the file is 19.08 MB for 3.85 MB of unique point data. It is
+pretty-printed (indent 2) and stores the points **twice** — an 8.11 MB flat `imported` array and
+a 10.80 MB `datasets` object holding the same 134,372 points. Compact separators plus dropping
+the redundant array would take it to ~4 MB. Matters only because restore is whole-store-scoped
+and parses the lot on an iPhone.
+
+---
+
+**7. GOOGLE DRIVE AS A STORAGE BACKEND — EVALUATED AND REJECTED. Do not reopen.**
+
+Free in dollar terms (Drive API costs nothing; files count against the personal 15 GB quota), but
+wrong for this app on four counts:
+
+- **Offline-first dies.** Guya's value is working on a rock platform with no signal. Drive needs
+  a network round-trip and a live token.
+- **OAuth friction.** An app in Testing status is capped at 100 test users and its refresh tokens
+  expire after **7 days** — so weekly re-authentication, forever. Production status gives
+  indefinite tokens but requires Google's application verification, including a security audit
+  for sensitive scopes. A verification process for a personal fishing app.
+- **iOS standalone-mode redirect hazard.** A home-screen web app that kicks out to an OAuth
+  consent screen typically returns into Safari — the wrong storage container.
+- **Hard rule 5.** Photos and personal data stay on-device. A depth-only split is defensible but
+  needs an explicit decision, not a quiet consequence.
+
+**The better answer, and the named starting hypothesis for the multi-region architecture spike:
+static region files on GitHub Pages + IndexedDB cache + viewport-driven loading.** No auth,
+`git commit` as the import path, Cache API for real offline, $0, and no privacy exposure at all
+because the only thing moving off-device is public LiDAR already published in the repo. Capacity:
+Pages' ~1 GB soft repo limit ÷ 29.6 B/pt ≈ **36.3 million points**, ~270× the current whole pool,
+before gzip. It also retires the manual per-region import ritual — every future region costs a
+commit instead of a field procedure, which is what makes "eventually a lot of regions" tractable.
+
+---
+
+**8. MULTI-REGION (#15) NOW HAS A HARD CEILING — three of them, binding at different points.**
+
+Aaron flagged intent to map many more areas. On the current architecture that is not reachable:
+
+- **Storage.** ~1.0–2.0 MB free in a ~5 MiB container ÷ 29.6 B/pt ≈ **35,000–70,000 more points,
+  total, ever.** Two or three more SEQ regions at current density and headroom is gone again —
+  with no rollback keys left to delete. The national-scale item (QLD-wide + NT, WA, partial NSW)
+  is off by two orders of magnitude.
+- **Runtime.** v16.60's cache removes the per-pan index rebuild, but the pool is still fully
+  resident and fully in scope for every operation touching it. Fine at 64,306. Not fine at
+  500,000.
+- **Import path.** 25,000 points per CSV parse, manual, one region at a time, each followed by a
+  force-close/reopen verification ritual. Tolerable for five regions; unworkable for fifty.
+
+Fixing storage alone buys ~10× and leaves the other two. **The IndexedDB migration (currently on
+Hold, deferred at v16.38 as "not urgent enough to block re-establishing SC/Maroochy-Noosa") should
+come off Hold and be sequenced as the GATE on multi-region expansion, not as an optimisation.**
+That deferral was correct then; the zero-headroom event is the signal it no longer is. Gold Coast
+and every region after it sit behind the spike. MN v3 and Noosa are sized to fit on the current
+architecture and can still proceed — they are the last things that will.
+
+Note also that IndexedDB brings a durability win independent of capacity: transaction commit is a
+genuine signal, which would retire the force-close/reopen ritual for everything except
+user-created data.
+
+---
+
+**9. NEXT SEQUENCE (supersedes the v16.58 sequence and v16.60's restatement of it):**
+
+1. **Re-gate v16.60 with auto-contours explicitly OFF, then explicitly ON**, and confirm build
+   string `2026.08.02a` in the panel. Separates the two pixel-loop paths. No build.
+2. **Measurement build** — `performance.now()` instrumentation of `buildShade()`'s four segments
+   (bounds/index, mask pass, IDW loop, `smoothField`) plus `W`/`H`/pixel count, reported for one
+   Bargara pan and one Brisbane pan. Sonnet. Diagnose before patch.
+3. **Jitter fix**, scoped by what (2) measures. Not before.
+4. **`storage_check.html` tooling pass** (cheap, batch three fixes): section 1 reload hint after
+   section 6 deletes; section 3 caption corrected to say it does NOT bound localStorage; stale
+   5.34 MB VERDICT panel removed. Optionally add the KiB-granular binary search for a precise cap.
+5. **Option 3 coverage-boundary toggle** — opt-in, default OFF.
+6. **MN v3 Noosa-OSM fetch → clip, and Noosa tide wiring** — independent of 1–5. **Transient cost
+   note:** MN v3 nets ≈ −63 KiB at rest (553.6 out, ~491 in), but the REPLACE path writes a
+   rollback snapshot of `maroochy_noosa` BEFORE committing, so peak demand is ~1,045 KiB against
+   1,024–2,047 KiB free. It fits now; it did NOT fit before the rollback delete. **Do not
+   re-derive "MN v3 is free" and dispatch it against a full container.** The ~491 KiB projection
+   is geometric, not measured — measure the real clipped count before dispatching.
+7. **Multi-region architecture spike** (see §8) — gates Gold Coast, national scale, and #16.
+
+---
+
+**10. PROCESS NOTES FROM THIS SESSION.**
+
+- **Claude Code's inference needs checking against its own evidence, even when the evidence is
+  correct and verbatim.** The fill-test diagnostic reported the 1 MiB chunk mechanism accurately
+  and then concluded the opposite of what it implies. Twice this session it *also* stopped
+  correctly rather than papering over a problem (the viewport-dependency finding that reshaped
+  v16.60; a self-flagged comparison-direction bug in the Step B harness). The pattern is: trust
+  the evidence it gathers, red-team the conclusions it draws from it.
+- **A commit message is a label, not a file.** Verify roadmap version by reading the file
+  (`Select-String -Path .\GUYA_ROADMAP.md -Pattern '^\*v16\.' | Select-Object -First 1`), not
+  by trusting `git log`.
+- **PowerShell has no `grep`/`head`/`tail`/`wc`.** Use `Select-String`, `Select-Object
+  -First/-Last`, `Measure-Object -Line`. Write dispatch commands in PowerShell form.
+- **`Select-String` prints nothing on no-match** — empty output is a valid negative result, not a
+  failed command.
+- **Never delete and re-add the home-screen icon to bust a cache.** It destroys the container and
+  every point in it. Restore is whole-store-scoped and needs headroom that may not exist.
+- **Never open a `?v=` cache-bust URL in Safari to test.** Separate container; it shows an empty
+  store that means nothing.
+- Pages Actions runs for `dff2999`, `7db40e8`, `5d99dcc` and `c1684fd` were **not** confirmed —
+  `gh` is unavailable in the Claude Code environment. Check
+  `https://github.com/AzmixLabs/Guya_Wamu/actions` directly. A push is not a deployment.*
+
+---
+
 *v16.60 · 2 Aug 2026 — poolVersion-keyed memoisation of ptsBounds()/buildSampleIndex(), on-phone
 sequence item (2). Build bumped to **2026.08.02a**. Repo head `5d99dcc` (tooling commit `7db40e8`
 before it: storage_check.html rollback-key delete + the item-13 hygiene commit `dff2999`, all v16.59
@@ -52,6 +437,16 @@ edge-detect implementation, opt-in and default OFF; (5) MN v3 Noosa-OSM fetch �
 Noosa tide-port wiring. The v16.58 process fix (route planning-deltas to the repo copy first) is
 STILL not actioned — still requires an edit to this project's own custom instructions, which only
 Aaron can make.*
+
+> **[THREE CORRECTIONS TO THE PARAGRAPH ABOVE — see v16.61, 2 Aug 2026.]**
+> (1) **The "GENUINE zero, not a rounding artefact" claim is WRONG.** The fill-test writes a flat
+> 1 MiB chunk and never retries smaller, so its display floor *is* 1 MiB — "0.0 MB" means
+> "headroom < 1,024 KiB" and cannot mean anything more precise. The diagnostic reported the
+> mechanism correctly and then drew the opposite inference from it.
+> (2) **The storage prune is CANCELLED**, not pending. Its reachable saving was measured at
+> 1,011.5 KiB — less than the 1,123.9 KiB freed non-destructively by the rollback-key delete.
+> (3) **The v16.58 process fix IS actioned** — project instructions rev D (31 Jul) carry the
+> one-direction repo→project-knowledge sync rule. Not an open task.*
 
 ---
 
@@ -2915,13 +3310,16 @@ first job, ahead of the Option A build — superseded by v16.43.1, which closed 
     (confirmed v16.5, re-confirmed v16.19) — same pattern as Redcliffe following Brisbane Bar in
     2a. Cheap, not urgent.
 12. Gold Coast stays parked.
-13. **CLOSED as a tracking item, REOPENED as a decision (v16.59).** Was: *"New (v16.26) —
-   `guya_species_qld_v3.md` sits untracked in the repo (surfaced by `git status` during the
-   deploy-incident fix) — origin and whether it belongs are undecided."* It is now tracked and
-   committed — but by **v16.48's STEP 0 repo-hygiene sweep**, not by a decision, and against a
-   standing "project knowledge only, never the repo" note that is only now tagged superseded.
-   Nothing left to track. What remains is Aaron's call: accept it in the repo and delete the
-   superseded note, or `git rm --cached` + `.gitignore`. See v16.59.
+13. **RESOLVED (v16.61) — `git rm --cached` + `.gitignore`, committed `dff2999` (2 Aug 2026).**
+   History: raised v16.26 as an untracked file of undecided origin; swept into the repo by
+   **v16.48's STEP 0 repo-hygiene sweep** against a standing "project knowledge only, never the
+   repo" note; reopened as a decision at v16.59. Aaron's call was to untrack it. `.gitignore` now
+   carries both `guya_species_qld_v3.md` and `*_intertidal_ground_v1.csv` (the latter pre-empts
+   re-entry of the two contaminated v1 CSVs, which have already resurfaced once). File remains on
+   disk, untracked, 10,790 bytes. **This is an ANTI-DRIFT fix, not a privacy fix** — `git rm
+   --cached` leaves the file in git history and the repo is public (it serves Pages). History was
+   deliberately NOT rewritten: the content is benign species-passport seed data and a rewrite
+   isn't warranted. Do not re-file this as a privacy remediation. CLOSED.
 14. **Maroochy/Noosa real bathymetric LiDAR — PIPELINE SHIPPED (v16.33), import decision
    pending.** Was: "New (v16.28) — target dataset identified, Aaron's step to order." Now:
    order placed, delivery inspected, pipeline built and run. Corrections to the original
