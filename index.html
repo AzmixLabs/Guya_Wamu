@@ -1006,6 +1006,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .bdg.secret .ic{filter:grayscale(1) brightness(.55)}
   .bdg-who{margin-bottom:8px}
   .bdg-foot{font-size:9px;color:var(--ink-dim);opacity:.8;margin-top:9px;line-height:1.4}
+
+  /* v16.65 Step B rebuild-timing readout. Created only while the diagnostic is ON, so with it OFF
+     no node exists and the map surface is unchanged. TOP-RIGHT, top:150px clears the zoom control
+     in both layouts (topright, margin-top 10px desktop / 64px under the max-width:600px rule,
+     68px of buttons) and never reaches the bottomright scale bar / zoom readout / attribution
+     strip that v16.63 settled. pointer-events:none - the only interactive control is the
+     #perf-toggle checkbox in the panel. z-index 900 sits under .panel (1000) deliberately: an
+     expanded panel covers it, exactly as it already covers the zoom control. */
+  #perf-box{position:absolute;top:150px;right:10px;z-index:900;pointer-events:none;
+    background:rgba(6,14,20,.92);border:1px solid var(--line);border-radius:8px;padding:6px 8px;
+    font-family:"IBM Plex Mono",monospace;font-size:10px;line-height:1.32;color:var(--ink);
+    font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;min-width:196px;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,.9)}
+  #perf-box .pfh{color:var(--accent);letter-spacing:.5px;margin-bottom:3px;white-space:nowrap}
+  #perf-box .pfr{display:flex;gap:6px;white-space:nowrap}
+  #perf-box .pfr span{flex:1 1 auto;color:var(--ink-dim)}
+  #perf-box .pfr b{flex:0 0 47px;text-align:right;font-weight:500}
+  #perf-box .pfk span,#perf-box .pfk b{color:var(--ink-dim);font-weight:400}
+  #perf-box .pff{color:var(--ink-dim);white-space:nowrap;margin-top:3px}
 </style>
 </head>
 <body>
@@ -1030,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.07a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1069,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.07a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1139,6 +1158,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="dlegend"><span>lines</span><span class="bar bar-ct"></span><span>8 m</span></div>
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="ac-toggle"><span>Auto contours (from soundings)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
+        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="perf-toggle"><span>⏱ Rebuild timing (diagnostic)</span></label>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Measurement only — shows how long each pan rebuild takes, split by stage. Changes nothing on the map. Off by default; nothing is timed or stored while it's off.</div>
     </div>
     <div class="blk"><div class="lbl">Depth lines (traced / drawn / imported)</div>
       <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
@@ -2036,16 +2057,151 @@ let _zoneFaded=null;
    have, the p.r0 write below is already sitting on the live objects pts references, so skipping
    the precompute loop is a genuine no-op read, not a copy. */
 let _r0Version=-1;
+/* ---------------------------------------------------------------------------------------------
+   v16.65 (build 2026.08.09a) - STEP B PAN-REBUILD INSTRUMENTATION. MEASUREMENT ONLY.
+   Nothing in this block or its marks changes rendering. Every mark sits at a SEGMENT BOUNDARY:
+   there is not one performance.now() call inside any per-pixel or per-cell loop body. S3 alone
+   runs up to 360,000 iterations (600x600), so a timing call in there would be the largest thing
+   measured and would invalidate the whole exercise.
+
+   Collection AND display are gated on the SAME flag (perfOn, default OFF). With it off,
+   perfBegin() returns null on its first line and perfT0 is never set, so no clock is read, no
+   record allocated, no DOM node created - the map surface is byte-identical to 2026.08.07a.
+   In-memory only: samples are NEVER written to localStorage (headroom is 1,024-2,047 KiB free
+   and this must not consume any of it).
+
+   TIMESTAMPS
+     T0  moveend fired (the LAST moveend before the 350ms trailing debounce elapsed)
+     T1  buildShade() entry, post-debounce
+     T2  code-level swap complete (new overlay added to the map, old one removed)
+     T3  imageOverlay 'load' - the PNG is actually decoded and PAINTED. Never measured before
+         this build; treated as a first-class number, not a footnote.
+
+   NESTING - READ THIS BEFORE INTERPRETING THE RESIDUAL.
+   buildAutoContours() is invoked from inside buildShade() and rides the same trigger (it has no
+   map binding of its own). Its call site sits ABOVE the S1 start mark (m0, taken at the top of
+   the rebuild try), so S1-S5 EXCLUDE the nested contour work entirely, and CT lands wholly inside
+       RESIDUAL = (T2-T1) - (S1+S2+S3+S4+S5)
+   which is why the overlay row is labelled RESID(+CT). Subtract CT from RESID to get the
+   genuinely unaccounted-for time. A large residual is a FINDING, not an instrumentation bug -
+   the segments are not to be re-cut to make it small.
+
+   S1 IS SPLIT, NOT CONTIGUOUS. The spec's "samples + bounds + index build" straddles the mask
+   pass in the existing code order (samples/bounds/canvas -> mask -> pooledSampleIndex + the r0
+   precompute), so S1 is measured as two spans (s1a + s1b) and summed. Segments were fitted to
+   the code as it stands; the code was not reordered to fit the segments.
+
+   CACHE FIELDS - the brief asked for _idwCache HIT/MISS. Both are reported, because _idwCache is
+   NOT the cache that governs S1: buildShade() nulls _idwCache on its own first line and never
+   repopulates it (only idwIndex(), i.e. tap-to-read, does). The index S1 actually pays for or
+   skips is pooledSampleIndex()'s poolVersion-keyed _sampleIndexCache. "six" is that one, read at
+   its call site immediately BEFORE the call; "idw" is _idwCache's state at T1, before line 1 of
+   buildShade() clears it. Both are shown so a spuriously-fast S1 is visible either way.
+--------------------------------------------------------------------------------------------- */
+let perfOn=false,perfT0=null,perfCur=null,perfSamples=[],perfSkips=0,perfPre=0,perfNoLoad=0,perfBox=null;
+const PERF_WIN=10;
+/* the build string is READ from the panel header rather than duplicated here - a third copy would
+   be a third thing to keep in sync, and reading it also proves the header copy is present. */
+function perfBuildStr(){try{const e=document.querySelector('.phead .sub');const m=e&&e.textContent.match(/build\s+([0-9.]+[a-z])/);return m?m[1]:'?';}catch(e){return '?';}}
+function perfBegin(){
+  if(!perfOn||perfT0===null)return null;
+  const r={t0:perfT0,t1:performance.now(),t2:null,t3:null,awaitPaint:false,done:false,
+    s1a:0,s1b:0,s2:0,s3:0,s4:0,s5:0,enc:0,c1:0,c2:0,ct:0,
+    sw:0,sh:0,cw:0,ch:0,pool:0,z:'',six:'-',idw:'-'};
+  perfT0=null;
+  /* flush on a fresh task - outside every timed span, and it catches the early-return paths
+     (shade off, pts<3, degenerate clip, throw) that never reach the swap. */
+  setTimeout(function(){perfFlush(r);},0);
+  return r;
+}
+function perfFlush(r){
+  if(r.awaitPaint||r.done)return;   /* the 'load' handler owns the commit for this gesture */
+  if(r.t2===null){perfSkips++;perfDraw();return;} /* never reached the swap - its segments would be meaningless */
+  perfCommit(r);
+}
+function perfAwaitPaint(r,ov){
+  r.awaitPaint=true;
+  try{
+    const img=ov&&ov._image;
+    /* brief: if the load event has already fired by the time we bind, record 0 rather than
+       dropping the sample - and make that case countable (the "pre" footer field). */
+    if(img&&img.complete){r.t3=r.t2;perfPre++;perfCommit(r);return;}
+    ov.once('load',function(){if(r.done)return;r.t3=performance.now();perfCommit(r);});
+    /* a gesture must never sit uncommitted: if no load ever arrives, commit at 0 and count it. */
+    setTimeout(function(){if(r.done)return;r.t3=r.t2;perfNoLoad++;perfCommit(r);},2000);
+  }catch(e){if(!r.done){r.t3=r.t2;perfNoLoad++;perfCommit(r);}}
+}
+function perfCommit(r){
+  if(r.done)return;r.done=true;
+  perfSamples.push(r);
+  if(perfSamples.length>PERF_WIN)perfSamples.shift();
+  perfDraw();
+}
+function perfStat(f){
+  const a=[];
+  for(let i=0;i<perfSamples.length;i++){const v=f(perfSamples[i]);if(isFinite(v))a.push(v);}
+  if(!a.length)return null;
+  a.sort(function(x,y){return x-y;});
+  const n=a.length;
+  return {med:(n%2)?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2,max:a[n-1]};
+}
+function perfRow(label,f,cls){
+  const s=perfStat(f);
+  return '<div class="pfr'+(cls?' '+cls:'')+'"><span>'+label+'</span><b>'+(s?s.med.toFixed(1):'—')+
+    '</b><b>'+(s?s.max.toFixed(1):'—')+'</b></div>';
+}
+function perfDraw(){
+  if(!perfOn){if(perfBox&&perfBox.parentNode)perfBox.parentNode.removeChild(perfBox);perfBox=null;return;}
+  if(!perfBox){perfBox=document.createElement('div');perfBox.id='perf-box';document.body.appendChild(perfBox);}
+  const lg=perfSamples.length?perfSamples[perfSamples.length-1]:null; /* last gesture - NOT named L; L is Leaflet in this file */
+  const kpx=function(w,h){return w&&h?(w+'×'+h+'='+Math.round(w*h/1000)+'k'):'—';};
+  let s='<div class="pfh">STEP B · '+perfBuildStr()+'</div>'+
+    '<div class="pfr pfk"><span>ms</span><b>med</b><b>max</b></div>'+
+    perfRow('T1-T0 idle',function(r){return r.t1-r.t0;})+
+    perfRow('T2-T1 comp',function(r){return r.t2-r.t1;})+
+    perfRow('T3-T2 paint',function(r){return r.t3-r.t2;})+
+    perfRow('T3-T0 total',function(r){return r.t3-r.t0;})+
+    perfRow('S1 idx/bnds',function(r){return r.s1a+r.s1b;})+
+    perfRow('S2 mask',function(r){return r.s2;})+
+    perfRow('S3 idw px',function(r){return r.s3;})+
+    perfRow('S4 smooth',function(r){return r.s4;})+
+    perfRow('S5 paint+enc',function(r){return r.s5;})+
+    perfRow('  of which enc',function(r){return r.enc;})+
+    perfRow('RESID(+CT)',function(r){return (r.t2-r.t1)-(r.s1a+r.s1b+r.s2+r.s3+r.s4+r.s5);})+
+    perfRow('C1 idx/field',function(r){return r.c1;})+
+    perfRow('C2 msq/layer',function(r){return r.c2;})+
+    perfRow('CT total',function(r){return r.ct;})+
+    '<div class="pff">sh '+(lg?kpx(lg.sw,lg.sh):'—')+'  ct '+(lg?kpx(lg.cw,lg.ch):'—')+'</div>'+
+    '<div class="pff">pool '+(lg?lg.pool:'—')+'  z'+(lg?lg.z:'—')+'  six '+(lg?lg.six:'—')+'  idw '+(lg?lg.idw:'—')+'</div>'+
+    '<div class="pff">n='+perfSamples.length+'/'+PERF_WIN+'  skip '+perfSkips+'  pre '+perfPre+'  noload '+perfNoLoad+'</div>';
+  perfBox.innerHTML=s;
+}
+(function(){const t=document.getElementById('perf-toggle');if(!t)return;
+  t.onchange=function(e){perfOn=e.target.checked;
+    /* turning it ON always starts a fresh window, so a screenshot at n<10 is self-evidently
+       incomplete rather than half stale. Turning it OFF just stops collecting. */
+    if(perfOn){perfSamples=[];perfSkips=0;perfPre=0;perfNoLoad=0;perfT0=null;}
+    perfDraw();};})();
 function buildShade(){
+  const _pf=perfBegin(); /* T1 - null unless the timing overlay is on AND a moveend is pending */
+  if(_pf){_pf.idw=_idwCache?'HIT':'MISS';_pf.z=(function(){try{return map.getZoom().toFixed(1);}catch(e){return '?';}})();}
   _idwCache=null; /* data changed - rebuild read index lazily */
   try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
+  /* CT is timed at this CALL SITE, so it covers buildAutoContours()'s own early-return paths too.
+     perfCur is how the nested function reaches this gesture's record; it is set across this one
+     call and cleared immediately after. This whole span sits ABOVE the S1 start mark, so CT is
+     excluded from S1-S5 and falls entirely inside RESID(+CT). */
+  const _c0=_pf?performance.now():0;perfCur=_pf;
   if(typeof buildAutoContours==='function')buildAutoContours();
+  if(_pf)_pf.ct=performance.now()-_c0;
+  perfCur=null;
   if(!shadeOn){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
   /* v16.62: atomic overlay swap - shadeOverlay is no longer torn down up front. Everything from
      here to the swap at the end is wrapped so a throw mid-rebuild leaves the map showing the
      PREVIOUS overlay rather than bare while the next one computes; branches that end with
      genuinely nothing to show still clear it, matching prior final-state behaviour. */
   try{
+  const _m0=_pf?performance.now():0; /* S1a start - see the Step B nesting note above buildShade() */
   const pts=depthSamples();
   if(pts.length<3){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
   const bb=ptsBounds(pts);
@@ -2084,11 +2240,18 @@ function buildShade(){
      design rather than chased - the spike's own guidance ("let them stay unpainted islands").
      R1=120 still deliberately untouched throughout: it alone bounds the painted footprint, so
      land-overpaint behaviour cannot change regardless of R0. */
+  /* S1a end. NOTE for reading the numbers: S1a is samples + bounds + viewport clip AND the
+     canvas/ImageData allocation just above (a 600x600 ImageData is 1.44 MB) - the allocation has
+     no separate mark, so a large S1a is not necessarily depthSamples()/ptsBounds(). */
+  const _m1=_pf?performance.now():0;
+  if(_pf){_pf.s1a=_m1-_m0;_pf.sw=W;_pf.sh=H;_pf.pool=pts.length;}
   /* pass 1: water/land mask */
   const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));mask[y*W+x]=inWaterFast(feats,la,lo)?1:0;}}
   const mAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?0:mask[y*W+x];
+  const _m2=_pf?performance.now():0; /* S2 end (mask pass incl. shadeMaskFeats()); S1b start */
+  if(_pf)_pf.s2=_m2-_m1;
   /* pass 2a: interpolated field (bucketed IDW)
      v16.60 (build 2026.08.02a): cellLo is now POOL-anchored, not viewport-anchored - derived from
      mLngMin, the smallest mLng any point in the pool bbox (bb, computed above by ptsBounds()
@@ -2120,6 +2283,8 @@ function buildShade(){
      DELIBERATELY untouched and still viewport/mid-pool-anchored respectively - changing either
      would shift alpha or R0, out of scope for this build. */
   const maxAbsLatPool=Math.max(Math.abs(bb.minLa),Math.abs(bb.maxLa)),mLngMin=111320*Math.cos(maxAbsLatPool*Math.PI/180);
+  /* read the index cache's state BEFORE the call, or the call itself makes it a HIT. */
+  if(_pf)_pf.six=(_sampleIndexVersion===poolVersion&&_sampleIndexCache)?'HIT':'MISS';
   const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
   /* per-sample adaptive R0 (v16.47): reuses the SAME bucketed index above (no second index
      built) to find each sample's own nearest-OTHER-sample gap, then sets that sample's own
@@ -2161,6 +2326,12 @@ function buildShade(){
     _r0Version=poolVersion;
   }
   const FD=new Float32Array(W*H),AL=new Float32Array(W*H),ST=new Uint8Array(W*H); /* ST: 1 where the nearest sample is topographic-NIR -> paint flats bands, not the depth ramp */
+  /* S1b end. Carries the bucket index (pooledSampleIndex - see the "six" field for HIT/MISS), the
+     per-sample r0 precompute (itself cached on _r0Version, so ~0 on a pan that didn't change the
+     pool - a non-zero S1b means that cache missed), and the FD/AL/ST allocation on the line above.
+     S1 reported on the overlay = S1a + S1b. */
+  const _m3=_pf?performance.now():0;
+  if(_pf)_pf.s1b=_m3-_m2;
   for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
       const i0=y*W+x;
@@ -2189,9 +2360,13 @@ function buildShade(){
       const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
       FD[i0]=num/den;AL[i0]=distA*maskA;ST[i0]=(nearST==='topographic')?1:0;}}
+  const _m4=_pf?performance.now():0; /* S3 end - the IDW pixel loop, up to 360,000 iterations */
+  if(_pf)_pf.s3=_m4-_m3;
   /* smooth the field: dense survey imports make raw IDW near-nearest-neighbour, which is far too
      noisy for gradients (the old aspect view rendered as rainbow static). 2 passes ≈ 1-px gaussian. */
   smoothField(FD,AL,W,H,2,0.01);
+  const _m5=_pf?performance.now():0; /* S4 end; S5 start */
+  if(_pf)_pf.s4=_m5-_m4;
   /* pass 2b: paint - depth bands; with relief on, modulate by NW-lit hillshade so slope reads as light/dark */
   const pxX=((maxLo-minLo)/(W-1))*mLng,pxY=((maxLa-minLa)/(H-1))*mLat;
   /* light from the NW at 45° elevation (toward-light unit vector: east, north, up) */
@@ -2233,9 +2408,19 @@ function buildShade(){
     }
     da[idx]=c[0];da[idx+1]=c[1];da[idx+2]=c[2];da[idx+3]=Math.round(a*235);}}
   ctx.putImageData(im,0,0);
-  const _newShade=L.imageOverlay(cv.toDataURL(),[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
+  const _mEnc=_pf?performance.now():0;
+  /* cv.toDataURL() hoisted out of the L.imageOverlay(...) argument list ONLY so the synchronous
+     PNG encode of W*H px gets its own boundary mark ("of which enc"). Same value, same evaluation
+     order - it was already the first argument evaluated. No behaviour change. */
+  const _url=cv.toDataURL();
+  if(_pf){const _m6=performance.now();_pf.enc=_m6-_mEnc;_pf.s5=_m6-_m5;}
+  const _newShade=L.imageOverlay(_url,[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
   if(shadeOverlay)map.removeLayer(shadeOverlay);
   shadeOverlay=_newShade;
+  /* T2 - v16.62's add-before-remove swap complete, order untouched. The overlay's own DOM write
+     happens in perfCommit(), reached from the 'load' handler (T3) or the flush task - i.e. AFTER
+     T3 and outside every timed span. */
+  if(_pf){_pf.t2=performance.now();perfAwaitPaint(_pf,_newShade);}
   }catch(e){ /* rebuild threw partway through - leave the existing shadeOverlay (if any) in place rather than leave the map bare */ }
 }
 let shadeOp=0.75;try{const v=parseFloat(localStorage.getItem('woongarra_shade_op'));if(isFinite(v)&&v>=0.25&&v<=1)shadeOp=v;}catch(e){}
@@ -2562,6 +2747,9 @@ function findDeepest(lat0,lng0){
 /* ---------- AUTO CONTOURS (marching squares over the interpolated depth field) ---------- */
 let autoCtOn=false,autoCtLayer=null,autoCtRenderer=null;
 function buildAutoContours(){
+  /* Step B: _pf is non-null only while called from buildShade() with the timing overlay on -
+     the ac-toggle's own direct call leaves perfCur null and is not measured. */
+  const _pf=perfCur,_cm0=_pf?performance.now():0;let _cm1=0;
   if(!autoCtOn){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   /* v16.62: atomic overlay swap - see buildShade() for the same pattern/rationale. */
   try{
@@ -2606,6 +2794,9 @@ function buildAutoContours(){
          findDeepest(): a contour needs a genuinely nearby sample regardless of zone. */
       const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))?1:0;}}
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
+  /* C1 end = entry -> bucket index + field loop + smoothField. C2 = everything after: min/max
+     scan, level selection, marching squares, polyline build and the layer swap. */
+  if(_pf){_cm1=performance.now();_pf.c1=_cm1-_cm0;_pf.cw=W;_pf.ch=H;}
   let mnD=1e9,mxD=-1e9;for(let i=0;i<F.length;i++){if(OK[i]){if(F[i]<mnD)mnD=F[i];if(F[i]>mxD)mxD=F[i];}}
   if(mxD<=mnD){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
   const stepL=(mxD-mnD)>4?1:0.5,levels=[];
@@ -2644,6 +2835,7 @@ function buildAutoContours(){
   _newCtLayer.addTo(map);
   if(autoCtLayer)map.removeLayer(autoCtLayer);
   autoCtLayer=_newCtLayer;
+  if(_pf)_pf.c2=performance.now()-_cm1; /* C2 end - v16.62 swap order above untouched */
   }catch(e){ /* rebuild threw partway through - leave the existing autoCtLayer (if any) in place rather than leave the map bare */ }
 }
 (function(){const t=document.getElementById('ac-toggle');if(!t)return;
@@ -3220,7 +3412,10 @@ renderContours();
 
 /* ---------- Re-render shading/contours for the current view ---------- */
 (function(){let t=null;
-  map.on('moveend',function(){if(!shadeOn&&!autoCtOn)return;clearTimeout(t);t=setTimeout(function(){buildShade();},350);});
+  /* Step B T0: set on EVERY moveend, so the value buildShade() reads is the LAST one before the
+     debounce elapsed - i.e. the moment the gesture actually settled. Nothing is read when the
+     timing overlay is off. Debounce and delay unchanged. */
+  map.on('moveend',function(){if(!shadeOn&&!autoCtOn)return;if(perfOn)perfT0=performance.now();clearTimeout(t);t=setTimeout(function(){buildShade();},350);});
 })();
 
 /* ---------- Navionics-vs-imported comparison & cleanup ---------- */

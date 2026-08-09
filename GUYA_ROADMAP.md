@@ -1,5 +1,118 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.65 · 9 Aug 2026 — STEP B MEASUREMENT BUILD SHIPPED (instrumentation only, no behaviour
+change). Build bumped to **2026.08.09a**. Repo head `6e85fc7` at session start. This is §7 item 2
+of v16.64 below, as amended. **THE NUMBERS DO NOT EXIST YET — nothing has been measured. This build
+only makes measurement possible; the on-phone run is the deliverable and it is the next job.**
+
+**What shipped (`index.html`, one new block + fourteen boundary marks):**
+
+- **Timestamps.** `T0` last `moveend` before the 350 ms trailing debounce elapsed · `T1`
+  `buildShade()` entry · `T2` code-level swap complete · `T3` `imageOverlay` `'load'` — the PNG
+  actually decoded and painted. Overlay reports T1−T0, T2−T1, **T3−T2**, T3−T0. T3−T2 has never
+  been measured before and is carried as a first-class row, not a footnote.
+- **Segments.** `buildShade()`: S1 samples+bounds+index, S2 mask pass, S3 IDW pixel loop, S4
+  `smoothField`, S5 canvas paint **including `cv.toDataURL()`**, plus a sub-row `of which enc` —
+  the synchronous PNG encode of W·H px alone, split out because it had never once been measured.
+  `buildAutoContours()`: C1 index+field, C2 marching-squares+polyline+layer-add, CT total (timed
+  at the **call site**, so it covers that function's own early returns).
+- **Per gesture:** shade W/H/W·H, contour W/H/W·H, `depthSamples().length`, `map.getZoom()` to 1 dp,
+  and two cache states (`six`, `idw` — see the correction below).
+- **Aggregation:** rolling window of the last 10 gestures, **median and max** per segment, with a
+  live `n=k/10` so a screenshot taken early is self-evidently incomplete. Median/max/window/
+  double-commit behaviour was exercised headlessly against the block lifted verbatim from the
+  file (odd-n, even-n, oldest-drop, duplicate-commit) before commit.
+- **Overlay:** `#perf-box`, top-right at `top:150px` (clears the zoom control in both the desktop
+  and the `max-width:600px` layout; nowhere near the bottom-right scale bar / zoom readout /
+  attribution that v16.63 settled). Monospace, tabular figures, 1 dp, 19 compact rows.
+  `pointer-events:none`; the only interactive control is the `#perf-toggle` checkbox in the panel.
+  Prints the build string, **read from the panel header** rather than duplicated — a third copy
+  would be a third thing to drift.
+- **Gating.** Collection and display share one flag, default OFF. With it off `perfBegin()` returns
+  `null` on its first line and `perfT0` is never set: no clock read, no record allocated, no DOM
+  node. **In-memory only — nothing is written to localStorage** (headroom is 1,024–2,047 KiB).
+
+**Discipline held:** not one `performance.now()` sits inside a per-pixel or per-cell loop body
+(all 17 call sites audited; S3 alone runs to 360,000 iterations, so a mark in there would have been
+the largest thing measured). No change to grid sizing, sample selection, alpha curve, contour
+interval, layer ordering, or v16.62's add-before-remove swap order. The overlay's own DOM write
+happens in `perfCommit()`, reached from the `'load'` handler or the flush task — after T3, outside
+every timed span. Leaflet block and first `<style>` block byte-identical
+(sha256 `156fc90a…6565fc58` and `fa8029b4…60c019e4`, unchanged); both script blocks `node --check`
+exit 0. `zoneAt()` most-protective ordering and the green-zone drag safeguard verified intact.
+
+**One deliberate code move:** `cv.toDataURL()` was hoisted out of the `L.imageOverlay(...)` argument
+list into `const _url` so the encode could get its own boundary mark. Identical value, identical
+evaluation order — it was already the first argument evaluated.
+
+**CORRECTION TO THE BRIEF — `_idwCache` is not the cache that governs S1.** The brief asked for
+`_idwCache` HIT/MISS on the grounds that its `s.length` key can collide and make S1 spuriously
+fast. That key weakness is real (it stays on the low-priority list), **but `_idwCache` is not on
+buildShade's path at all**: `buildShade()` nulls it on its own first line and never repopulates it
+— only `idwIndex()` (tap-to-read) does. The index S1 actually pays for or skips is
+`pooledSampleIndex()`'s `poolVersion`-keyed `_sampleIndexCache`. Both are therefore reported:
+**`six`** is the governing one, read at its call site immediately *before* the call (reading it
+after would make every gesture a HIT), and **`idw`** is `_idwCache`'s state at T1 as asked. On a
+pure pan sequence `idw` should read MISS every time; if it ever reads HIT, something called
+`idwIndex()` mid-protocol and that gesture is not a clean pan.
+
+**Two honest caveats on how to read the overlay:**
+
+- **S1 is split, not contiguous.** "samples + bounds + index build" straddles the mask pass in the
+  existing code order (samples/bounds/canvas → mask → `pooledSampleIndex` + r0 precompute), so it
+  is measured as two spans and summed. Segments were fitted to the code; the code was not reordered
+  to fit the segments. S1a also carries the canvas/`ImageData` allocation (600×600 `ImageData` is
+  1.44 MB) and S1b also carries the r0 precompute (itself cached on `_r0Version`, so ≈0 on a pan
+  that didn't change the pool — a non-zero S1b means that cache missed).
+- **`RESID(+CT)` includes the whole nested contour build.** `buildAutoContours()`'s call site sits
+  *above* the S1 start mark, so S1–S5 exclude CT entirely and CT falls wholly inside
+  `RESID = (T2−T1) − (S1+S2+S3+S4+S5)`. Subtract CT from RESID for the genuinely unaccounted time.
+  **A large residual is a finding, not an instrumentation bug** — do not re-cut the segments to
+  shrink it.
+
+**Edge cases instrumented rather than swallowed:** a gesture whose `imageOverlay` had already
+loaded by bind time records T3−T2 = 0 and increments `pre`; one where no `load` ever arrives is
+committed at 0 after 2 s and increments `noload`; one that never reached the swap (shade off,
+`pts<3`, degenerate clip, throw) is excluded from the medians and increments `skip`. All three
+counters are on screen, so no sample is silently dropped and a screenshot shows if any fired.
+
+**Three optimisation candidates spotted while instrumenting. Code left alone, as instructed —
+these are Step C material and must not be touched before the numbers land:**
+
+1. **`mA` in the IDW pixel loop is dead weight.** The existing v16.47 comment already says so: the
+   9-tap mask average can no longer change the painted result (`distA` zeroes `AL` when
+   `near ≥ R1`, and `near < R1` forces `maskA = 1`). That is ~9 array reads + 9 adds per pixel,
+   ~3.2 M redundant ops per 600×600 rebuild.
+2. **String-keyed bucket lookup.** `sIx[i2+':'+j2]` builds a fresh string key per bucket probe — 9
+   per pixel, in *both* the S3 loop and the C1 loop. At 360,000 px that is ~3.2 M transient string
+   allocations per shade rebuild. Prime candidate for v16.61's GC-churn hypothesis (c), and it is
+   geography-independent, so on its own it still cannot explain the Bargara/Brisbane gap.
+3. **S2's per-pixel `inWaterFast()`** is exactly v16.61 candidate (a) — the one that *is*
+   geography-dependent (Moreton's polygon complexity vs Woongarra's). S2 is now measured directly,
+   so this hypothesis is finally falsifiable rather than argued.
+
+**NEXT JOB — run the protocol, do not patch anything first.** Panel → tick "⏱ Rebuild timing
+(diagnostic)" (ticking it ON clears the window, so `n` restarts at 0/10). Depth shading AND auto
+contours both ON. Then: 10 pans at Bargara z14, 10 at Bargara z11, 10 at Redcliffe/Hays z14, 10 at
+Redcliffe/Hays z11 — **four screenshots, forty gestures**, each screenshot taken only at `n=10/10`.
+Collapse the panel before screenshotting (an expanded panel covers the overlay, same as it already
+covers the zoom control). Portrait only — 19 rows at `top:150px` will clip in landscape on a short
+viewport.
+
+**Not verified on-device this session** (no phone access): the overlay's real position and that it
+fits an iPhone screenshot uncropped are reasoned from the CSS/DOM layout, not confirmed against an
+actual narrow-viewport screenshot. If it clips, lower `top:150px` before running the protocol —
+that is a one-line CSS change, not a re-measure.
+
+**NEXT-SESSION NOTE:** build **2026.08.09a**, committed on top of `6e85fc7`. Shipped: Step B `performance.now()`
+instrumentation (T0–T3, S1–S5+enc, C1/C2/CT, median+max over the last 10 gestures, on-screen
+overlay default OFF, in-memory only). Recommended next job: **run the forty-gesture on-phone
+protocol above and paste the four screenshots — no code changes until those numbers exist.** Then
+§7 item 3 (jitter fix), scoped by what the numbers actually say. Pending cleanup: none from this
+build; the three optimisation candidates above are deliberately unactioned.
+
+---
+
 *v16.64 · 9 Aug 2026 — planning only, no build, no code. Build stays **2026.08.07a**. Repo head
 `40835f6` at session start; roadmap version verified by direct `project_knowledge_search` at the
 top of the session (found v16.61 on project knowledge, v16.62/v16.63 committed by the build
@@ -154,7 +267,10 @@ before every push, not only when a hygiene sweep is running.
 **7. NEXT — supersedes v16.61's list.**
 
 1. **DONE** — v16.62 and v16.63 both gated on-phone and closed (§1, §5 above).
-2. **STEP B MEASUREMENT BUILD — the next job. Sonnet. Diagnose before patch.** Now correctly
+2. **BUILT — shipped as build `2026.08.09a` (v16.65 at the top of this file). NOT YET RUN: the
+   forty-gesture on-phone protocol below is now the next job, and no patch may precede it.**
+   Original scoping, kept for the record:
+   **STEP B MEASUREMENT BUILD — the next job. Sonnet. Diagnose before patch.** Now correctly
    scoped and genuinely warranted: subjective rating has saturated twice and cannot resolve the
    ~1-point gap. Instrument with `performance.now()` — `buildShade()`: S1 samples+bounds+index,
    S2 mask pass, S3 IDW pixel loop, S4 `smoothField`, **S5 canvas paint including
@@ -167,7 +283,8 @@ before every push, not only when a hygiene sweep is running.
    OFF**. Output pixels must be byte-identical to `2026.08.07a`. On-phone protocol: overlay ON,
    10 pans at Bargara z14 + 10 at z11, 10 at Redcliffe/Hays z14 + 10 at z11 — four screenshots,
    forty gestures.
-3. **Jitter fix, scoped by what (2) measures. Not before.**
+3. **Jitter fix, scoped by what (2) measures. Not before.** (2)'s instrumentation now exists but
+   has produced no numbers yet — this item stays blocked until the four screenshots land.
 4. `storage_check.html` tooling pass, batch three: section 1 reload hint after a section 6 delete;
    section 3 caption corrected to say it does NOT bound localStorage; stale 5.34 MB VERDICT panel
    removed. Unchanged, independent of the render work.
