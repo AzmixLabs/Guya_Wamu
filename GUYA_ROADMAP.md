@@ -1,7 +1,7 @@
 # Guya — Feature Backlog & Roadmap
 
-*v16.67 · 9 Aug 2026 — C1 SCANLINE WATER MASK SHIPPED. Build bumped to **2026.08.09b**. Repo head
-`dcbc673` at session start. Closes v16.66 §7's C1 slot. **Canvas rasterisation is DROPPED to
+*v16.67.1 · 9 Aug 2026 — C1 SCANLINE WATER MASK SHIPPED (+ session record, gate re-derivation,
+standing rules). Build bumped to **2026.08.09b**. Repo head `dcbc673` at session start. Closes v16.66 §7's C1 slot. **Canvas rasterisation is DROPPED to
 fallback and was never implemented.**
 
 **What shipped (`index.html:1992-2094` new, `index.html:2355` call site):** `scanlineMask()`
@@ -58,11 +58,12 @@ pixels cost ~2× land pixels, so a water-heavier real box is dearer, not cheaper
 gate produces the real number.** The 0-diff gate, by contrast, is exact and engine-independent.
 
 **NEXT JOB — on-phone gate.** Panel → "⏱ Rebuild timing (diagnostic)" (still default OFF,
-untouched by this build). Depth shading AND auto contours ON. 10 pans at Bargara z14, 10 at
-Bargara z11, 10 at Redcliffe/Hays z14, 10 at Redcliffe/Hays z11 — four screenshots at `n=10/10`.
-**Read S2 specifically**; the v16.66 baseline is 105.0 ms median Bargara z11 / 504.0 ms Redcliffe
-z11. Also confirm visually that the shading footprint is unchanged at a coastline — the gate is
-bit-exact off-phone, but nothing has run on-device.
+untouched by this build). Depth shading AND auto contours ON. **CORRECTED PROTOCOL — see §I
+below; the z14 pairs originally written here have NO v16.66 baseline and cannot be compared.**
+10 pans each at **Bargara z11 / Redcliffe z11 / Bargara z10 / Brisbane z10** — four screenshots
+at `n=10/10`. **Read S2 specifically** against 105.0 / 504.0 / 205.5 / 366.5 ms medians. Also
+confirm visually that the shading footprint is unchanged at a coastline — the gate is bit-exact
+off-phone, but nothing has run on-device.
 
 **Open, carried forward:** the `:2417` vs `:2251` half-pixel inconsistency between how the mask
 samples (pixel centres on the bounds, `(W-1)` denominators) and how `L.imageOverlay` stretches the
@@ -70,10 +71,175 @@ image (pixel edges on the bounds) — pre-existing, deliberately untouched, logg
 `buildAutoContours()`'s field loop still runs the per-pixel path and is the obvious C2 candidate,
 but only once C1's on-phone number exists.
 
-**NEXT-SESSION NOTE:** build **2026.08.09b**, committed on top of `dcbc673`. Shipped: C1 scanline
-water mask, gated at 0/28,804,800 across 144 boxes. Recommended next job: **run the forty-gesture
-on-phone protocol and read S2 — no further optimisation until that number exists.** Pending
-cleanup: none from this build. `mA` remains dead code by instruction (v16.66 §7 item 5).
+---
+
+**v16.67.1 SESSION RECORD — the reasoning that produced C1, recorded because three hypotheses were
+killed on the way and none of them should be reopened.**
+
+**A. STEP B2 (S2a/S2b SPLIT) — CANCELLED BEFORE BUILD. Do not re-scope it.** v16.66 §7 item 1 made
+C1 conditional on splitting S2 to check whether `shadeMaskFeats()` was a large slice of the 504 ms.
+A read of the file answered it without a build: `_shadeFeats` has exactly **four textual
+references** in `index.html` — `let _shadeFeats=null` (`:1977`), the guard
+`if(_shadeFeats)return _shadeFeats` (`:1979`), the assignment (`:1980`), the return (`:1984`).
+**No reset path anywhere.** It is a permanent singleton built once per page life, so S2a would have
+read `0.0` on every gesture of the protocol. Its one-off construction is attributed to C1's span in
+any case, because the `buildAutoContours()` call site (`:2194`) runs before `buildShade()`'s S2
+span. `poolVersion` would have been the WRONG cache key here — it tracks points/contours/imported,
+none of which `shadeMaskFeats()` reads; keying on it would force a pointless rebuild after every
+depth import. The B2 precondition was satisfied by evidence, not bypassed.
+
+**B. THE 16.2x VERTEX RATIO WAS WRONG. The real figure is 3.87x.** The first harness counted
+vertices by walking every bbox-surviving feature's rings without replicating the code's
+short-circuits — `inWaterFast()` returns on the first accepting feature (`:1988-1989`) and `pip()`
+skips inner rings unless the point is inside the outer (`:1324`). Those were **upper bounds on
+work, not work done**. Instrumenting the actual control flow gives 58.4 verts/px at Bargara vs
+226.3 at Redcliffe. **STANDING RULE: an instrumented counter must replicate every short-circuit in
+the path it measures, or it reports a bound and not a measurement.** This is the second harness in
+three sessions to make this class of error; dispatch prompts must say so explicitly.
+
+**C. THE INNER-RING HYPOTHESIS IS FALSIFIED — the gap lives in the OUTER rings.** `pip()` applies
+no bbox reject to inner rings, and the corpus looked like the perfect victim (CPZ21 149 rings,
+GUZ01 34, HPZ02 23). Measured, inner rings are only **14.6% (Bargara) / 16.8% (Redcliffe)** of
+scanned vertices. The geographic ratio is outer-ring: 188.3 vs 49.9 verts/px, 3.77x, essentially
+the whole 3.87x total. The inner scans are near-pure waste (18 hole hits across 316,855
+inside-outer tests at Bargara, **zero** at Redcliffe) but there is no money in them. HPZ02 is the
+instructive case: 0 pixels inside its outer ring in the Redcliffe viewport despite a bbox that
+blankets it — 3,037 vertices, holes never reached. That is a coarse-bbox failure and it is an
+outer-ring problem.
+
+**D. THE INNER-RING BBOX REJECT WAS BUILT, MEASURED, AND NOT SHIPPED.** Bit-exact (0/360,000 both
+viewports), 1.45x at Bargara and 1.13x at Redcliffe — it **widens** the geographic ratio 1.82x ->
+2.35x, optimising the arm that was already fine. It is also superseded: scanline removes the
+per-pixel path entirely, leaving `zoneAt()` (one call per tap) as its only surviving beneficiary.
+**Not to be revived.** A per-polygon outer-ring bbox reject on top was also tried and is slightly
+WORSE (Bargara 194.6 vs 189.3 ms) — for the 176 single-polygon features the polygon bbox is the
+feature bbox just tested. Dead end, recorded so nobody retries it.
+
+**E. CANVAS RASTERISATION — DROPPED TO FALLBACK, NEVER IMPLEMENTED.** It was v16.66 §7 item 2 and
+it was the plan until scanline measured. Canvas cannot be bit-exact by construction: it needs a
+coastline threshold decision on antialiased edge pixels, per-polygon `evenodd` fills to preserve
+union semantics (a single-path fill was measured to drop water the current code paints — Bargara
+9 px, Great Sandy 7, Hays 2 — caused by cross-feature hole punch-through across 385 of 15,753 bbox
+pairs), and an exact `(W-1)` + half-pixel transform. Scanline delivers the same complexity-class
+change with a gate of **0 diff or it is a bug**. The scaling objection is real and is accepted, not
+dismissed: scanline is O(rows x candidate edges) and degrades as the corpus grows where canvas
+would not. **Revisit at the multi-region architecture spike (§7 item 7)**, which changes the
+data-loading model anyway. Canvas stays on file as the fallback the bbox reject used to be.
+
+**F. THE OFF-PHONE HARNESS IS UNCALIBRATED. Its ratios transfer; its milliseconds do not.** Against
+the v16.66 on-phone medians the harness was 2.62x SLOWER at Bargara and at PARITY at Redcliffe. An
+engine difference scales both arms alike, so this is workload, not JSC — "JSC amplifies it" is
+withdrawn. Aspect was a genuine harness defect (it used a square 0.25 deg box; `buildShade()`
+builds a square W x H grid over a non-square degree box — pool bbox padded 35% at `:2209-2210`,
+intersected with the viewport expanded 30% per side at `:2215-2218`, `extM` taking `Math.max` of
+the two extents at `:2222`, `H=W` at `:2223`, ~1.59:1 in practice). **Correcting it made the
+absolute fit worse** — 3.14x and 1.73x, harness now slower on both arms. The water-fraction
+hypothesis was tested and falsified in the direction that hurts: water pixels cost ~2x land pixels
+(a land pixel is usually rejected by the feature bbox outright), so a water-heavier real box is
+dearer, not cheaper. Best remaining candidate is **pool-bbox clipping** (`:2217-2218`), unmodelled
+and asymmetric by construction — Bargara's pool is a narrow coastal strip, Redcliffe's fills the
+bay — with the over-modelled arm being Bargara, which fits. Also live: guessed pan centres, and the
+fact that a phone median over 10 varying boxes is not comparable to one fixed box. `W` is saturated
+at 600 on both arms so the overlay yields only extM >= 21 km, a lower bound, not the box. **The
+on-phone gate is the calibration.**
+
+**G. GATE RE-DERIVED FROM A CLEAN BASELINE — and the first gate HAD drifted.** The shipped gate's
+baseline was partly hand-made: `pir`/`pip`/`inWaterFast` were extracted, but `shadeMaskFeats` was
+**hand-written** and the pre-edit mask loop was **retyped**. Re-running against the authentic
+function failed instantly — the hand-written copy had invented `zid`/`name` fields the real
+`shadeMaskFeats()` does not return (it returns `{polys,minx,miny,maxx,maxy}` only). Benign in
+effect (the geometry never reads those fields) but proof that a retyped copy diverges silently.
+Re-derivation: baseline extracted programmatically from `head_prev.html`
+(`git show d903ba8~1:index.html`, SHA-256 `2A3A986E…1BC87C3`, 2,267,215 B, verified identical to
+the blob), candidate extracted from the shipped `index.html`, harness written to a real file at
+`D:\Claude Code\scratchpad\c1_gate.js` (12,913 B).
+
+- **168 boxes, 32,702,400 pixels, TOTAL DISAGREEING PIXELS: 0. Per-box worst case: 0.**
+- W 280/400/600 at 61/53/54 boxes; 72 random boxes across two seeds (24 never previously run).
+- **`ZONES` asserted IDENTICAL across both files, with the harness halting on mismatch** — the
+  shipped gate never checked this, and a differing corpus would have reported a hollow zero.
+- `MNP23` occurs at ZONES indices **[101, 165]** (Garrys Anchorage AND Peel Island, the
+  MultiPolygon). Both covered; a naive single-match selector covers only one.
+- Degenerate: 46 boxes 100% land, 4 boxes 100% water, open-ocean east of every ring, north and
+  south of the corpus latitude extent (-27.9333..-24.4983), and straddle boxes on those edges where
+  some rows intersect no edges and some do.
+
+**This validates the ARITHMETIC, not the INTEGRATION.** It proves `scanlineMask()` returns an
+identical mask for any box. It does not exercise the `buildShade()` call site, `mAt`, or anything
+downstream, and nothing has run on a device.
+
+**H. STANDING RULES PROMOTED FROM THIS SESSION.**
+
+1. **A gate's baseline must be extracted programmatically from a file on disk** — never retyped,
+   never hand-written, never pasted from a transcript. Where a gate compares two implementations,
+   the shared input corpus must be asserted identical across both sources, with the harness HALTING
+   on mismatch rather than reporting a pass.
+2. **A harness whose output gates a ship must be written to a real file, and its ABSOLUTE PATH
+   reported.** Claude Code's session scratchpad is
+   `%LOCALAPPDATA%\Temp\claude\<slug>\<session>\scratchpad`, NOT repo-relative — a repo-relative
+   `Get-ChildItem` produces a false negative and cost this session a round trip. `scratchpad/` is
+   now gitignored in-repo (`.gitignore:18`, commit `590824c`) for harnesses written there
+   deliberately.
+3. **Leaflet SHA-256 span is PINNED: BODY ONLY, excluding the `<script>`/`</script>` tags, expected
+   `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`.** The tags-included span is
+   `156fc90aa436d569480491a5009458ac1375630726e3fe096059305f6565fc58`. Two sessions hashing
+   different spans of identical bytes would report a false corruption alarm.
+4. **Instrumented counters must replicate the measured path's short-circuits** (see §B).
+
+**I. CORRECTED ON-PHONE PROTOCOL — the NEXT JOB paragraph above originally specified z14 and that
+was wrong.** v16.66's protocol ran z11/z10, so **no z14 baseline exists and none can now be
+captured** — the pre-C1 code is shipped over. Treat the z14 data point as a permanent loss; it was
+worth ~87 ms extrapolated and was already flagged marginal in v16.66 §6. Run instead, 10 pans each,
+`n=10/10`, four screenshots, reading **S2**:
+
+| location / zoom | v16.66 S2 baseline (median ms) |
+|---|---|
+| Bargara z11 | 105.0 |
+| Redcliffe z11 | 504.0 |
+| Bargara z10 | 205.5 (mean of 216.5 / 194.5) |
+| Brisbane z10 | 366.5 |
+
+(Cleveland z11 538.5 is n=6 and stays corroborating-only.) Plus a visual coastline check — nothing
+has run on-device. Watch whether **S3 becomes the top segment** and whether the Redcliffe/Bargara
+ratio **inverts**; an inversion is the confirmation, not a regression.
+
+**J. DEFERRED OPTIMISATIONS, logged not scoped. None to be built before the on-phone number
+exists.**
+
+1. **`buildAutoContours()`'s field loop still runs the per-pixel `inWaterFast()` path** over the
+   360x360 contour grid (129,600 px) against the same outer rings. Post-edit call site `:2898`. The
+   same scanline transformation applies. On the Redcliffe arm this is plausibly worth more than C3
+   numeric bucket keys — C1's span measured 118–191 ms per pan. **Re-sequence §7 to put this ahead
+   of C3** if the on-phone S2 result confirms the shade-side win.
+2. **`scanlineMask()`'s x loop runs all W pixels per polygon per row**, even where the polygon's
+   intercepts span a narrow longitude range. Bounding the walk to [first intercept, last intercept]
+   would cut the residual per-pixel term.
+3. **`slFit()`'s corpus scan (~34k iterations) runs every rebuild** and could be hoisted into
+   `_shadeFeats` alongside the feature bboxes.
+4. Buffer sizing in `scanlineMask()` is EXACT with zero slack (`_slT` is sized to max
+   `sum(ring.length)` per polygon; each ring yields at most one intercept per edge). Correct, but
+   any future change to ring storage has no headroom to absorb — re-check `slFit()` if that
+   changes.
+5. `slSort()` insertion sort cannot regress on this corpus: break-even against the loop it replaces
+   needs ~1,595 crossings on a single row of HPZ02's 2,119-vertex outer ring, i.e. 797 water/land
+   alternations across one horizontal line. Geometrically impossible here. The "typically 2
+   intercepts" claim is not load-bearing.
+
+**K. PROCESS NOTE — Claude Code self-authored the v16.67 roadmap entry unprompted.** The dispatch
+did not ask for it. Content is accurate and it correctly kept the uncalibrated harness figures out
+as projections, but rev D puts roadmap deltas in the planning chat, and this bypassed that. Named
+so it does not become habit. Related and unresolved: the `.gitignore` commit printed "Enumerating
+objects: 214" for a one-line change — a hook or mid-commit repack. Harmless here (the push moved 3
+objects / 355 B) but worth identifying before it appears during a build commit.
+
+**NEXT-SESSION NOTE:** build **2026.08.09b**, committed on top of `dcbc673` (`d903ba8` = C1 build +
+v16.67 entry; `590824c` = `.gitignore scratchpad/`). Shipped: C1 scanline water mask, gated at
+**0 disagreeing pixels across 168 boxes / 32,702,400 px** from a programmatically-extracted pre-C1
+baseline (§G supersedes the 144-box / 28,804,800-px figure recorded before the re-derivation).
+Recommended next job: **run the on-phone protocol in §I and read S2 — no further optimisation until
+that number exists.** Pending cleanup: confirm the Pages run for `d903ba8`, commit and push this
+v16.67.1 entry, confirm its Pages run, and re-upload the committed file to project knowledge. `mA`
+remains dead code by instruction (v16.66 §7 item 5).
 
 ---
 
