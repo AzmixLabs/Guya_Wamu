@@ -1,6 +1,7 @@
 # Guya — Feature Backlog & Roadmap
 
-*v16.68 · 9 Aug 2026 — C2 CONTOUR EARLY-OUT SHIPPED (+ dead `inWaterFast()` term deleted). Build
+*v16.68.1 · 9 Aug 2026 — C2 CONTOUR EARLY-OUT SHIPPED (+ dead `inWaterFast()` term deleted;
+v16.68.1 adds the planning review, one caveat, three corrections to earlier entries). Build
 bumped to **2026.08.09c**. Repo head `b0ddab9` at session start. Closes v16.66 §7 item 3. Two
 changes, both in `buildAutoContours()`, both bit-exact by construction.*
 
@@ -73,15 +74,119 @@ code, the green-zone `dragend` safeguard and `spotsUnlocked` all byte-identical 
 string comparison. Diff scope: 6 hunks, +72/−10, at `:1052`, `:1091`, `:1999-2003`, `:2882`,
 `:2889-2944`, `:2953-2961`. Step B overlay stays in, default OFF.
 
-**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68**. Shipped: C2 contour early-out +
-dead `inWaterFast()` term removed. **The on-phone run is the deliverable and has NOT happened** —
-expect `C1 → ~0` and `CT → ~0` at Redcliffe/Cleveland/Brisbane, unchanged at Bargara, and confirm by
-panning Bargara → Moreton that the contour layer drops rather than stranding. Next job: **Step C3,
-numeric bucket keys** (§7 item 4) — `sIx[i2+':'+j2]` allocates 9 transient strings per pixel in both
-the S3 and C1 loops, now the largest remaining term (S3 268–286 ms at Bargara). The 350 ms `moveend`
-debounce stays UNTOUCHED and is explicitly deferred until compute is under ~200 ms, then rated as
-its own change: the 351 ms is idle main thread, cutting it moves jank closer to the finger rather
-than removing it, and there is no in-flight guard to absorb the extra overlap.
+---
+
+**v16.68.1 PLANNING REVIEW OF THE v16.68 BUILD — accepted, with one material caveat and three
+corrections to earlier entries.**
+
+**A. THE SAFETY ARGUMENT IS SOUND, checked independently rather than accepted.** The field is a
+convex combination of contributing sample depths (weights `1/(dist²+1) > 0`), so `mxD <= max(d)`;
+`v0` is floored at 0; therefore `max(d) <= 0` implies empty `levels` implies the pre-existing
+return. One-way — it cannot remove geometry that would have drawn. The six-exit-path teardown
+comparison closes the one way this build could have visibly broken. **The adversarial test of the
+dead-term deletion is the right method and should be the pattern**: pre-edit was run with
+`inWaterFast` forced always-true, always-false, and deterministic pseudo-random, 52 comparisons all
+agreeing. A constant `false` stub would have passed vacuously and proved nothing.
+
+**B. THE GATE PROVES SAFETY, NOT BENEFIT. The harness pool is not the runtime pool.** The gate ran
+a 52,929-point pool = raw `moreton_bay_flats_v1.csv` (33,751) + MN (19,178). The pool that exists on
+the phone is 64,306 with a *different composition*: legacy_unknown 20,533 + BR 9,420 + SC 5,947 +
+Moreton **9,228 post-mask survivors** + MN 19,178. So the gate used the pre-mask Moreton file rather
+than the survivors, and omitted legacy_unknown, BR and SC entirely. **legacy_unknown is unaudited for
+depth sign.** If any point inside the Redcliffe box carries `d > 0` — a manually logged spot depth
+would do it — the early-out does not fire and the ~130 ms saving evaporates. The change stays *safe*
+either way; what is unproven is that it *fires*.
+
+**Strong counter-evidence, explicitly not proof:** v16.66 §1 recorded `C2 = 0.0` at Redcliffe,
+Cleveland and Brisbane, i.e. `levels` was empty. `levels` is empty iff `v0 >= mxD`, and with
+`v0 = max(0, ceil(mnD/stepL)*stepL)` the ordinary route is `mxD <= 0` — exactly the early-out's
+precondition. But a second route exists: `mnD > 0` with `v0` rounding up past `mxD` (e.g.
+`mnD = 0.1`, `mxD = 0.4`, `stepL = 0.5` gives `v0 = 0.5 > 0.4`), which v16.68 deliberately does NOT
+catch. So `C2 = 0` makes firing very likely without establishing it. **The on-phone run is the
+decider, and a non-firing result is the §B case, not a defect — report the number, do not patch.**
+
+**STANDING RULE PROMOTED: a gate that measures WHETHER an optimisation fires must use a corpus
+matching the runtime pool's composition; a gate that measures only whether a change is SAFE may use
+any corpus.** This session's gate was built to the second standard and read as though it met the
+first.
+
+**C. THE COMMENT AMENDMENT OUTSIDE THE EDITED REGION (`:1999-2003`) IS APPROVED.**
+`scanlineMask()`'s header asserted `inWaterFast()` "keeps all four of its other callers …
+`buildAutoContours()`' field loop …", which edit 2 made false. Shipping it would have told the next
+session that the contour loop still calls `inWaterFast()` — the precise error this entry corrects in
+§E. The test for future builds is narrow: **amend an out-of-region comment only when this diff makes
+it assert something false about the code.** Not a general licence to tidy comments.
+
+**D. PAD HONESTY — accepted as written, and do not upgrade the claim later.** `padM=240` is exactly
+the 3×3 probe's two-cell reach, computed from the same `mLat`/`mLngMin` the buckets use. But
+`pad_check.js` re-ran all 26 boxes at `padM=0` and changed **no verdict** — the ±30% viewport
+expansion was doing the work. `pad_boundary.js` locates the cutover exactly between 240 m (does not
+fire) and 250 m (fires), with the caveat that pre-edit drew nothing at any offset, so it locates the
+boundary without demonstrating the pad rescuing real geometry. **Conservative insurance, correct and
+near-free, not a practically-triggered mechanism.** Keep it; describe it that way.
+
+**E. THREE CORRECTIONS TO EARLIER ENTRIES. All three are marked SUPERSEDED in place; this is the
+authoritative statement.**
+
+1. **v16.66 §7 item 3's precondition is FALSE.** "Skip the field build when the viewport contains no
+   contourable samples" would never have fired at Redcliffe — Moreton contributes 9,228
+   mask-surviving samples centred there. Had it been built as specified it would have shipped,
+   gated, measured zero, and cost a full cycle. Superseded by the max-depth precondition.
+2. **v16.67.1 §J item 1 is WRONG.** It claimed `buildAutoContours()`'s field loop "still runs the
+   per-pixel `inWaterFast()` path" and might outrank C3. It never ran unconditionally — the call sat
+   behind `den && near<=R1 &&` — and its result was discarded, because `near<=R1` was already true
+   at that point, making the OR `(X||true)`. The correct action was deletion, done in v16.68. It
+   never competed with C3.
+3. **"C1 idx/field" UNDERCOUNTS ITS OWN SPAN.** Per the in-file comment, C1 = bucket index build +
+   field loop + `smoothField`. The index half is `poolVersion`-cached and read `six HIT` in all
+   seven v16.66 readings, so it costs ~0 — the label points at the wrong half. C1 was always the
+   field loop plus `smoothField`. Read the C1 row that way in every prior entry.
+
+**F. NEW FAILURE CLASS — a comment can record intent the code no longer implements.** The deleted
+`NOTE` at the field loop explained, *accurately*, why `inWaterFast()` could never be the deciding
+branch there. The comment was true; the call it described was dead compute. Reading a comment as
+justification for code is not the same as verifying the code does anything. Where a comment explains
+why a term cannot matter, check whether the term is still evaluated.
+
+**G. ON-PHONE PROTOCOL FOR BUILD `2026.08.09c` — the deliverable, not yet run.** Force-close and
+reopen, confirm `2026.08.09c` in-panel, overlay ON, 10 pans each at `n=10/10`:
+
+| location / zoom | baseline (2026.08.09b or v16.66) | expected |
+|---|---|---|
+| Redcliffe z11 | C1 130.0, CT 130.0, total 670.0 | C1 → 0.0, CT → 0.0, total ~540 |
+| Brisbane z10 | C1 186.5, CT 187.5 | C1 → 0.0, CT → 0.0 |
+| Bargara z11 | C1 122.0, C2 8.5, CT 130.5 | unchanged, contours still drawn |
+
+**When the early-out fires, `C1` and `CT` read `0.0` because the function returns before `_cm1` is
+assigned — that is the return path, not a measurement.** Do not read `0.0` as the field build having
+become infinitely fast. **The ~1 ms pool scan is now paid on every pan including Bargara, where it
+never fires, and lands in `RESID` rather than `C1`** — a small RESID shift is expected and is not a
+new mystery.
+
+**THE ONE VISIBLE BREAK TO CHECK: pan Bargara → Moreton and confirm the contour layer DROPS rather
+than stranding on screen.** Also confirm contours still draw normally at Bargara.
+
+**H. SEQUENCE UNCHANGED: C3 numeric bucket keys next, then the debounce.** `sIx[i2+':'+j2]`
+allocates 9 transient strings per pixel in both the S3 and C1 loops — 1,166,400 per pan in the
+contour loop alone at 360×360. Geography-independent, which is why it could never have explained the
+gap, and now the largest remaining term. **The 350 ms `moveend` debounce stays UNTOUCHED** until
+compute is under ~200 ms: the 351 ms is idle main thread, cutting it moves jank closer to the finger
+rather than removing it, there is no in-flight guard to absorb the extra overlap, and it has no
+dependency so it will never get harder. Improving `T1-T0` is the fastest way to move the totals
+column without touching a millisecond of work — the shape of a metric being gamed, which this
+project has already paid for once (v16.66 §8).
+
+
+**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68.1**, repo head `fb27f98` at time of
+writing (the v16.68.1 commit and its Pages run are UNAPPLIED/UNCONFIRMED unless Aaron says
+otherwise). Shipped: C2 contour early-out + dead `inWaterFast()` term removed, both gated bit-exact
+off-phone. **The on-phone run is the deliverable and has NOT happened** — protocol and expected
+values in §G above. Two things to read carefully: `C1`/`CT` reading `0.0` is the return path, not a
+measurement; and **if C1 is NOT ~0 at Redcliffe the early-out is not firing, which is the §B
+runtime-pool case and not a defect — report the number, do not patch.** Confirm by panning Bargara →
+Moreton that the contour layer drops rather than stranding. Next job after that: **Step C3, numeric
+bucket keys** (§H). The 350 ms `moveend` debounce stays UNTOUCHED and deferred until compute is
+under ~200 ms, then rated as its own change.
 
 ---
 
@@ -153,8 +258,9 @@ off-phone, but nothing has run on-device.
 **Open, carried forward:** the `:2417` vs `:2251` half-pixel inconsistency between how the mask
 samples (pixel centres on the bounds, `(W-1)` denominators) and how `L.imageOverlay` stretches the
 image (pixel edges on the bounds) — pre-existing, deliberately untouched, logged separately.
-`buildAutoContours()`'s field loop still runs the per-pixel path and is the obvious C2 candidate,
-but only once C1's on-phone number exists.
+~~`buildAutoContours()`'s field loop still runs the per-pixel path and is the obvious C2
+candidate~~ — **SUPERSEDED by v16.68.1 §E2: that call was conditional and its result discarded;
+the correct action was deletion, done in v16.68.**
 
 ---
 
@@ -291,7 +397,11 @@ ratio **inverts**; an inversion is the confirmation, not a regression.
 **J. DEFERRED OPTIMISATIONS, logged not scoped. None to be built before the on-phone number
 exists.**
 
-1. **`buildAutoContours()`'s field loop still runs the per-pixel `inWaterFast()` path** over the
+1. **SUPERSEDED — WRONG, see v16.68.1 §E2.** The call was never unconditional (it sat behind
+   `den && near<=R1 &&`) and its result was discarded, because `near<=R1` was already true there,
+   making the OR `(X||true)`. Deletion was the correct action and shipped in v16.68; it never
+   competed with C3. Original text kept below for the record. ~~**`buildAutoContours()`'s field
+   loop still runs the per-pixel `inWaterFast()` path**~~ over the
    360x360 contour grid (129,600 px) against the same outer rings. Post-edit call site `:2898`. The
    same scanline transformation applies. On the Redcliffe arm this is plausibly worth more than C3
    numeric bucket keys — C1's span measured 118–191 ms per pan. **Re-sequence §7 to put this ahead
@@ -446,8 +556,11 @@ becomes the new ceiling. Plan for that; do not treat an inverted gap as a regres
    from the PIP result. Verify by diffing the `mask` arrays for both geographies before trusting it,
    and treat any edge disagreement as a decision to make deliberately, not a rounding detail.
    Conditional on B2 showing S2b dominant.
-3. **STEP C2 — CONTOUR EARLY-OUT** (§5). Skip `buildAutoContours()`'s field build when the viewport
-   contains no contourable samples. ~130–187 ms per pan in Moreton, ~0 at Bargara.
+3. **STEP C2 — CONTOUR EARLY-OUT** (§5). **SHIPPED v16.68 — but the precondition stated here is
+   FALSE and was corrected before build; see v16.68.1 §E1.** ~~Skip the field build when the
+   viewport contains no contourable samples~~ — Redcliffe is full of samples (9,228 mask-surviving
+   Moreton points); the working precondition is **max sample depth ≤ 0 over the padded box**.
+   ~130–187 ms per pan in Moreton, ~0 at Bargara.
 4. **STEP C3 — NUMERIC BUCKET KEYS.** v16.65's optimisation candidate 2: `sIx[i2+':'+j2]` allocates
    a transient string per bucket probe, 9 per pixel, in both the S3 and C1 loops. Geography-
    independent, so it could never have explained the gap — but after C1/C2 it is the largest
