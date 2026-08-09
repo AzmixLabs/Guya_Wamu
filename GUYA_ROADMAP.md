@@ -1,5 +1,90 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.68 · 9 Aug 2026 — C2 CONTOUR EARLY-OUT SHIPPED (+ dead `inWaterFast()` term deleted). Build
+bumped to **2026.08.09c**. Repo head `b0ddab9` at session start. Closes v16.66 §7 item 3. Two
+changes, both in `buildAutoContours()`, both bit-exact by construction.*
+
+**1. EARLY-OUT (`index.html:2889-2943`).** Skips the whole field build — the W×H IDW lookup loop,
+`smoothField()`, and both typed-array allocations — when no contour level can exist. Placed after
+`mLngMin` (which the pad needs) and before the `F`/`OK` allocation at `:2944`.
+
+**The precondition is MAX-DEPTH, not "no samples in bbox".** v16.66 §7 item 3 proposed the bbox
+test; it would never have fired at Redcliffe. Moreton contributes **9,228 mask-surviving samples**
+to the 64,306-point pool, centred on Redcliffe — the viewport is full of samples. What is actually
+true is that **every one of them is above LAT**: `data/moreton_bay_flats_v1.csv` (33,751 rows) runs
+min -2.81 / **max -0.30, zero rows deeper than 0**. Same for both Sunshine Coast CSVs (max -0.10);
+`brisbane_river_*` max 0.19 with 2 rows of 257,778 — which is why Brisbane z10 also read `C2 = 0.0`.
+The bbox-membership test is KEPT as the free first filter, but max-d is what decides.
+
+**Soundness (one-way, cannot suppress a contour that would have drawn):** the field is `num/den`
+with weights `1/(dist²+1) > 0`, i.e. a convex combination of contributing sample depths, so
+`mxD <= max(d)`. `v0` is floored at 0 (`:2969`), so `max(d) <= 0` ⇒ `mxD <= 0` ⇒ empty `levels` ⇒
+the existing empty-levels return. It deliberately does NOT catch the "data exists but no level
+crossed" case (`mnD > 0` with `v0` past `mxD`), which stays on the full path exactly as before.
+
+**Pad = 240 m, exactly the 3×3 bucket probe's reach, not a safety guess.** A sample in cell `ci±1`
+is at most TWO cell widths away on that axis; `cellLa = 120/mLat` and `cellLo = 120/mLngMin`, so two
+cells is `240/mLat` and `240/mLngMin` degrees — computed from the same constants the buckets are
+built from.
+
+**Exit path is the existing teardown, verified byte-for-byte.** All six returns in
+`buildAutoContours()` (`:2859, :2863, :2878, :2942, :2967, :2971`) end in the identical string
+`{if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}`. This was the one way the
+build could visibly break — a pan from Bargara into Moreton stranding its contour layer on screen.
+
+**2. DEAD `inWaterFast()` TERM DELETED (`index.html:2961`).** Was
+`(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))`; `near<=R1` was already required by the `&&`
+to its left, so the OR was `(X||true)` for any X — the call ran and its result was discarded. Now
+`(den&&near<=R1)`. `const feats=shadeMaskFeats()` became dead and was removed with it.
+**`inWaterFast()` live call sites 4 → 3** (`:2820` tap-to-read, `:2840` deep-scan, `:3643` zone
+readout); the function itself is byte-identical to HEAD. The stale claim in `scanlineMask()`'s
+header naming four callers (`:1999-2003`) was amended — the only comment touched outside the edited
+region, and `scanlineMask()`'s executable code is byte-identical.
+
+**GATE — behavioural, PASS.** Harness `c2_gate.js` (11,946 bytes) at
+`C:\Users\Az\AppData\Local\Temp\claude\D--Claude-Code\28754a1b-d748-4589-b1ee-605576418e89\scratchpad\`.
+Baseline extracted programmatically via `git show b0ddab9:index.html` (`extract_baseline.ps1`),
+never retyped; all app logic under test is SLICED VERBATIM from both files.
+
+- **26 boxes** over a combined 52,929-point pool (Moreton 33,751 + MN 19,178, one pool spanning both
+  regions as in the real app). **13 fired** (all Moreton/Redcliffe-like, max-d -0.30 to -0.84;
+  pre-edit drew 0 polylines in every one). **13 did not fire** (all Maroochy/Noosa-like, max-d 3.53
+  to 42.48, 15–43 polylines each) — **F, OK, levels and polyline geometry all bit-identical to
+  pre-edit. 0 failures.**
+- **The deletion was tested ADVERSARIALLY, not with a constant stub.** Pre-edit was run three times
+  per box with `inWaterFast` forced always-true / always-false / deterministic pseudo-random — 52
+  comparisons, all agreeing with each other and with post-edit. A stub returning `false` would have
+  passed vacuously and proved nothing.
+- **Pad honesty (`pad_check.js`, 5,780 bytes):** re-running all 26 boxes with `padM` substituted to
+  0 changed **no** verdict. The pad is NOT exercised by the real corpus — the ±30% viewport
+  expansion was doing the work I had attributed to it. It is conservative insurance justified by the
+  reach argument, not a practically-triggered mechanism, and should be described that way.
+- **`pad_boundary.js` (6,599 bytes)** walks a controlled probe across the reach with a sparse bed:
+  cutover is exactly between **240 m (does not fire) and 250 m (fires)**, matching the two-cell
+  reach. Caveat recorded: pre-edit drew nothing at every offset (a single dominating sample gives a
+  locally constant field, so no level is crossed), so this locates the boundary but does not
+  demonstrate the pad rescuing real geometry — consistent with `pad_check`'s 0/26.
+
+**Build discipline:** `node --check` both blocks **exit=0 before AND after the bump** (block 2 is
+byte-identical across the bump at 2,061,276 bytes, proving the bump touched only HTML outside the
+script blocks). Leaflet body-only SHA-256 `db49d009…5641a` MATCH. Both `<style>` blocks
+byte-identical to HEAD. `pir()`, `pip()`, `zoneAt()`, `ORDER`, `inWaterFast()`, `scanlineMask()`
+code, the green-zone `dragend` safeguard and `spotsUnlocked` all byte-identical to HEAD by direct
+string comparison. Diff scope: 6 hunks, +72/−10, at `:1052`, `:1091`, `:1999-2003`, `:2882`,
+`:2889-2944`, `:2953-2961`. Step B overlay stays in, default OFF.
+
+**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68**. Shipped: C2 contour early-out +
+dead `inWaterFast()` term removed. **The on-phone run is the deliverable and has NOT happened** —
+expect `C1 → ~0` and `CT → ~0` at Redcliffe/Cleveland/Brisbane, unchanged at Bargara, and confirm by
+panning Bargara → Moreton that the contour layer drops rather than stranding. Next job: **Step C3,
+numeric bucket keys** (§7 item 4) — `sIx[i2+':'+j2]` allocates 9 transient strings per pixel in both
+the S3 and C1 loops, now the largest remaining term (S3 268–286 ms at Bargara). The 350 ms `moveend`
+debounce stays UNTOUCHED and is explicitly deferred until compute is under ~200 ms, then rated as
+its own change: the 351 ms is idle main thread, cutting it moves jank closer to the finger rather
+than removing it, and there is no in-flight guard to absorb the extra overlap.
+
+---
+
 *v16.67.1 · 9 Aug 2026 — C1 SCANLINE WATER MASK SHIPPED (+ session record, gate re-derivation,
 standing rules). Build bumped to **2026.08.09b**. Repo head `dcbc673` at session start. Closes v16.66 §7's C1 slot. **Canvas rasterisation is DROPPED to
 fallback and was never implemented.**

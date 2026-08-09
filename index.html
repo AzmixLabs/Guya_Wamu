@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09c</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1996,9 +1996,11 @@ function inWaterFast(feats,lat,lng){
    Redcliffe z11), and confirmed off-phone to sit in the OUTER rings, not the holes.
 
    pir() and pip() are NOT touched and NOT called from here - zoneAt() and the zone hard rule sit
-   on top of them. inWaterFast() is likewise unmodified and keeps all four of its other callers
-   (tap-to-read depth gate, the deep-scan loop, buildAutoContours' field loop, the zone readout).
-   This function is used at exactly one call site.
+   on top of them. inWaterFast() is likewise unmodified and keeps its other callers (tap-to-read
+   depth gate, the deep-scan loop, the zone readout). AMENDED v16.68: this line read "all four of
+   its other callers ... buildAutoContours' field loop ..." until C2 deleted that call as dead
+   (its result was discarded - see the note at the field loop); three remain, and inWaterFast()
+   itself is still unmodified. This function is used at exactly one call site.
 
    WHY IT IS BIT-EXACT, not approximately equal. pir() toggles once per edge satisfying
    (yi>y)!=(yj>y) AND x<(xj-xi)*(y-yi)/(yj-yi)+xi. For a fixed row, y is constant, so the
@@ -2878,13 +2880,68 @@ function buildAutoContours(){
   const extM=Math.max((maxLa-minLa)*mLat,(maxLo-minLo)*mLng);
   const W=Math.max(110,Math.min(360,Math.round(extM/60))),H=W;
   const latAt=y=>maxLa-(maxLa-minLa)*(y/(H-1)),lngAt=x=>minLo+(maxLo-minLo)*(x/(W-1));
-  const feats=shadeMaskFeats(),F=new Float32Array(W*H),OK=new Uint8Array(W*H);
   /* cellLo is POOL-anchored (mLngMin, from bb computed above by ptsBounds() before viewport-
      clipping) - same v16.60 fix, same structural invariant, as buildShade's cellLo; see the full
      comment there. cellLa/mLat unchanged (bare constant, never viewport-dependent). mLng just
      above stays viewport-anchored and untouched - it feeds extM's sizing above AND the lookup
      loop's own distance metric below, deliberately left as-is, same as buildShade. */
   const maxAbsLatPool=Math.max(Math.abs(bb.minLa),Math.abs(bb.maxLa)),mLngMin=111320*Math.cos(maxAbsLatPool*Math.PI/180);
+  /* ---------------------------------------------------------------------------------------------
+     v16.68 (build 2026.08.09c) - C2: CONTOUR EARLY-OUT. Skips the whole field build (W*H IDW
+     lookup loop + smoothField + the two typed-array allocations) when no contour level can exist.
+     Measured cost avoided: C1 130.0 ms median per pan at Redcliffe z11, 138.5 at Cleveland z11,
+     186.5 at Brisbane z10 (Step B, v16.66 A1) - all three geographies where C2 was already 0.0,
+     i.e. the field was built and then thrown away. 0 ms at Bargara, where contours are real.
+
+     THE PRECONDITION IS MAX-DEPTH, NOT "NO SAMPLES IN BBOX". The bbox-emptiness test proposed in
+     v16.66 A7 item 3 would never have fired at Redcliffe: Moreton contributes 9,228 mask-surviving
+     samples to the 64,306-point runtime pool (v16.67.1 A1), centred on Redcliffe - the viewport is
+     full of samples. What is actually true there is that every one of them is ABOVE LAT: the
+     Moreton source (data/moreton_bay_flats_v1.csv, 33,751 rows) runs min -2.81 / max -0.30 with
+     ZERO rows deeper than 0. Contours are only drawn at depths >= 0.
+
+     WHY IT IS SOUND, one-way and unable to suppress a contour that would have drawn:
+     - The field is F[i] = num/den with weights w = 1/(dist^2+1) > 0 (the lookup loop just below),
+       i.e. a CONVEX COMBINATION of the depths of the samples that contributed to that pixel.
+       A convex combination is bounded by its inputs, so mxD <= max(d) over contributing samples.
+     - v0 is floored at 0 ("0 = LAT waterline; no contours above water") and levels are pushed only
+       while v < mxD. So mxD <= 0 => the level loop body never runs => `levels` is empty => the
+       existing empty-levels return fires. max(d) <= 0 => mxD <= 0 => no levels. One-way only: this
+       does NOT try to catch the "data exists but no level is crossed" case (mnD > 0 with v0 past
+       mxD), which stays on the full path exactly as before.
+     - So the early-out returns ONLY in cases where the full path was already going to return
+       without drawing anything. It can never remove geometry.
+
+     THE PAD IS EXACTLY THE BUCKET PROBE'S REACH, not a guess. The lookup loop probes cells
+     [ci-1..ci+1] x [cj-1..cj+1]. For any pixel inside the grid box, a sample in cell ci+1 or ci-1
+     is at most TWO cell widths away on that axis (pixel at one edge of its own cell, sample at the
+     far edge of the neighbour). cellLa = 120/mLat and cellLo = 120/mLngMin, so two cells is
+     240/mLat degrees of latitude and 240/mLngMin degrees of longitude - which is what padM=240
+     converts to below, using the SAME mLat/mLngMin the buckets themselves are built from. Any
+     sample that could contribute to any pixel in the grid is therefore inside the test box, and
+     using mLngMin (the pool's smallest metres-per-degree, per the v16.60 invariant) makes the
+     longitude pad the widest any point in the pool could need. Not >= 240 m as a safety margin -
+     exactly the reach, by construction.
+
+     COST: one linear pass over the pool (64,306 elements), no allocation, no string keys - against
+     the 130-187 ms it replaces. The bbox-membership test is kept as the free first filter (it costs
+     nothing once the scan is running) even though `!anyIn` is strictly subsumed by maxDBox <= 0,
+     because an empty box leaves maxDBox at its -1e9 sentinel.
+
+     EXIT PATH IS THE EXISTING ONE, byte-for-byte the same teardown as the empty-levels return
+     below. This is the one way this build could visibly break: a pan from Bargara into Moreton
+     must drop the contour layer it was showing, not leave it stranded on screen.
+  --------------------------------------------------------------------------------------------- */
+  {
+    const padM=240,padLaD=padM/mLat,padLoD=padM/mLngMin;
+    const tS=minLa-padLaD,tN=maxLa+padLaD,tW=minLo-padLoD,tE=maxLo+padLoD;
+    let anyIn=false,maxDBox=-1e9;
+    for(let k=0;k<pts.length;k++){const p=pts[k];
+      if(p.lat<tS||p.lat>tN||p.lng<tW||p.lng>tE)continue;
+      anyIn=true;if(p.d>maxDBox)maxDBox=p.d;}
+    if(!anyIn||maxDBox<=0){if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}
+  }
+  const F=new Float32Array(W*H),OK=new Uint8Array(W*H);
   const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
   for(let y=0;y<H;y++){const la=latAt(y);
     for(let x=0;x<W;x++){const lo=lngAt(x);
@@ -2893,10 +2950,15 @@ function buildAutoContours(){
       for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=sIx[i3+':'+j3];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
-      /* NOTE: near<=R1 is already required by the outer &&near<=R1 just left of this OR, so
-         inWaterFast() can never be the deciding branch here - deliberate, same reasoning as
-         findDeepest(): a contour needs a genuinely nearby sample regardless of zone. */
-      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))?1:0;}}
+      /* v16.68 (C2): the dead inWaterFast() term is REMOVED here. It used to read
+         `(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))`. near<=R1 was already required by
+         the && immediately to its left, so the OR was `(X||true)` = true for ANY X - the call ran
+         and its result was discarded. Dropping it leaves `(den&&near<=R1)`, which is the same
+         boolean by construction, for every pixel, whatever inWaterFast would have returned.
+         The intent that comment recorded is unchanged and still holds: a contour needs a genuinely
+         nearby sample regardless of zone - same reasoning as findDeepest(). inWaterFast() itself
+         and its three other call sites are untouched. */
+      const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1)?1:0;}}
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   /* C1 end = entry -> bucket index + field loop + smoothField. C2 = everything after: min/max
      scan, level selection, marching squares, polyline build and the layer swap. */
