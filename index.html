@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09b</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1989,6 +1989,109 @@ function inWaterFast(feats,lat,lng){
     for(let j=0;j<f.polys.length;j++)if(pip([lng,lat],f.polys[j]))return true;}
   return false;
 }
+/* ---------------------------------------------------------------------------------------------
+   v16.67 (build 2026.08.09b) - C1: SCANLINE WATER MASK for buildShade()'s pass-1 grid.
+   Replaces the per-pixel inWaterFast() ray-cast at buildShade's mask loop ONLY. Measured as the
+   entire geographic performance gap (Step B: S2 105.0 ms median at Bargara z11 vs 504.0 ms at
+   Redcliffe z11), and confirmed off-phone to sit in the OUTER rings, not the holes.
+
+   pir() and pip() are NOT touched and NOT called from here - zoneAt() and the zone hard rule sit
+   on top of them. inWaterFast() is likewise unmodified and keeps all four of its other callers
+   (tap-to-read depth gate, the deep-scan loop, buildAutoContours' field loop, the zone readout).
+   This function is used at exactly one call site.
+
+   WHY IT IS BIT-EXACT, not approximately equal. pir() toggles once per edge satisfying
+   (yi>y)!=(yj>y) AND x<(xj-xi)*(y-yi)/(yj-yi)+xi. For a fixed row, y is constant, so the
+   intercept term does not depend on x: it is computed ONCE per edge per row, with the SAME
+   expression, the SAME operand order and the SAME guard as pir(), then every pixel in the row is
+   classified by the parity of the intercepts strictly greater than its x. The strict '<' is
+   preserved by advancing the walk pointer while T[p] <= lo, so what remains is exactly the count
+   of intercepts > lo. Nothing is algebraically rearranged, no cross-product form is substituted,
+   no epsilon is introduced. Sorting cannot perturb the result: parity of a multiset is
+   order-independent and no floating-point value is accumulated.
+
+   TWO STRUCTURAL SHORTCUTS, both exact, both consequences of scanline order rather than added
+   heuristics (in particular NEITHER is the per-inner-ring bbox reject, which is not in this build):
+   - A ring with no edge crossing this row produces no intercepts, so pir() would never toggle and
+     it cannot contribute. Skipping it is exact.
+   - The per-pixel LONGITUDE bbox test is dropped. The guard forces (y-yi)/(yj-yi) into [0,1], so
+     every intercept is a convex combination of xi and xj and therefore lies inside the ring's own
+     x-range. Left of that range ALL intercepts exceed lo, and a closed ring always yields an even
+     crossing count, so parity is 0; right of it the count is 0, so parity is 0. Outside the box
+     the answer is false either way, exactly as the bbox test gave. The per-row LATITUDE reject is
+     kept, exact for the same reason.
+
+   Union across features/polygons is an OR, matching inWaterFast()'s first-match-wins return -
+   order affects only speed, never the boolean.
+
+   BUFFERS ARE PREALLOCATED AND REUSED. Sized once per rebuild from the corpus (not per polygon,
+   not per row), then reused across every row and every ring. CPZ21 alone has 149 rings, so a
+   per-ring-per-row allocation would be 600*148 = 88,800 arrays per rebuild - v16.61's GC-churn
+   candidate re-entering by the back door. Steady-state allocations per rebuild: TWO (the mask
+   itself, which the old loop also allocated, plus the row's shared longitude table). The four
+   scratch buffers allocate only when they must grow, i.e. once in the page's lifetime.
+--------------------------------------------------------------------------------------------- */
+let _slT=null,_slStart=null,_slCount=null,_slPtr=null;
+function slFit(nRings,nVerts){
+  if(_slT===null||_slT.length<nVerts)_slT=new Float64Array(nVerts);
+  if(_slStart===null||_slStart.length<nRings){_slStart=new Int32Array(nRings);_slCount=new Int32Array(nRings);_slPtr=new Int32Array(nRings);}
+}
+/* in-place ascending insertion sort over [lo,hi) - allocation-free, and the per-row intercept
+   counts are tiny (typically 2), which is the regime insertion sort wins outright. */
+function slSort(a,lo,hi){for(let i=lo+1;i<hi;i++){const v=a[i];let j=i-1;while(j>=lo&&a[j]>v){a[j+1]=a[j];j--;}a[j+1]=v;}}
+function scanlineMask(feats,minLa,maxLa,minLo,maxLo,W,H){
+  const mask=new Uint8Array(W*H);
+  let maxR=1,maxV=1;
+  for(let i=0;i<feats.length;i++){const ps=feats[i].polys;
+    for(let j=0;j<ps.length;j++){const p=ps[j];let v=0;
+      for(let k=0;k<p.length;k++)v+=p[k].length;
+      if(p.length>maxR)maxR=p.length;if(v>maxV)maxV=v;}}
+  slFit(maxR,maxV);
+  /* identical expression to the old loop's per-pixel `lo`, hoisted: every row samples the same
+     longitudes, and a Float64Array round-trip is exact for a double. */
+  const lngs=new Float64Array(W);
+  for(let x=0;x<W;x++)lngs[x]=minLo+(maxLo-minLo)*(x/(W-1));
+  for(let y=0;y<H;y++){
+    const la=maxLa-(maxLa-minLa)*(y/(H-1)),row=y*W;
+    for(let fi=0;fi<feats.length;fi++){
+      const f=feats[fi];
+      if(la<f.miny||la>f.maxy)continue; /* per-row latitude reject - exact, see header */
+      const polys=f.polys;
+      for(let pi=0;pi<polys.length;pi++){
+        const p=polys[pi],nR=p.length;
+        let w=0;
+        /* slot 0 is always the outer ring. Built first: if this row misses it entirely the
+           polygon cannot contribute and no inner ring needs building at all. */
+        const outer=p[0];
+        for(let i=0,j=outer.length-1;i<outer.length;j=i++){
+          const xi=outer[i][0],yi=outer[i][1],xj=outer[j][0],yj=outer[j][1];
+          if((yi>la)!=(yj>la))_slT[w++]=(xj-xi)*(la-yi)/(yj-yi)+xi;}
+        if(w===0)continue;
+        slSort(_slT,0,w);
+        _slStart[0]=0;_slCount[0]=w;_slPtr[0]=0;
+        let nUse=1;
+        for(let k=1;k<nR;k++){
+          const ring=p[k],st=w;
+          for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+            const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+            if((yi>la)!=(yj>la))_slT[w++]=(xj-xi)*(la-yi)/(yj-yi)+xi;}
+          if(w>st){slSort(_slT,st,w);_slStart[nUse]=st;_slCount[nUse]=w-st;_slPtr[nUse]=0;nUse++;}
+        }
+        for(let x=0;x<W;x++){
+          const lo=lngs[x];
+          let hole=false,insideOuter=false;
+          for(let m=0;m<nUse;m++){
+            const st=_slStart[m],cn=_slCount[m];let q=_slPtr[m];
+            while(q<cn&&_slT[st+q]<=lo)q++; /* strict '<' preserved: what remains is count of T > lo */
+            _slPtr[m]=q;
+            const odd=((cn-q)&1)===1;
+            if(m===0)insideOuter=odd;else if(odd)hole=true;}
+          if(insideOuter&&!hole)mask[row+x]=1;}
+      }
+    }
+  }
+  return mask;
+}
 function buildSampleIndex(pts,cellLa,cellLo){const ix={};
   for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
   return ix;}
@@ -2246,9 +2349,10 @@ function buildShade(){
   const _m1=_pf?performance.now():0;
   if(_pf){_pf.s1a=_m1-_m0;_pf.sw=W;_pf.sh=H;_pf.pool=pts.length;}
   /* pass 1: water/land mask */
-  const feats=shadeMaskFeats(),mask=new Uint8Array(W*H);
-  for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
-    for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));mask[y*W+x]=inWaterFast(feats,la,lo)?1:0;}}
+  /* v16.67 (C1): the per-pixel inWaterFast() ray-cast here is replaced by scanlineMask(), which
+     produces a bit-identical mask - see its header for why. This is the ONLY call site changed;
+     inWaterFast()'s four other callers are untouched and still take the per-pixel path. */
+  const feats=shadeMaskFeats(),mask=scanlineMask(feats,minLa,maxLa,minLo,maxLo,W,H);
   const mAt=(x,y)=>(x<0||y<0||x>=W||y>=H)?0:mask[y*W+x];
   const _m2=_pf?performance.now():0; /* S2 end (mask pass incl. shadeMaskFeats()); S1b start */
   if(_pf)_pf.s2=_m2-_m1;

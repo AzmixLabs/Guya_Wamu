@@ -1,5 +1,82 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.67 · 9 Aug 2026 — C1 SCANLINE WATER MASK SHIPPED. Build bumped to **2026.08.09b**. Repo head
+`dcbc673` at session start. Closes v16.66 §7's C1 slot. **Canvas rasterisation is DROPPED to
+fallback and was never implemented.**
+
+**What shipped (`index.html:1992-2094` new, `index.html:2355` call site):** `scanlineMask()`
+replaces the per-pixel `inWaterFast()` ray-cast in `buildShade()`'s pass-1 mask loop — and only
+there. For a fixed row, `pir()`'s intercept term `(xj-xi)*(y-yi)/(yj-yi)+xi` does not depend on
+`x`, so it is computed once per edge per row and every pixel is classified by the parity of the
+intercepts strictly greater than its longitude.
+
+**`pir()` and `pip()` are byte-identical to HEAD and are not called from the new code** — verified
+by direct line comparison, not by diff inspection. `zoneAt()`, `ORDER` and `inWaterFast()` are
+likewise byte-identical. The zone hard rule is untouched.
+
+**`inWaterFast()` reference audit before the edit: 9 textual references — 1 declaration, 3 in
+comments, 5 real call sites.** Only the `buildShade` mask loop changed. The other four keep the
+per-pixel path unchanged: tap-to-read depth gate (`:2714` pre-edit), deep-scan loop (`:2734`),
+`buildAutoContours()`'s field loop (`:2795` — C2, deliberately out of scope), zone readout
+(`:3477`).
+
+**GATE — 0 disagreeing pixels on every box.** The FINAL IN-FILE implementation was lifted back out
+of `index.html` after the edit and diffed against the original per-pixel implementation:
+
+- **144 boxes, 28,804,800 pixels compared, TOTAL DISAGREEING PIXELS: 0. Per-box worst case: 0.**
+- W at **280 / 400 / 600** (47 / 49 / 48 boxes) — the whole clamp range, not 600 only.
+- Targeted: CPZ21 Great Sandy Strait (149 rings), GUZ02 and MNP23 Peel Island (both
+  MultiPolygons), HPZ02 Moreton Island to Broadwater (23 rings, blanketing bbox) — each at four
+  aspect ratios × three W.
+- 48 pseudo-random boxes spanning both regions, aspect 0.4–2.6, span 0.01–0.71°.
+- Degenerate: 33 boxes 100% land, 3 boxes 100% water, open-ocean boxes east of every ring, and
+  boxes north/south of the corpus's latitude extent (-27.9333..-24.4983) plus boxes straddling
+  that edge so some rows intersect no edges at all and some do.
+
+**Why it is exact, recorded so it is not re-litigated:** same expression, same operand order, same
+`(yi>y)!=(yj>y)` guard, strict `<` preserved by advancing while `T[p] <= lo`. Nothing rearranged,
+no cross-product form, no epsilon. Sorting cannot perturb the result — parity of a multiset is
+order-independent and no float is accumulated. Two shortcuts, both exact and both consequences of
+scanline order rather than added heuristics (**neither is the inner-ring bbox reject, which is not
+in this build**): a ring with no crossing on a row produces no intercepts and could never toggle
+`pir()`; and the per-pixel longitude test is dropped because the guard forces the interpolation
+factor into [0,1], so every intercept lies inside the ring's own x-range — left of it all
+intercepts exceed `lo` and a closed ring always has an even crossing count, right of it the count
+is 0. The per-row latitude reject is kept.
+
+**Allocation audit (measured, constraint 4):** 6 typed-array allocations on the first rebuild in a
+page's life, then **2 per rebuild steady-state** — the mask (which the old loop also allocated)
+plus the shared longitude table — and still 2 after a W change. Per-ring-per-row allocation was
+specifically avoided: CPZ21 would have been 600 × 148 = 88,800 arrays per rebuild, i.e. v16.61's
+GC-churn candidate re-entering by the back door.
+
+**NO on-phone number yet, and the harness ms figures are NOT projections.** Per v16.66's own Item
+1(c) the off-phone harness is uncalibrated — it disagreed with the phone by 3.14× at Bargara and
+1.73× at Redcliffe on the same aspect, and the water-fraction hypothesis was falsified (water
+pixels cost ~2× land pixels, so a water-heavier real box is dearer, not cheaper). The harness's
+23.4×/41.0× and its 2.98×→1.70× ratio collapse are within-harness comparisons only. **The on-phone
+gate produces the real number.** The 0-diff gate, by contrast, is exact and engine-independent.
+
+**NEXT JOB — on-phone gate.** Panel → "⏱ Rebuild timing (diagnostic)" (still default OFF,
+untouched by this build). Depth shading AND auto contours ON. 10 pans at Bargara z14, 10 at
+Bargara z11, 10 at Redcliffe/Hays z14, 10 at Redcliffe/Hays z11 — four screenshots at `n=10/10`.
+**Read S2 specifically**; the v16.66 baseline is 105.0 ms median Bargara z11 / 504.0 ms Redcliffe
+z11. Also confirm visually that the shading footprint is unchanged at a coastline — the gate is
+bit-exact off-phone, but nothing has run on-device.
+
+**Open, carried forward:** the `:2417` vs `:2251` half-pixel inconsistency between how the mask
+samples (pixel centres on the bounds, `(W-1)` denominators) and how `L.imageOverlay` stretches the
+image (pixel edges on the bounds) — pre-existing, deliberately untouched, logged separately.
+`buildAutoContours()`'s field loop still runs the per-pixel path and is the obvious C2 candidate,
+but only once C1's on-phone number exists.
+
+**NEXT-SESSION NOTE:** build **2026.08.09b**, committed on top of `dcbc673`. Shipped: C1 scanline
+water mask, gated at 0/28,804,800 across 144 boxes. Recommended next job: **run the forty-gesture
+on-phone protocol and read S2 — no further optimisation until that number exists.** Pending
+cleanup: none from this build. `mA` remains dead code by instruction (v16.66 §7 item 5).
+
+---
+
 *v16.66 · 9 Aug 2026 — **STEP B NUMBERS LANDED. THE GAP IS SOLVED.** Planning/analysis only, no
 build, no code. Build stays **2026.08.09a**. Repo head `6762ffc` (v16.65 build + roadmap) at session
 start. Seven on-phone screenshots from the 2026.08.09a instrumentation overlay. **v16.61 candidate
