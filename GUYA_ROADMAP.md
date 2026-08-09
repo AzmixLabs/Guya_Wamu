@@ -1,5 +1,195 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.64 · 9 Aug 2026 — planning only, no build, no code. Build stays **2026.08.07a**. Repo head
+`40835f6` at session start; roadmap version verified by direct `project_knowledge_search` at the
+top of the session (found v16.61 on project knowledge, v16.62/v16.63 committed by the build
+sessions in between — PK was four days stale, see the repo-hygiene note below). **v16.62 and
+v16.63 both GATED ON-PHONE AND CLOSED. The gate result REOPENS the geographic asymmetry that
+v16.61 §1 raised and that this session's own earlier re-gate appeared to falsify.**
+
+---
+
+**1. ON-PHONE GATE ON v16.62 (atomic overlay swap) — PASS. Item closed.**
+
+Build `2026.08.06a`, both layers ON. No blanking at either location at any zoom tested; toggle-off
+still immediate, so the rewritten `!shadeOn`/`!autoCtOn` branches did not regress. Subjective /5
+against the pre-fix v16.60 baseline, at ~1–2 km scale:
+
+| location | v16.60 | v16.62 | Δ |
+|---|---|---|---|
+| Bargara | 2.8 | ~3.8 | **+1.0** |
+| Brisbane/Hays | 2.8 | 3.0 | +0.2 |
+
+**Wide-zoom rows completed** (z11 or lower — shade pinned at its 600×600 cap, 360,000 px; contours
+at 360×360): Bargara 3.5–4, Brisbane/Hays 2.5–3, **NO BLANKING at either**. Worst-case rebuild
+confirmed gap-free. 4.6× the pixel work vs the tight-zoom rows moved neither score materially,
+while the ~1-point Bargara/Brisbane gap persisted at both zooms. **Do not read that as evidence
+against the per-pixel candidates** — a subjective /5 saturates, and flat scores across 4.6× pixels
+are equally consistent with both locations already sitting past the annoyance threshold. The
+rating scale has reached its resolution limit; that is the argument for measurement, not against
+the hypotheses.
+
+**THE EARLIER FALSIFICATION WAS CONFOUNDED, NOT WRONG.** Earlier the same session, a re-gate with
+zoom held constant returned 2.8/2.8 (both-off 4.5/4.5, depths-only 3.5/3.5) and was read as
+falsifying the Bargara-vs-Brisbane difference outright. It does not. The blanking was a large
+**geography-independent** cost sitting on top of both locations, and it dominated hard enough to
+flatten them to an identical score. Remove it and Bargara gains a full point while Brisbane barely
+moves. **v16.61 §1's candidates (a) per-pixel `inWaterFast()` scaling with Moreton's polygon
+complexity and (b) local IDW bucket occupancy are back on the table as the live hypotheses.**
+Candidate (c) `smoothField` GC churn is unchanged in status — geography-independent, so it can
+never explain the gap on its own.
+
+**Standing lesson:** a controlled comparison is only valid once the *dominant* confounder is
+removed. Controlling zoom was necessary but not sufficient — a second, larger confounder sat
+underneath it and inverted the conclusion. Before treating any future A/B as decisive, ask what
+else is common to both arms and larger than the effect being measured.
+
+**Additional signal, not yet explained:** Bargara degrades noticeably from ~1–2 km scale to z11;
+Brisbane does not. If pixel count (280²→600², ~4.6×) were the sole driver both should degrade
+together. Brisbane appears already saturated at the tighter zoom by something not pixel-scaled.
+Do not theorise further — this is exactly what Step B measures.
+
+---
+
+**2. HOW THE DIAGNOSIS WAS REACHED (two read-only steps, no code changed).**
+
+Recorded because the *route* matters more than the answer: v16.61 §1 nominated three compute-cost
+candidates and the real defect was none of them.
+
+- **Step A** — `buildShade()` is bound to `moveend` with a 350 ms trailing debounce
+  (`index.html:3198-3200`), NOT a raw `move` binding. It therefore provably does not run during
+  the drag at all, ruling out per-frame rebuild as the mechanism. `buildAutoContours()` has no
+  separate map binding; it is invoked inside `buildShade()` and rides the same trigger.
+  `pooledSampleIndex()` is a genuine cache hit on the nested call, so the bucket index is built
+  once per gesture, not twice.
+- **Step A2** — neither overlay repositions per-frame during a pan either; both ride the shared
+  `mapPane` CSS transform. Only Leaflet's own `Canvas._update` fires on `moveend` to resize and
+  redraw existing contour paths, independent of our debounce. **The actual defect:** both
+  functions removed the existing overlay/layer at the START of every rebuild, before the
+  replacement existed — a destroy-then-rebuild gap, ~187 lines of compute wide in `buildShade()`,
+  with no `try`/`catch` around the intervening span.
+- **The user-visible symptom was never "jitter."** Drag was smooth; both overlays went ABSENT for
+  ~1–2 s after each pan settled. 350 ms of that was the debounce, the rest real rebuild time.
+  Every candidate in v16.61 §1 was an answer to "why is each frame slow" — the wrong question.
+
+**Process note:** the phone report that produced this was one question — "is it jittery while your
+finger is down, or is there a hitch after it settles?" That single discriminator was worth more
+than the entire three-candidate compute analysis it replaced.
+
+---
+
+**3. CORRECTION TO v16.61 §1 — TWO GRIDS, NOT ONE.**
+
+§1 attributed `W`/`H` = `clamp(110,360,extM/60)` to the mask pass and quoted "up to 360×360 =
+129,600 point-in-polygon tests per pan". **That is `buildAutoContours()`'s grid.** `buildShade()`
+sizes itself independently:
+
+- `buildShade()`: `Math.max(280,Math.min(600,Math.round(extM/35)))` → **78,400 – 360,000 px**
+- `buildAutoContours()`: `Math.max(110,Math.min(360,Math.round(extM/60)))` → 12,100 – 129,600 px
+
+Shade's grid is up to 2.8× larger, and its floor (78,400 px) is 6.5× the contour floor. **Any
+figure in §1 derived from the 110–360 grid for shading work is wrong.**
+
+**Per-pan typed-array allocation volume** (from Step A4's inventory of 11 W×H-sized allocations —
+7 in `buildShade`: ImageData, mask, FD, AL, ST, 2× `smoothField` swap buffers; 4 in
+`buildAutoContours`: F, OK, 2× `smoothField`):
+
+- At the floor (shade 280², contours 110²): 1,724,800 B + 157,300 B ≈ **1.88 MB per pan**
+- At the cap (shade 600², contours 360²): 7,920,000 B + 1,684,800 B ≈ **9.6 MB per pan**
+
+---
+
+**4. ACCEPTED RISK INTRODUCED BY v16.62 — observability regression, logged not fixed.**
+
+Both rebuild paths now sit inside a silent `catch(e){}`. A throw mid-rebuild leaves the stale
+overlay displayed with no signal of any kind. This app has form here: **v16.38's
+`Math.max.apply` RangeError at the iOS JSC argument ceiling, which desktop never reproduced.** If
+pool growth re-triggers that class, shading will silently stop updating rather than failing
+visibly. **Not a field-safety issue** — `imageOverlay` is bounds-anchored, so a stale overlay
+cannot display depths at the wrong coordinates. A future build should surface the catch via
+`console.warn` plus the existing `#imp-save-err` banner slot. Low priority, but do not let it
+become invisible.
+
+**Expected, not a bug:** `autoCtRenderer` is a single persistent `L.canvas` reused across
+rebuilds, so during the swap window both the new and the old layer group are attached to it.
+Momentarily doubled or thicker contour lines are the correct trade for not blanking — do not
+report that as a regression.
+
+---
+
+**5. ON-PHONE GATE ON v16.63 (map control layout) — PASS. Item closed.**
+
+Build `2026.08.07a` confirmed in-panel after force-close/reopen. Scale **number** readable (not
+just the unit); zoom readout visible in `z12.0` format and updating on pinch; attribution still
+showing OpenStreetMap + CARTO + State of Queensland; place-name labels still rendering. **No
+collision with the attribution strip in the bottom-right corner** — the reasoned-not-verified
+corner choice held. The `voyager_only_labels` tileLayer line was independently verified from the
+file (`subdomains:'abcd'`, `pane:'labels'`, `maxZoom:21` all present) after a suspected truncation
+in the session transcript.
+
+**METHOD NOTE — a verification gap in the standing build discipline.** The suspected corruption
+was `{subdaxZoom:21,…}` in place of `{subdomains:'abcd',pane:'labels',maxZoom:21,…}`. That is
+**valid JavaScript** — a wrong property name, not a syntax error — so `node --check` would have
+passed a broken file, as would the Leaflet hash check and the diff-scope check. **Add to dispatch
+prompts: after editing any long single line, re-read it from the file and quote it, not from the
+edit output.** Transcript paste is not file content.
+
+---
+
+**6. REPO HYGIENE — v16.61 sat UNCOMMITTED for four days.**
+
+`d8e6248` swept in the v16.61 entry, which had been written to the repo working tree on 2 Aug and
+never committed. For four days the repo read v16.60 while project knowledge carried v16.61 — a
+reader checking repo head would have concluded PK had forked *ahead* of the authoritative copy,
+which is the exact undetectable-from-inside-a-chat failure the one-direction sync rule exists to
+prevent. Verified before pushing: `v16.61` occurrence count is 0 at `c1684fd` and 8 at `d8e6248`;
+412 changed lines − 48 for the v16.62 entry = 364 ≈ the v16.61 entry. Now closed.
+
+**Standing rule, promoted from this incident: WRITING A ROADMAP ENTRY IS NOT COMMITTING IT.** A
+session that ends without `git status` clean has not closed. Check for an uncommitted roadmap
+before every push, not only when a hygiene sweep is running.
+
+---
+
+**7. NEXT — supersedes v16.61's list.**
+
+1. **DONE** — v16.62 and v16.63 both gated on-phone and closed (§1, §5 above).
+2. **STEP B MEASUREMENT BUILD — the next job. Sonnet. Diagnose before patch.** Now correctly
+   scoped and genuinely warranted: subjective rating has saturated twice and cannot resolve the
+   ~1-point gap. Instrument with `performance.now()` — `buildShade()`: S1 samples+bounds+index,
+   S2 mask pass, S3 IDW pixel loop, S4 `smoothField`, **S5 canvas paint including
+   `cv.toDataURL()`** (a synchronous PNG encode of W×H px, never once measured, kept as its own
+   number); `buildAutoContours()`: C1 index+field, C2 marching-squares+polyline+layer-add, CT
+   total. Also capture shade W/H/W·H, contour W/H/W·H, `depthSamples()` length, `map.getZoom()`
+   to 1 dp (v16.63's readout makes this exact), and wall time from `moveend` to swap complete.
+   **Rolling window of the last 10 gestures, reporting MEDIAN and MAX per segment — jitter is
+   variance, not mean.** On-screen overlay (iOS standalone has no console), toggleable, **default
+   OFF**. Output pixels must be byte-identical to `2026.08.07a`. On-phone protocol: overlay ON,
+   10 pans at Bargara z14 + 10 at z11, 10 at Redcliffe/Hays z14 + 10 at z11 — four screenshots,
+   forty gestures.
+3. **Jitter fix, scoped by what (2) measures. Not before.**
+4. `storage_check.html` tooling pass, batch three: section 1 reload hint after a section 6 delete;
+   section 3 caption corrected to say it does NOT bound localStorage; stale 5.34 MB VERDICT panel
+   removed. Unchanged, independent of the render work.
+5. Option 3 coverage-boundary toggle, opt-in default OFF, edge-detection of the painted alpha
+   buffer. Unchanged.
+6. MN v3 Noosa-OSM fetch → clip, plus Noosa tide-port wiring (BoM TP021). Independent.
+   **TRANSIENT COST:** the REPLACE path writes a ~553.6 KiB rollback snapshot before committing,
+   so peak demand ≈1,045 KiB against 1,024–2,047 KiB free — fits now, did not before the v16.61
+   rollback-key delete. The ~491 KiB projection is geometric; measure the real clipped count
+   first.
+7. Multi-region architecture spike — gates Gold Coast, national scale, and item 16. Named starting
+   hypothesis: static region files on GitHub Pages + IndexedDB cache + viewport-driven loading.
+   IndexedDB migration comes OFF Hold as the gate, not an optimisation.
+
+**OPEN, LOW PRIORITY (unchanged from v16.61):** lat/lng readout on the depth-tap popup; backup
+file is 19.08 MB for 3.85 MB of unique data (pretty-printed, points stored twice); `legacy_unknown`'s
+mask drops >half a below-datum population — worth one look before treating it as clean. **Added
+this session:** surface the v16.62 silent `catch(e){}` (§4); `_idwCache` is keyed on `s.length`
+rather than `poolVersion`.
+
+---
+
 *v16.63 · 7 Aug 2026 — MAP CONTROL LAYOUT SHIPPED (cosmetic only). Build bumped to
 **2026.08.07a**. Repo head `d8e6248` at session start.
 
