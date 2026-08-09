@@ -1,5 +1,149 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.66 · 9 Aug 2026 — **STEP B NUMBERS LANDED. THE GAP IS SOLVED.** Planning/analysis only, no
+build, no code. Build stays **2026.08.09a**. Repo head `6762ffc` (v16.65 build + roadmap) at session
+start. Seven on-phone screenshots from the 2026.08.09a instrumentation overlay. **v16.61 candidate
+(a) — per-pixel `inWaterFast()` polygon complexity — is CONFIRMED as the entire geographic gap.
+Candidate (b) — local IDW bucket occupancy — is FALSIFIED, and moves in the wrong direction.**
+
+**1. THE MEASUREMENT. Seven readings, median ms, transcribed from the overlay.**
+
+Six at `n=10/10`; one (Cleveland z11) at `n=6/10` and therefore corroborating only, not load-bearing.
+Protocol ran at z11/z10 rather than the specified z14/z11 — see §5. `sh 600×600=360k` and
+`ct 360×360=130k` in **all seven**, so shade grid size is constant and cannot explain any variance.
+`pool 64306`, `six HIT`, `idw MISS`, `skip 0`, `pre 0` in all seven — no cache or edge-case confound.
+
+| reading | n | idle | comp | paint | total | S2 | S3 | S5 | RESID | C1 | C2 | CT |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bargara z11 (img1) | 10 | 351.0 | 509.0 | 2.0 | 865.5 | **105.0** | 268.0 | 8.0 | 124.5 | 118.0 | 9.0 | 124.0 |
+| Bargara z11 (img4) | 10 | 351.0 | 513.5 | 3.5 | 868.0 | **105.0** | 273.0 | 8.0 | 127.5 | 119.5 | 8.5 | 127.0 |
+| Bargara z10 (img6) | 10 | 351.0 | 764.0 | 2.0 | 1118.0 | **216.5** | 276.5 | 6.0 | 196.0 | 191.0 | 6.5 | 195.0 |
+| Bargara z10 (img7) | 10 | 351.0 | 677.0 | 2.5 | 1034.0 | **194.5** | 286.5 | 6.0 | 191.5 | 183.0 | 7.0 | 190.5 |
+| Redcliffe z11 (img5) | 10 | 351.5 | 808.5 | 3.5 | 1167.5 | **504.0** | 151.0 | 6.0 | 130.5 | 130.0 | 0.0 | 130.0 |
+| Cleveland z11 (img3) | 6 | 353.5 | 956.5 | 13.5 | 1324.0 | **538.5** | 281.0 | 9.0 | 139.5 | 138.5 | 0.0 | 139.0 |
+| Brisbane z10 (img2) | 10 | 351.0 | 837.5 | 3.0 | 1203.5 | **366.5** | 273.0 | 6.0 | 187.5 | 186.5 | 0.0 | 187.5 |
+
+S1 is 0.0 in all seven (max 1.0–3.0) and S4 is 1.0–1.5. Both are noise; neither is ever worth
+another look. `enc` is 4.5–5.0 of S5's 6.0–9.0 — the synchronous `toDataURL()` PNG encode is real
+but trivial, and is now closed as a suspect.
+
+**2. S2 IS THE GAP. Like-for-like at z11, Bargara (mean of two runs) vs Redcliffe:**
+
+```
+  S2 mask    105.0 -> 504.0   delta +399.0   ratio 4.80x
+  S3 idw     270.5 -> 151.0   delta -119.5   ratio 0.56x
+  S5 paint     8.0 ->   6.0   delta   -2.0
+  CT total   125.5 -> 130.0   delta   +4.5
+  ------------------------------------------------------
+  T2-T1      511.2 -> 808.5   delta +297.2
+  sum of segment deltas = +282.0  (15.2 ms apart; medians drawn from different gesture sets)
+```
+
+**S2's delta alone (+399.0) EXCEEDS the entire compute gap (+297.2)** — S3 runs the other way and
+partially cancels it. Same finding at z10, Bargara (mean of two) vs Brisbane: S2 205.5 -> 366.5
+(+161.0, 1.78x) against a compute delta of +117.0, with S3 flat at 281.5 -> 273.0 (-8.5).
+
+S2 as a share of compute: **Bargara 20.4–28.7%, Moreton 43.8–62.3%.** The mask pass is a fifth of
+the work on the reference coast and up to five-eighths of it in Moreton Bay. That is the whole story.
+
+**3. CANDIDATE (b) IS FALSIFIED — do not reopen it.** S3 across all seven: Bargara 268.0 / 273.0 /
+276.5 / 286.5; Moreton 151.0 / 273.0 / 281.0. The ranges fully overlap and the **fastest S3 in the
+entire set is Moreton's** (151.0, Redcliffe z11). Sparse local buckets make the IDW loop cheaper,
+not dearer, so bucket occupancy cannot generate a gap in the observed direction under any reading.
+The v16.61 §1 candidate list is now closed: (a) confirmed, (b) dead, (c) GC churn untested but
+demoted — it is geography-independent by construction and there is no longer an unexplained
+geographic residue for it to account for.
+
+**4. TWO HYPOTHESES THIS SESSION KILLED, INCLUDING ONE OF THIS CHAT'S OWN.**
+
+- **T3 paint is not the problem.** `T3-T2` is 2.0–13.5 ms median, 11.0–29.0 max. The v16.65-era
+  argument that asynchronous PNG decode might sit wholly outside S1–S5 and explain the visible
+  absence was wrong. It cost two boundary marks to falsify and was worth it — the alternative was
+  carrying it as a live unknown into the fix.
+- **There is no hidden term.** `RESID - CT` = **+0.0 to +1.0 ms in all seven readings**. The
+  segmentation accounts for essentially 100% of `T2-T1`. Any future claim that "something else" is
+  costing time in the shade rebuild has to explain how it hides inside a 1 ms residual.
+
+Also settled: `T1-T0` is 351.0–353.5 median (max 351.0–386.0) in every reading. The 350 ms trailing
+debounce is exact and invariant. The three-timestamp split (v16.65 §2) earned its keep by proving
+the idle term is not a variable — every ms of the 865–1324 ms user-visible total above 351 is
+compute.
+
+**5. NEW FINDING, UNSOUGHT: `C2 = 0.0` AT EVERY MORETON READING.** The marching-squares/polyline/
+layer-add stage produces literally zero geometry in Moreton Bay (correct — the Option 3 STRICT-AND
+mask leaves no depth samples over that water), yet `C1` still spends **130.0 / 138.5 / 186.5 ms**
+per pan building a 130k-cell field for it. At Bargara, where contours are real, C2 is 6.5–9.0 and
+the work is earned. This is a pure-waste term available **only in the slow arm**, i.e. it improves
+the gap as well as the absolute. Requires a cheap, correct precondition — "no samples in the
+contour viewport bbox", not "C2 was 0 last time"; C2 can legitimately be 0 when data exists but no
+level is crossed, and an early-out keyed on that would silently drop real contours.
+
+**6. PROTOCOL DEVIATIONS — recorded, neither invalidating.**
+
+- **z11/z10 was run, not the specified z14/z11.** The finding generalises regardless: S2 and S3 are
+  both linear in W·H, so at any grid size the *ratio* between them is preserved. But the tight-zoom
+  regime is now genuinely unmeasured. At z14 the shade grid is `clamp(280,600,extM/35)` = 280×280 =
+  78,400 px, i.e. 4.59x fewer pixels, extrapolating to S2 ≈ 22.9 ms (Bargara) vs ≈ 109.8 ms
+  (Moreton) — an **~87 ms absolute gap, which is marginal as a subjective full point**. Either the
+  tight-zoom rating was less reliable than v16.61 assumed, or a second mechanism operates there.
+  Capture one z14 pair opportunistically; not a blocker for Step C.
+- **Cleveland z11 (img3) is `n=6/10`.** Consistent with Redcliffe z11 and therefore corroborating,
+  but it must not be quoted as a primary figure.
+
+**7. STEP C — THE FIX. Ordered, one variable per build.**
+
+**Projected end state at z11** (S2 -> ~10 ms via rasterisation; Moreton CT -> ~0 via early-out):
+
+```
+  Bargara    comp  509.0 ->  414.0    total   865.5 ->  ~767 ms
+  Redcliffe  comp  808.5 ->  184.5    total  1167.5 ->  ~540 ms
+```
+
+The gap does not close — **it inverts**, and S3 (268–286 ms at Bargara, untouched by any of this)
+becomes the new ceiling. Plan for that; do not treat an inverted gap as a regression.
+
+1. **STEP B2 — SPLIT S2. Instrumentation only, two marks, Sonnet. DO THIS FIRST.** The S2 span as
+   built includes `shadeMaskFeats()` as well as the pixel loop. If feature assembly is a large slice
+   of the 504 ms, canvas rasterisation buys far less than projected and a cycle has been spent on
+   output-critical code. The evidence favours the pixel loop dominating — Moreton S2 *fell* 504.0
+   (z11) -> 366.5 (z10) despite more polygons entering view, which is a per-pixel signature, not a
+   feature-count one — but that is inference, not measurement, and the mask is the one component
+   whose breakage is not cosmetic. Split into **S2a (`shadeMaskFeats()`)** and **S2b (pixel loop)**,
+   then a 20-gesture run: Bargara z11 and Redcliffe z11 only. Cheap insurance, not a coin flip.
+2. **STEP C1 — RASTERISE THE MASK.** Replace the 360,000-iteration JS point-in-polygon loop with a
+   native canvas fill: draw the mask polygons into an offscreen 600×600 context, `getImageData`
+   once, threshold to the existing binary `mask` array. The browser rasteriser is native code doing
+   in single-digit ms what the JS loop does in 105–538. **Output-identity risk is real and must be
+   gated:** polygon antialiasing at edges means the thresholded result can differ by a pixel or two
+   from the PIP result. Verify by diffing the `mask` arrays for both geographies before trusting it,
+   and treat any edge disagreement as a decision to make deliberately, not a rounding detail.
+   Conditional on B2 showing S2b dominant.
+3. **STEP C2 — CONTOUR EARLY-OUT** (§5). Skip `buildAutoContours()`'s field build when the viewport
+   contains no contourable samples. ~130–187 ms per pan in Moreton, ~0 at Bargara.
+4. **STEP C3 — NUMERIC BUCKET KEYS.** v16.65's optimisation candidate 2: `sIx[i2+':'+j2]` allocates
+   a transient string per bucket probe, 9 per pixel, in both the S3 and C1 loops. Geography-
+   independent, so it could never have explained the gap — but after C1/C2 it is the largest
+   remaining term (S3 268–286 ms at Bargara). Deferred to last precisely because it is the one item
+   whose benefit does not depend on the others.
+5. **Dead `mA` removal** (v16.65 candidate 1) stays unactioned. It is real but small, and it touches
+   the alpha path. Not worth a build of its own; fold into C3 only if C3 already opens that loop.
+
+**8. STANDING ADDITION — SUBJECTIVE RATING IS RETIRED FOR THIS CLASS OF PROBLEM.** The /5 pan-
+smoothness scale saturated twice (v16.61, v16.64) and produced one actively misleading reading (the
+confounded 2.8/2.8 in v16.64 §1). A single instrumented build resolved in one on-phone run what four
+sessions of rating could not. **Where a symptom has a plausible per-stage decomposition, instrument
+before rating.** The overlay from 2026.08.09a stays in the build and is the tool for it.
+
+**NEXT-SESSION NOTE:** build **2026.08.09a**, repo head `6762ffc` at session start, roadmap
+**v16.66** UNAPPLIED at time of writing. Nothing shipped this session — analysis only. Decided:
+S2 is the gap (4.80x at z11), candidate (b) falsified, paint and hidden-residual hypotheses both
+killed, contour build is pure waste in Moreton. Next job: **Step B2, the S2a/S2b split** (§7 item 1)
+— instrumentation only, Sonnet, then a 20-gesture run at Bargara z11 + Redcliffe z11. Do not build
+the rasterisation fix before that split reports. Pending cleanup: commit and push this roadmap entry
+on its own before any build commit, and confirm the Pages run.
+
+---
+
 *v16.65 · 9 Aug 2026 — STEP B MEASUREMENT BUILD SHIPPED (instrumentation only, no behaviour
 change). Build bumped to **2026.08.09a**. Repo head `6e85fc7` at session start. This is §7 item 2
 of v16.64 below, as amended. **THE NUMBERS DO NOT EXIST YET — nothing has been measured. This build
