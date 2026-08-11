@@ -1,5 +1,139 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.68.2 · 9 Aug 2026 — ON-PHONE RUN FOR `2026.08.09c` COMPLETE. **C2 EARLY-OUT CONFIRMED FIRING
+ON-DEVICE; §B RETIRED.** Planning/measurement only, no build, no code. Build stays **2026.08.09c**.
+Repo head `b3a5195` (the v16.68.1 entry, pushed; project-knowledge copy verified byte-identical by
+SHA-256 `e8080540…80ef6b`). Supersedes three predictions in v16.68.1 §G.*
+
+**1. RESULTS.** Force-close/reopen confirmed, `2026.08.09c` in-panel, overlay ON, depth shading +
+auto contours + rebuild timing all ON. `pool 64306`, `six HIT`, `idw MISS`, `pre 0` in all five.
+
+| reading | n | idle | comp | paint | total | S2 | S3 | S5 | RESID | C1 | C2 | CT | `ct` grid | skip |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Redcliffe z11 | 10/10 | 351.0 | 224.5 | 2.0 | 582.0 | 24.0 | 189.5 | 8.0 | 2.0 | **0.0** | 0.0 | 2.0 | **—** | 10 |
+| Brisbane z10 | 8/10 | 351.0 | 326.5 | 6.5 | 689.5 | 24.0 | 291.0 | 5.0 | 3.0 | **0.0** | 0.0 | 2.0 | **—** | 0 |
+| Cleveland z11 | 10/10 | 351.0 | 208.5 | 2.0 | 563.5 | 23.0 | 173.5 | 6.0 | 2.0 | **0.0** | 0.0 | 1.0 | **—** | 0 |
+| Bargara z11 | 10/10 | 351.0 | 290.5 | 12.0 | 653.5 | 4.0 | 151.5 | 5.0 | 126.0 | 117.0 | 8.0 | 126.0 | 360×360=130k | 0 |
+| Brisbane z10 TRANSIT | 9/10 | 351.0 | 498.0 | 11.0 | 860.0 | 6.0 | 321.0 | 8.0 | 180.0 | 166.0 | 21.0 | 180.0 | — | 0 |
+
+**2. THE DECIDER IS `ct —`, NOT `C1 0.0`.** §G warned that `0.0` is the return path. It is also the
+reading produced by the PRE-EXISTING empty-levels return, which returns before `_cm1` is assigned by
+the same mechanism — so `C1 0.0` alone cannot distinguish the new early-out from the old behaviour,
+and v16.66 §1 already recorded `C1 0.0` at all three Moreton locations. **What distinguishes them is
+the grid line.** Pre-edit the field loop ran to completion, so `ct W×H=Nk` was populated. It now
+reads `ct —` at Redcliffe, Brisbane and Cleveland while Bargara still reads `ct 360×360=130k`. The
+field build is being skipped, not merely producing no levels. **Record this as the general lesson: an
+early-out that shares a return path with existing behaviour needs a side-channel to be observable at
+all. Design the instrumentation with the optimisation.**
+
+**3. §B IS RETIRED. `legacy_unknown` carries no `d > 0` in these viewports.** The 20,533-point
+unaudited block was the one thing that could have stopped the early-out firing on the phone's
+64,306-point pool when it fired on the gate's 52,929-point corpus. It fires. No audit is needed and
+the planned `version:2`-export depth-sign check is CANCELLED. **The standing rule promoted in §B
+stands unchanged and was vindicated** — the gate genuinely could not have settled this, and the
+on-phone run was the right deliverable.
+
+**4. THE FULL SAVING WAS REALISED. Net totals moved less because S2 and S3 drifted between pan
+sets.** Reconciled against the v16.66 §1 baseline table (`:454-461` pre-insert), medians throughout:
+
+```
+loc        ΔS2      ΔS3   ΔRESID      sum    Δcomp    slack
+Bri     -342.5     18.0   -184.5   -509.0   -511.0     -2.0
+Red     -480.0     38.5   -128.5   -570.0   -584.0    -14.0
+Bar     -101.0   -119.0      0.0   -220.0   -220.8     -0.8
+Cle     -515.5   -107.5   -137.5   -760.5   -748.0    +12.5
+```
+
+**ΔRESID is the C2 early-out's whole contribution, and at each location it equals that location's
+baseline C1 to within 2 ms** — Brisbane −184.5 against C1 186.5, Redcliffe −128.5 against 130.0,
+Cleveland −137.5 against 138.5 (n=6 baseline, corroborating only). **At Bargara ΔRESID is exactly
+0.0**, which is the early-out correctly not firing where contours draw. ΔS2 is v16.67.1's scanline
+mask, already banked. Slack is the residue of summing medians of different distributions and is
+≤15 ms everywhere.
+
+**§G's "total ~540" at Redcliffe was therefore a bad predictor of a correct change** — it assumed
+every other segment held constant across pan sets, and S3 alone moved 38.5 ms. **Predict the segment
+the change touches, not the total.**
+
+**5. NEW AND UNRESOLVED — S3 IS NOT STABLE ACROSS NOMINALLY IDENTICAL READINGS, AND THIS IS A GATE
+PROBLEM FOR C3.** S3 at the same location and zoom, across builds that touched nothing in S3:
+Bargara z11 **268.0 / 273.0 → 151.5** (−119.0, −44%); Cleveland z11 **281.0 → 173.5**; Redcliffe z11
+**151.0 → 189.5**; Brisbane z10 **273.0 → 291.0**. Not monotonic, so not drift.
+
+Two candidates are excluded by recorded evidence: the mask set is unchanged (v16.67.1's gate, 0
+disagreeing pixels over 28,804,800), and `idw MISS` on every pan is not new — v16.66 §1 recorded it
+in all seven readings. That leaves **viewport composition** (water fraction and local bucket
+occupancy under the 600×600 grid), consistent with v16.66 §3's finding that sparse local buckets make
+the IDW loop cheaper, but **NOT ESTABLISHED**.
+
+**Consequence, binding on the next build: C3's benefit lands in S3, so a C3 gate that compares S3
+between two pan sets can be swamped by a ±119 ms viewport effect.** C3 must be measured as a paired
+A/B — same device, same session, same map centre, alternating builds — or by a segment-level counter
+(transient allocations per pan) rather than by wall-clock S3 across sessions.
+
+**6. CORRECTION TO §G — the pool scan lands in `CT`, not `RESID`.** §G predicted a small `RESID`
+shift. `RESID(+CT)` is a superset of `CT`, and at every firing location the two are equal to within
+1.0 (Redcliffe 2.0/2.0, Brisbane 3.0/2.0, Cleveland 2.0/1.0), as they are at Bargara where it does
+not fire (126.0/126.0). **The early-out's own cost is therefore directly measured at 1–2 ms rather
+than inferred.** Better than predicted; record the measured figure, not the estimate.
+
+**7. CORRECTION TO §G — THE BARGARA → MORETON VISIBLE-BREAK CHECK IS UNOBSERVABLE BY CONSTRUCTION.**
+It was run (Bargara z11 → Brisbane z10) and showed no stranded contours, but the test cannot fail.
+Leaflet polylines are geographic: a layer stranded at Bargara sits ~300 km north of a Moreton
+viewport and is off-screen whether or not the teardown ran. The general case is worse — **any
+viewport that triggers the early-out has no contourable sample in bbox+pad, so it also excludes the
+footprint of any geometry that could have stranded.** There is no pan between these regions that puts
+stale contours inside the new viewport.
+
+**The teardown is established by the six-exit-path byte comparison in v16.68 (`:2859, :2863, :2878,
+:2942, :2967, :2971`, all ending in the identical
+`{if(autoCtLayer){map.removeLayer(autoCtLayer);autoCtLayer=null;}return;}`), which is a stronger
+proof than any pan and was already done.** The pan is corroborating, not the gate. **Lesson: before
+nominating an on-device check as "the one visible break", verify the failure it targets would
+actually be visible.**
+
+**8. THE TRANSIT READING IS NOT A LOCATION MEASUREMENT — do not cite row 5 as Brisbane z10.** It is a
+9-sample median spanning the pan from Bargara, crossing the Maroochy/Noosa corpus (max-d 3.53–42.48
+m), where full contour fields are legitimately built at z10 viewport size. `C2 21.0 med / 46.0 max`
+is the fingerprint: at least half the window created a contour layer. It is useful only as
+confirmation that the rebuild path stays live across the transit and that layers are created and torn
+down repeatedly, rather than the early-out wedging the function into a permanent no-op. Its `C1
+166.0` does not contradict the clean Brisbane z10 row.
+
+**9. TWO PROTOCOL DEFECTS, RECORDED AND DELIBERATELY NOT CHASED.** Brisbane z10 ran **n=8/10**, two
+short of spec. Redcliffe z11 reported **`skip 10`** against `skip 0` in every other reading — ten
+suppressed rebuilds, on the location carrying the headline result, cause unidentified (repeat pans
+landing on an unchanged viewport is the benign explanation, untested). Neither can flip a verdict
+resting on `ct —` plus a ±2 ms ΔRESID reconciliation, and Cleveland z11 at n=10/10 corroborates
+Redcliffe independently. **Judgement: not worth a re-run. Recorded so a future session does not read
+the numbers as clean.**
+
+**10. NEXT: C3 NUMERIC BUCKET KEYS, UNCHANGED — and `_idwCache` PROMOTED TO SIT ALONGSIDE IT.** S3 is
+now 84% of compute at Redcliffe (189.5/224.5), 89% at Brisbane (291.0/326.5) and 52% at Bargara
+(151.5/290.5, with C1's 117.0 taking most of the rest). C3 is aimed correctly.
+
+**`idw MISS` appears on every pan in all five readings.** The known `_idwCache` keyed on `s.length`
+rather than `poolVersion` (long-standing low-priority backlog item) means the IDW structure is
+rebuilt every single pan, and that cost lands in S3 — the same segment C3 targets. It is a smaller
+edit than C3 and shares its measurement problem. **Re-rate it against C3 before dispatching either;
+do not leave it at low priority.** Compare `six HIT` on the same line, which is the cache behaving.
+
+**The 350 ms `moveend` debounce stays UNTOUCHED.** Compute medians are 224.5 / 326.5 / 208.5 / 290.5
+— no location is under the ~200 ms threshold. Reasoning in v16.68.1 §H is unchanged.
+
+**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68.2**, repo head `b3a5195` at time of
+writing (the v16.68.2 commit and its Pages run are UNAPPLIED/UNCONFIRMED unless Aaron says
+otherwise). No code shipped this session. **The C2 early-out is confirmed firing on-device and §B is
+retired** — the decider is `ct —` replacing `ct 360×360=130k`, not `C1 0.0`, which the pre-existing
+empty-levels return produces by the same mechanism. Next job: **Step C3, numeric bucket keys** — but
+**re-rate `_idwCache` (`s.length` vs `poolVersion`) against it first** (§10). **Binding on whichever
+ships: S3 moved up to 119 ms between builds that touched nothing in S3 (§5), so C3 cannot be measured
+by comparing S3 across pan sets — paired A/B at the same map centre, or an allocation counter.** The
+Bargara → Moreton visible-break check is unobservable by construction and is not to be re-specified
+(§7). The 350 ms `moveend` debounce stays UNTOUCHED.
+
+---
+
 *v16.68.1 · 9 Aug 2026 — C2 CONTOUR EARLY-OUT SHIPPED (+ dead `inWaterFast()` term deleted;
 v16.68.1 adds the planning review, one caveat, three corrections to earlier entries). Build
 bumped to **2026.08.09c**. Repo head `b0ddab9` at session start. Closes v16.66 §7 item 3. Two
@@ -148,7 +282,8 @@ branch there. The comment was true; the call it described was dead compute. Read
 justification for code is not the same as verifying the code does anything. Where a comment explains
 why a term cannot matter, check whether the term is still evaluated.
 
-**G. ON-PHONE PROTOCOL FOR BUILD `2026.08.09c` — the deliverable, not yet run.** Force-close and
+**G. ON-PHONE PROTOCOL FOR BUILD `2026.08.09c` — RUN 9 Aug 2026; RESULTS IN v16.68.2 §1.
+Retained as written; three of its predictions are SUPERSEDED there (§4, §6, §7).** Force-close and
 reopen, confirm `2026.08.09c` in-panel, overlay ON, 10 pans each at `n=10/10`:
 
 | location / zoom | baseline (2026.08.09b or v16.66) | expected |
@@ -161,10 +296,14 @@ reopen, confirm `2026.08.09c` in-panel, overlay ON, 10 pans each at `n=10/10`:
 assigned — that is the return path, not a measurement.** Do not read `0.0` as the field build having
 become infinitely fast. **The ~1 ms pool scan is now paid on every pan including Bargara, where it
 never fires, and lands in `RESID` rather than `C1`** — a small RESID shift is expected and is not a
-new mystery.
+new mystery. **SUPERSEDED (v16.68.2 §6): the scan lands in `CT`, not `RESID`, and is
+therefore directly measured at 1–2 ms rather than inferred.**
 
 **THE ONE VISIBLE BREAK TO CHECK: pan Bargara → Moreton and confirm the contour layer DROPS rather
 than stranding on screen.** Also confirm contours still draw normally at Bargara.
+**SUPERSEDED (v16.68.2 §7): this check is unobservable by construction — any viewport triggering the
+early-out also excludes the footprint of the geometry that could strand. The teardown is established
+by the six-exit-path byte comparison above.**
 
 **H. SEQUENCE UNCHANGED: C3 numeric bucket keys next, then the debounce.** `sIx[i2+':'+j2]`
 allocates 9 transient strings per pixel in both the S3 and C1 loops — 1,166,400 per pan in the
@@ -177,7 +316,8 @@ column without touching a millisecond of work — the shape of a metric being ga
 project has already paid for once (v16.66 §8).
 
 
-**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68.1**, repo head `fb27f98` at time of
+**NEXT-SESSION NOTE — SUPERSEDED by v16.68.2; retained for the record.** build **2026.08.09c**,
+roadmap **v16.68.1**, repo head `fb27f98` at time of
 writing (the v16.68.1 commit and its Pages run are UNAPPLIED/UNCONFIRMED unless Aaron says
 otherwise). Shipped: C2 contour early-out + dead `inWaterFast()` term removed, both gated bit-exact
 off-phone. **The on-phone run is the deliverable and has NOT happened** — protocol and expected
