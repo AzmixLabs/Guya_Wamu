@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.09c</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.11a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.09c</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.11a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1160,6 +1160,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Dashed depth lines traced through your interpolated soundings — approximate, drawn only over water where you have data.</div>
         <label class="toggle" style="margin-top:8px"><input type="checkbox" id="perf-toggle"><span>⏱ Rebuild timing (diagnostic)</span></label>
         <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">Measurement only — shows how long each pan rebuild takes, split by stage. Changes nothing on the map. Off by default; nothing is timed or stored while it's off.</div>
+        <label class="toggle" style="margin-top:8px"><input type="checkbox" id="six-mode-toggle"><span>🔢 Numeric bucket key (diagnostic, C3a)</span></label>
+        <div style="font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.3">A/B for the sample-index key: off = shipped string key, on = origin-relative integer key. Output is bit-identical either way — this is a rebuild-cost comparison, not a feature. Flipping it clears the rebuild-timing window above.</div>
     </div>
     <div class="blk"><div class="lbl">Depth lines (traced / drawn / imported)</div>
       <div class="dp-actions"><label class="dp-btn" for="ct-gpx">Import routes (GPX)</label><input type="file" id="ct-gpx" accept=".gpx,application/gpx+xml" hidden></div>
@@ -2094,9 +2096,60 @@ function scanlineMask(feats,minLa,maxLa,minLo,maxLo,W,H){
   }
   return mask;
 }
-function buildSampleIndex(pts,cellLa,cellLo){const ix={};
-  for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
-  return ix;}
+/* C3a (diagnostic A/B, default OFF=arm A='str'): buildSampleIndex() now takes a mode and returns
+   an object, not a bare bucket store. 'str' is the byte-identical shipped behaviour (string key,
+   unchanged formula). 'num' is the origin-relative INTEGER key: key=(i2-iLo)*NJ+(j2-jLo), where
+   iLo/jLo/iHi/jHi/NJ are the floor(lat/cellLa)/floor(lng/cellLo) bounds over THIS CALL's pts
+   array - computed HERE, not from ptsBounds()/bb, and on EVERY call (not cached), so the
+   containment invariant every probe site's bounds test relies on holds for ANY caller, not only
+   the ptsBounds-cached depthSamples() pool. That matters because idwIndex()/impIndex() use a
+   different anchor than buildShade()/buildAutoContours(), and impIndex() indexes a FRESH array
+   built from `imported`, not depthSamples() - a bb-derived origin would silently drop samples
+   outside the (possibly tighter) pool bbox at construction. Cost: one extra O(n) pass, sub-ms.
+   Kept as a plain object in BOTH modes - 'num' keys are still small enough (max ~1.89 M at the
+   current pool, always <2^32) to land in dictionary-mode elements, not string-keyed storage; see
+   the roadmap C3a entry for why this is a real but container-bound saving, not the CSR/dense-array
+   win C3b would be. mode travels ON the returned object so every probe site reads it (and the
+   origin) off the SAME object it reads buckets off - never a module-level copy, never a second
+   derivation, so a stale index can never be probed under the wrong scheme. */
+function buildSampleIndex(pts,cellLa,cellLo,mode){
+  const m=(mode==='num')?'num':'str';
+  let iLo=Infinity,iHi=-Infinity,jLo=Infinity,jHi=-Infinity;
+  for(let k=0;k<pts.length;k++){
+    const i2=Math.floor(pts[k].lat/cellLa),j2=Math.floor(pts[k].lng/cellLo);
+    if(i2<iLo)iLo=i2;if(i2>iHi)iHi=i2;if(j2<jLo)jLo=j2;if(j2>jHi)jHi=j2;
+  }
+  const NJ=jHi-jLo+1;
+  const ix={};
+  if(m==='num'){
+    for(let k=0;k<pts.length;k++){
+      const i2=Math.floor(pts[k].lat/cellLa),j2=Math.floor(pts[k].lng/cellLo);
+      const key=(i2-iLo)*NJ+(j2-jLo);
+      (ix[key]||(ix[key]=[])).push(pts[k]);
+    }
+  }else{
+    for(let k=0;k<pts.length;k++){const key=Math.floor(pts[k].lat/cellLa)+':'+Math.floor(pts[k].lng/cellLo);(ix[key]||(ix[key]=[])).push(pts[k]);}
+  }
+  return {ix:ix,mode:m,iLo:iLo,jLo:jLo,iHi:iHi,jHi:jHi,NJ:NJ};
+}
+/* sIdxMode: the C3a diagnostic toggle. 'str' (default, checkbox OFF) is arm A - the shipped
+   baseline. 'num' (checkbox ON) is arm B - the origin-relative integer key. Declared here, read
+   by pooledSampleIndex()/idwIndex()/impIndex() at INDEX-CONSTRUCTION time only, never inside a
+   3x3 probe loop - see the buildShade/buildAutoContours probe sites for why. Wiring (incl. the
+   perf-window clear on flip) sits with the other diagnostic toggles, below perf-toggle. */
+let sIdxMode='str';
+/* C3a cold-site helper (idwDepthAt - tap-to-read; impAt - Navionics-comparison button): a
+   per-call mode branch is fine here per v16.68.3 §5a - neither is a per-pixel hot loop
+   (idwDepthAt runs once per tap; impAt runs only when the compare button is pressed, over a
+   handful of contour-vertex samples). Bounds test precedes key formation for 'num', same as the
+   three hot sites, so a probe past the window is a skip there too. */
+function bkAt(C,i2,j2){
+  if(C.mode==='num'){
+    if(i2<C.iLo||i2>C.iHi||j2<C.jLo||j2>C.jHi)return undefined;
+    return C.ix[(i2-C.iLo)*C.NJ+(j2-C.jLo)];
+  }
+  return C.ix[i2+':'+j2];
+}
 let _sampleIndexCache=null,_sampleIndexVersion=-1;
 /* v16.60: poolVersion-keyed cache OVER buildSampleIndex(), not INSIDE it. buildShade() and
    buildAutoContours() now compute IDENTICAL pool-anchored cellLa/cellLo (same bb=ptsBounds(pts),
@@ -2109,10 +2162,16 @@ let _sampleIndexCache=null,_sampleIndexVersion=-1;
    its own index back to every other caller, corrupting depth reads for the callers that didn't
    run first. This wrapper is used ONLY at buildShade's and buildAutoContours's own call sites;
    idwIndex (keeps _idwCache) and impIndex (untouched, button-triggered) keep calling
-   buildSampleIndex() directly, exactly as before. */
+   buildSampleIndex() directly, exactly as before.
+   C3a: the cache guard now also checks .mode===sIdxMode (v16.68.3 §5b) - a store built by one arm
+   and probed under the other would otherwise stay CORRECT (mode travels on the object, so every
+   probe site would read the STALE mode and behave consistently with it) while measuring NOTHING,
+   which is a silent A/B-corrupting failure, not a crash. poolVersion is deliberately NOT bumped on
+   a mode flip - that would needlessly dump _poolCache/_boundsCache/_r0Version, none of which hold
+   an index. */
 function pooledSampleIndex(pts,cellLa,cellLo){
-  if(_sampleIndexVersion===poolVersion&&_sampleIndexCache)return _sampleIndexCache;
-  _sampleIndexCache=buildSampleIndex(pts,cellLa,cellLo);
+  if(_sampleIndexVersion===poolVersion&&_sampleIndexCache&&_sampleIndexCache.mode===sIdxMode)return _sampleIndexCache;
+  _sampleIndexCache=buildSampleIndex(pts,cellLa,cellLo,sIdxMode);
   _sampleIndexVersion=poolVersion;
   return _sampleIndexCache;
 }
@@ -2212,7 +2271,7 @@ function perfBegin(){
   if(!perfOn||perfT0===null)return null;
   const r={t0:perfT0,t1:performance.now(),t2:null,t3:null,awaitPaint:false,done:false,
     s1a:0,s1b:0,s2:0,s3:0,s4:0,s5:0,enc:0,c1:0,c2:0,ct:0,
-    sw:0,sh:0,cw:0,ch:0,pool:0,z:'',six:'-',idw:'-'};
+    sw:0,sh:0,cw:0,ch:0,pool:0,z:'',six:'-',idw:'-',sixMode:'-'};
   perfT0=null;
   /* flush on a fresh task - outside every timed span, and it catches the early-return paths
      (shade off, pts<3, degenerate clip, throw) that never reach the swap. */
@@ -2277,7 +2336,7 @@ function perfDraw(){
     perfRow('C2 msq/layer',function(r){return r.c2;})+
     perfRow('CT total',function(r){return r.ct;})+
     '<div class="pff">sh '+(lg?kpx(lg.sw,lg.sh):'—')+'  ct '+(lg?kpx(lg.cw,lg.ch):'—')+'</div>'+
-    '<div class="pff">pool '+(lg?lg.pool:'—')+'  z'+(lg?lg.z:'—')+'  six '+(lg?lg.six:'—')+'  idw '+(lg?lg.idw:'—')+'</div>'+
+    '<div class="pff">pool '+(lg?lg.pool:'—')+'  z'+(lg?lg.z:'—')+'  six '+(lg?lg.six:'—')+'  idw '+(lg?lg.idw:'—')+'  key '+(lg?lg.sixMode:'—')+'</div>'+
     '<div class="pff">n='+perfSamples.length+'/'+PERF_WIN+'  skip '+perfSkips+'  pre '+perfPre+'  noload '+perfNoLoad+'</div>';
   perfBox.innerHTML=s;
 }
@@ -2286,6 +2345,16 @@ function perfDraw(){
     /* turning it ON always starts a fresh window, so a screenshot at n<10 is self-evidently
        incomplete rather than half stale. Turning it OFF just stops collecting. */
     if(perfOn){perfSamples=[];perfSkips=0;perfPre=0;perfNoLoad=0;perfT0=null;}
+    perfDraw();};})();
+/* C3a (v16.68.3 §5d): flipping the sample-index-key arm MUST clear the perf window - the overlay
+   medians over the last PERF_WIN gestures, so straight after a flip the window still holds
+   gestures from the OTHER arm and every median for the next few is a blend of both. Reuses the
+   exact same clearing statement the perf-toggle wiring above performs on enable, rather than
+   reimplementing it - see that block. A screenshot taken before the window has refilled (n<10/10)
+   is self-evidently incomplete, same as the perf toggle's own case. */
+(function(){const t=document.getElementById('six-mode-toggle');if(!t)return;
+  t.onchange=function(e){sIdxMode=e.target.checked?'num':'str';
+    perfSamples=[];perfSkips=0;perfPre=0;perfNoLoad=0;perfT0=null;
     perfDraw();};})();
 function buildShade(){
   const _pf=perfBegin(); /* T1 - null unless the timing overlay is on AND a moveend is pending */
@@ -2389,9 +2458,14 @@ function buildShade(){
      DELIBERATELY untouched and still viewport/mid-pool-anchored respectively - changing either
      would shift alpha or R0, out of scope for this build. */
   const maxAbsLatPool=Math.max(Math.abs(bb.minLa),Math.abs(bb.maxLa)),mLngMin=111320*Math.cos(maxAbsLatPool*Math.PI/180);
-  /* read the index cache's state BEFORE the call, or the call itself makes it a HIT. */
-  if(_pf)_pf.six=(_sampleIndexVersion===poolVersion&&_sampleIndexCache)?'HIT':'MISS';
+  /* read the index cache's state BEFORE the call, or the call itself makes it a HIT. Mode-aware
+     per C3a (v16.68.3 §5b) - a store built under the other arm is a MISS here, not a stale HIT. */
+  if(_pf)_pf.six=(_sampleIndexVersion===poolVersion&&_sampleIndexCache&&_sampleIndexCache.mode===sIdxMode)?'HIT':'MISS';
   const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
+  /* C3a §5c: the perf overlay must show which arm actually produced these numbers, read off the
+     SAME returned object every probe site below reads mode/buckets/origin from - not off the
+     checkbox, which is precisely what is in doubt. */
+  if(_pf)_pf.sixMode=sIx.mode;
   /* per-sample adaptive R0 (v16.47): reuses the SAME bucketed index above (no second index
      built) to find each sample's own nearest-OTHER-sample gap, then sets that sample's own
      r0 via the v16.46 midpoint-alpha=0.5 criterion, clamped to [R0_MIN,R0_MAX]. O(n) over the
@@ -2422,13 +2496,37 @@ function buildShade(){
      than introducing it. */
   const midLaPool=(bb.minLa+bb.maxLa)/2,mLngPool=111320*Math.cos(midLaPool*Math.PI/180);
   if(_r0Version!==poolVersion){
+    /* C3a (v16.68.3 §5a): mode is read OFF sIx ONCE here, above the per-sample loop - never inside
+       the 3x3 probe - then one of two full loop bodies runs for the whole precompute. Arm A ('str')
+       below is byte-identical, per-sample-accumulation-span, to the pre-C3a code (see the roadmap
+       C3a build entry for the direct comparison against HEAD). Arm B ('num') adds the bounds test
+       BEFORE key formation (§3/§6c) - i2/j2 tested against sIx's own iLo/iHi/jLo/jHi INDEPENDENTLY
+       and skipped before the key is formed, so a probe past the window is a skip, never a wrong-row
+       hit. */
+    const _ixo=sIx.ix;
+    if(sIx.mode==='num'){
+      const _iLo=sIx.iLo,_iHi=sIx.iHi,_jLo=sIx.jLo,_jHi=sIx.jHi,_NJ=sIx.NJ;
+      for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
+        let best=1e9;
+        for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){
+          if(i2<_iLo||i2>_iHi||j2<_jLo||j2>_jHi)continue;
+          const bk=_ixo[(i2-_iLo)*_NJ+(j2-_jLo)];if(!bk)continue;
+          for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
+            const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLngPool,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
+        const gap=best>=1e9?(R0_MAX+R1):best;
+        p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
+    }else{
+      /* arm A ('str') - indentation deliberately left matching the pre-C3a original (not re-flowed
+         to the extra if/else nesting level) so the accumulation span below is byte-identical to
+         HEAD, not merely equivalent - see the roadmap C3a entry for the direct comparison. */
     for(let k=0;k<pts.length;k++){const p=pts[k];const ci=Math.floor(p.lat/cellLa),cj=Math.floor(p.lng/cellLo);
       let best=1e9;
-      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
+      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=_ixo[i2+':'+j2];if(!bk)continue;
         for(let m=0;m<bk.length;m++){if(bk[m]===p)continue;
           const dy=(p.lat-bk[m].lat)*mLat,dx=(p.lng-bk[m].lng)*mLngPool,d=Math.sqrt(dx*dx+dy*dy);if(d<best)best=d;}}
       const gap=best>=1e9?(R0_MAX+R1):best;
       p.r0=Math.max(R0_MIN,Math.min(R0_MAX,gap-R1));}
+    }
     _r0Version=poolVersion;
   }
   const FD=new Float32Array(W*H),AL=new Float32Array(W*H),ST=new Uint8Array(W*H); /* ST: 1 where the nearest sample is topographic-NIR -> paint flats bands, not the depth ramp */
@@ -2438,14 +2536,41 @@ function buildShade(){
      S1 reported on the overlay = S1a + S1b. */
   const _m3=_pf?performance.now():0;
   if(_pf)_pf.s1b=_m3-_m2;
-  for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
+  /* C3a (v16.68.3 §5a): mode read OFF sIx ONCE here, above the pixel loop - NOT inside the 3x3
+     probe reached 9x per pixel (3.24 M times at the 600x600 cap). Two full loop bodies below,
+     identical except the bucket-lookup line; arm A ('str') is byte-identical, per the accumulation
+     span the roadmap C3a entry compares against HEAD. Arm B ('num') bounds-tests i2/j2 against
+     sIx's own origin BEFORE forming the key (§3/§6c) - the row-wrap alias this build exists to
+     avoid can only happen if the key is formed first. */
+  const _ixoS=sIx.ix;
+  if(sIx.mode==='num'){
+    const _iLo=sIx.iLo,_iHi=sIx.iHi,_jLo=sIx.jLo,_jHi=sIx.jHi,_NJ=sIx.NJ;
+    for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
+      for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
+        const i0=y*W+x;
+        let mSum=0;for(let dy2=-1;dy2<=1;dy2++)for(let dx2=-1;dx2<=1;dx2++)mSum+=mAt(x+dx2,y+dy2);
+        const mA=mSum/9;
+        let num=0,den=0,near=1e9,nearD=0,nearR0=R0_MIN,nearST='bathymetric';
+        const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
+        for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){
+          if(i2<_iLo||i2>_iHi||j2<_jLo||j2>_jHi)continue;
+          const bk=_ixoS[(i2-_iLo)*_NJ+(j2-_jLo)];if(!bk)continue;
+          for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
+            if(dist<near){near=dist;nearD=bk[k].d;nearR0=bk[k].r0;nearST=bk[k].st;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+        if(!den){AL[i0]=0;continue;}
+        const distA=near<=nearR0?1:(near>=R1?0:1-(near-nearR0)/(R1-nearR0));
+        const maskA=Math.max(mA,(near<=R1)?1:0);
+        if(maskA<=0){AL[i0]=0;continue;}
+        FD[i0]=num/den;AL[i0]=distA*maskA;ST[i0]=(nearST==='topographic')?1:0;}}
+  }else{
+    for(let y=0;y<H;y++){const la=maxLa-(maxLa-minLa)*(y/(H-1));
     for(let x=0;x<W;x++){const lo=minLo+(maxLo-minLo)*(x/(W-1));
       const i0=y*W+x;
       let mSum=0;for(let dy2=-1;dy2<=1;dy2++)for(let dx2=-1;dx2<=1;dx2++)mSum+=mAt(x+dx2,y+dy2);
       const mA=mSum/9;
       let num=0,den=0,near=1e9,nearD=0,nearR0=R0_MIN,nearST='bathymetric';
       const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
-      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=sIx[i2+':'+j2];if(!bk)continue;
+      for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=_ixoS[i2+':'+j2];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near){near=dist;nearD=bk[k].d;nearR0=bk[k].r0;nearST=bk[k].st;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
       if(!den){AL[i0]=0;continue;}
@@ -2466,6 +2591,7 @@ function buildShade(){
       const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
       FD[i0]=num/den;AL[i0]=distA*maskA;ST[i0]=(nearST==='topographic')?1:0;}}
+  }
   const _m4=_pf?performance.now():0; /* S3 end - the IDW pixel loop, up to 360,000 iterations */
   if(_pf)_pf.s3=_m4-_m3;
   /* smooth the field: dense survey imports make raw IDW near-nearest-neighbour, which is far too
@@ -2780,14 +2906,17 @@ function waterNowText(d,lat,lng){const t=tideHeightNow(lat,lng);if(t==null)retur
   return ' \u00b7 now ~'+wn.toFixed(1)+' m water (tide +'+t.toFixed(1)+')';}
 let _idwCache=null;
 function idwIndex(){const s=depthSamples();
-  if(_idwCache&&_idwCache.n===s.length)return _idwCache;
+  /* C3a: mode added to the guard alongside the existing n===s.length key (v16.68.3 §5b scope
+     fence - re-keying to poolVersion is a separate, out-of-scope change; see the roadmap entry). */
+  if(_idwCache&&_idwCache.n===s.length&&_idwCache.mode===sIdxMode)return _idwCache;
   const mLat=111320,mLng=111320*Math.cos(-24.85*Math.PI/180),cellLa=120/mLat,cellLo=120/mLng;
-  _idwCache={n:s.length,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};
+  const _bi=buildSampleIndex(s,cellLa,cellLo,sIdxMode);
+  _idwCache={n:s.length,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,mode:_bi.mode,ix:_bi.ix,iLo:_bi.iLo,jLo:_bi.jLo,iHi:_bi.iHi,jHi:_bi.jHi,NJ:_bi.NJ};
   return _idwCache;}
 function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
   let num=0,den=0,near=1e9,nearD=0,nearST='bathymetric';
   const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
-  for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
+  for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=bkAt(C,i2,j2);if(!bk)continue;
     for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
       if(dist<near){near=dist;nearD=bk[k].d;nearST=bk[k].st;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
   if(!den)return null;
@@ -2943,22 +3072,44 @@ function buildAutoContours(){
   }
   const F=new Float32Array(W*H),OK=new Uint8Array(W*H);
   const cellLa=120/mLat,cellLo=120/mLngMin,sIx=pooledSampleIndex(pts,cellLa,cellLo);
+  /* v16.68 (C2): the dead inWaterFast() term is REMOVED here (in both C3a arms below). It used to
+     read `(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))`. near<=R1 was already required by
+     the && immediately to its left, so the OR was `(X||true)` = true for ANY X - the call ran
+     and its result was discarded. Dropping it leaves `(den&&near<=R1)`, which is the same
+     boolean by construction, for every pixel, whatever inWaterFast would have returned.
+     The intent that comment recorded is unchanged and still holds: a contour needs a genuinely
+     nearby sample regardless of zone - same reasoning as findDeepest(). inWaterFast() itself
+     and its three other call sites are untouched.
+     C3a (v16.68.3 §5a): mode read OFF sIx ONCE here, above the field loop - not inside the 3x3
+     probe. Two full loop bodies; arm A ('str') is byte-identical, per the accumulation span, to
+     the pre-C3a code. Arm B ('num') bounds-tests i3/j3 before forming the key, same as the other
+     two hot sites. */
+  const _ixoC=sIx.ix;
+  if(sIx.mode==='num'){
+    const _iLo=sIx.iLo,_iHi=sIx.iHi,_jLo=sIx.jLo,_jHi=sIx.jHi,_NJ=sIx.NJ;
+    for(let y=0;y<H;y++){const la=latAt(y);
+      for(let x=0;x<W;x++){const lo=lngAt(x);
+        let num=0,den=0,near=1e9,nearD=0;
+        const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
+        for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){
+          if(i3<_iLo||i3>_iHi||j3<_jLo||j3>_jHi)continue;
+          const bk=_ixoC[(i3-_iLo)*_NJ+(j3-_jLo)];if(!bk)continue;
+          for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
+            if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
+        const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1)?1:0;}}
+  }else{
+    /* arm A ('str') - indentation deliberately left matching the pre-C3a original (not re-flowed
+       to the extra if/else nesting level) so the accumulation span below is byte-identical to
+       HEAD - see the roadmap C3a entry for the direct comparison. */
   for(let y=0;y<H;y++){const la=latAt(y);
     for(let x=0;x<W;x++){const lo=lngAt(x);
       let num=0,den=0,near=1e9,nearD=0;
       const ci=Math.floor(la/cellLa),cj=Math.floor(lo/cellLo);
-      for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=sIx[i3+':'+j3];if(!bk)continue;
+      for(let i3=ci-1;i3<=ci+1;i3++)for(let j3=cj-1;j3<=cj+1;j3++){const bk=_ixoC[i3+':'+j3];if(!bk)continue;
         for(let k=0;k<bk.length;k++){const dy=(la-bk[k].lat)*mLat,dx=(lo-bk[k].lng)*mLng,dist=Math.sqrt(dx*dx+dy*dy);
           if(dist<near){near=dist;nearD=bk[k].d;}const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
-      /* v16.68 (C2): the dead inWaterFast() term is REMOVED here. It used to read
-         `(den&&near<=R1&&(inWaterFast(feats,la,lo)||near<=R1))`. near<=R1 was already required by
-         the && immediately to its left, so the OR was `(X||true)` = true for ANY X - the call ran
-         and its result was discarded. Dropping it leaves `(den&&near<=R1)`, which is the same
-         boolean by construction, for every pixel, whatever inWaterFast would have returned.
-         The intent that comment recorded is unchanged and still holds: a contour needs a genuinely
-         nearby sample regardless of zone - same reasoning as findDeepest(). inWaterFast() itself
-         and its three other call sites are untouched. */
       const i2=y*W+x;F[i2]=den?num/den:0;OK[i2]=(den&&near<=R1)?1:0;}}
+  }
   smoothField(F,OK,W,H,2,0); /* same de-noise as shading — keeps contours from going spaghetti on dense imports */
   /* C1 end = entry -> bucket index + field loop + smoothField. C2 = everything after: min/max
      scan, level selection, marching squares, polyline build and the layer swap. */
@@ -3590,10 +3741,16 @@ renderContours();
   const esc3=function(s){return String(s||'').replace(/[<>]/g,'');};
   function impIndex(){const s=[];for(let i=0;i<imported.length;i++)s.push({lat:imported[i][0],lng:imported[i][1],d:imported[i][2]});
     const mLat=111320,mLng=111320*Math.cos(-24.85*Math.PI/180),cellLa=120/mLat,cellLo=120/mLng;
-    return {s:s,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,ix:buildSampleIndex(s,cellLa,cellLo)};}
+    /* C3a: no cache here (fresh object every call, unchanged) - mode is read fresh from sIdxMode
+       every time, so it can never go stale. buildSampleIndex() derives its bounds from `s` itself,
+       NOT from ptsBounds()'s depthSamples()-anchored bb, which can be tighter than `imported`'s
+       extent (depthSamples() is mask-filtered) - see the roadmap C3a entry §2b for why a
+       bb-derived origin here would have silently dropped samples at construction. */
+    const _bi=buildSampleIndex(s,cellLa,cellLo,sIdxMode);
+    return {s:s,mLat:mLat,mLng:mLng,cellLa:cellLa,cellLo:cellLo,mode:_bi.mode,ix:_bi.ix,iLo:_bi.iLo,jLo:_bi.jLo,iHi:_bi.iHi,jHi:_bi.jHi,NJ:_bi.NJ};}
   function impAt(C,lat,lng){let num=0,den=0,near=1e9;
     const ci=Math.floor(lat/C.cellLa),cj=Math.floor(lng/C.cellLo);
-    for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=C.ix[i2+':'+j2];if(!bk)continue;
+    for(let i2=ci-1;i2<=ci+1;i2++)for(let j2=cj-1;j2<=cj+1;j2++){const bk=bkAt(C,i2,j2);if(!bk)continue;
       for(let k=0;k<bk.length;k++){const dy=(lat-bk[k].lat)*C.mLat,dx=(lng-bk[k].lng)*C.mLng,dist=Math.sqrt(dx*dx+dy*dy);
         if(dist<near)near=dist;const w=1/(dist*dist+1);num+=w*bk[k].d;den+=w;}}
     return den?{d:num/den,near:near}:null;}

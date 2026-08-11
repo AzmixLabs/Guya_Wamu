@@ -1,5 +1,137 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.69 · 11 Aug 2026 — C3a SHIPPED: numeric bucket key for `buildSampleIndex()`, diagnostic A/B
+toggle, off-phone verification complete. Build **2026.08.11a**. Repo head before this build was
+`aa87b6b` (the v16.68.3 planning entry). **ON-PHONE PERF RUN NOT YET DONE** — this entry ships the
+code and the off-phone proof only; §5's protocol below is written for Aaron to execute.*
+
+**1. WHAT SHIPPED.** `buildSampleIndex(pts,cellLa,cellLo,mode)` now takes a `mode` ('str'
+default/arm A = shipped string key, unchanged formula; 'num' = arm B, new) and returns
+`{ix,mode,iLo,jLo,iHi,jHi,NJ}` instead of a bare bucket object — origin travels WITH the buckets,
+computed from `pts` itself on every call (not from `ptsBounds()`/`bb`), per v16.68.3 §2b/§6d. A new
+`bkAt(C,i2,j2)` helper does the bounds-test-before-key-formation lookup (§3/§6c) for the two COLD
+sites. All FIVE probe sites changed: `pooledSampleIndex()`, the r0 precompute, the shade pixel
+loop, `buildAutoContours()`'s field loop (HOT, mode hoisted once above the loop, two full loop
+bodies per v16.68.3 §5a), and `idwIndex()`/`idwDepthAt()`, `impIndex()`/`impAt()` (COLD, per-probe
+branch via `bkAt()`, allowed per §5a). A new checkbox `#six-mode-toggle` ("🔢 Numeric bucket key
+(diagnostic, C3a)") sits under the existing perf-toggle; flipping it sets the global `sIdxMode` and
+clears the perf window (§5d) via the same clear the perf-toggle itself performs. The perf overlay
+now prints `key <mode>` in its footer, read off the SAME object (`sIx.mode`, captured as
+`_pf.sixMode`) every probe site reads mode from — not off the checkbox (§5c). Both cache guards
+enumerated in v16.68.3 §5b now check mode alongside their existing key: `_sampleIndexCache.mode`
+alongside `poolVersion` (`pooledSampleIndex`), `_idwCache.mode` alongside `n===s.length`
+(`idwIndex`, scope-fenced — the `n===s.length`→`poolVersion` re-key stays OUT of scope per
+v16.68.3's scope fence). `impIndex()` builds fresh every call — confirmed still no cache, nothing
+to guard. Container stays a plain object in BOTH arms (§2a) — Map/dense-array is explicitly C3b,
+not this build.
+
+**2. CONTAINER CHOICE AND ITS CEILING — STATED BEFORE THE NUMBERS (§2a).** The saving is
+container-bound, not key-bound: a max key of ~1.89 M at the current pool against a few thousand
+occupied cells is very sparse for a plain object, so V8/JSC puts it in dictionary-mode elements
+(numeric hashing, no string concat, no allocation) — a real win over the string arm, but NOT the
+dense-array/CSR fast path C3b would give. A saving that lands at the LOW end of the estimate (49–130
+ms per v16.68.3 §4) should read as "container-bound — C3b is the next lever," not as "C3 doesn't
+help." This framing is recorded here BEFORE the on-phone numbers exist, per the spec's requirement.
+
+**3. WHAT EACH CALLER PASSES TO `buildSampleIndex()` — VERIFIED FROM THE FILE (§2b).**
+- `pooledSampleIndex()` — passes `buildShade()`'s/`buildAutoContours()`'s `pts`, which is
+  `depthSamples()`, the SAME array `ptsBounds()` bounds. Consistent.
+- `idwIndex()` — `const s=depthSamples();` then passes `s`. Same array. Consistent.
+- `impIndex()` — builds a FRESH array from `imported`, NOT `depthSamples()`. Confirmed: under the
+  OLD (pre-C3a) design, a `ptsBounds()`/`bb`-derived origin here would have been silently wrong,
+  because `depthSamples()` is mask-filtered and the pool bbox can be TIGHTER than `imported`'s own
+  extent — samples outside that tighter window would have been dropped at construction with no
+  error. **This is the confirmed bug the §2b amendment prevents**, not merely a footnote: C3a's
+  spec (compute bounds from `pts` itself, inside `buildSampleIndex()`, every call) sidesteps it
+  structurally rather than requiring `impIndex()` to be specially handled.
+
+**4. ARM A BYTE COMPARISON AGAINST HEAD (`aa87b6b`) — §6.** SPAN DEFINITION: opens at
+`for(let m=0;m<bk.length;m++){` / `for(let k=0;k<bk.length;k++){` immediately after
+`if(!bk)continue;`; closes at the matching `}` that terminates THAT loop (brace-depth-counted, not
+textual), excluding the bucket-lookup statement and the i2/j2 loop headers above it (permitted to
+change — arm A's enclosing loop sources `ix` off `sIx.ix` now, a differently-shaped object). Ran
+programmatically (not by eye) via a Node harness that brace-matches the span out of both HEAD and
+the working tree and does a strict string `===`:
+  - r0 precompute (`:2427` pre-edit): 167 bytes, IDENTICAL.
+  - shade pixel loop (`:2448` pre-edit): 238 bytes, IDENTICAL.
+  - `buildAutoContours` field loop (`:2950` pre-edit): 206 bytes, IDENTICAL.
+All three: **byte-for-byte identical, including leading whitespace** — arm A's else-branch bodies
+were deliberately left at the PRE-C3a original indentation (not re-flowed to the new if/else
+nesting level) specifically so this comparison is literal, not "equivalent modulo whitespace."
+Harness: `C:\Users\Az\AppData\Local\Temp\claude\D--Claude-Code\7fd6f213-2ed1-426e-8cbb-8b6cc305c268\scratchpad\c3a_span_compare.js`.
+
+**5. BIT-EXACTNESS — §7.** Geometric, not compositional, per the spec's own framing (a bijective
+re-map has no firing condition, so the v16.68.1 §B representative-pool rule doesn't apply — what
+matters is the bounds domain, not pool composition). A Node harness extracts the REAL, shipped
+`buildSampleIndex()`/`bkAt()` verbatim (brace-matched extraction + `eval`, not retyped) from
+`index.html` and runs them against a small synthetic pool (26 points, southern-hemisphere
+magnitude lat/lng, four deliberate bbox corners + one isolated point):
+  - **(a) key-formation domain, exhaustive** over `[iLo-2..iHi+2]×[jLo-2..jHi+2]` (189 in-window +
+    136 out-of-window cells at this pool's scale): all in-window keys distinct (injectivity), all
+    out-of-window probes skip (`bkAt`→`undefined`). **Constructed row-wrap case**, per §3/§7a: a
+    dedicated 4-corner pool puts a real sample at `(iLo,jHi)`; querying `(iLo+1,jLo-1)` — which
+    WITHOUT bounds-test-before-key-formation would compute `key=(1)*NJ+(-1)=NJ-1`, IDENTICAL to
+    `(iLo,jHi)`'s correct key — is confirmed to skip (`undefined`), not alias into that occupied
+    bucket. `cj-1` at `jLo` and `cj+1` at `jHi` explicitly checked for every row `i2∈[iLo,iHi]`.
+  - **(b) end-to-end value compare, arm A vs arm B**, per site, over 74 query points (interior grid
+    + boundary-hugging + near-isolated-point + far-outside-pool):
+    - `:2427` r0 array — 26/26 samples bit-identical.
+    - `:2448` shade pixel loop — compared the full `{num,den,near,nearD,nearR0,nearST}` tuple that
+      the (unchanged, byte-proven-identical) downstream code turns into the alpha/ImageData buffer
+      — 74/74 identical.
+    - `:2950` `buildAutoContours` F field — compared `{F,OK}` per query, 74/74 identical; the level
+      set is a deterministic, mode-independent function of `F`/`OK` once built (no `sIx` reference
+      anywhere in the marching-squares code), so identical `F`/`OK` implies an identical level set
+      without re-running marching squares under both arms.
+    - `:2789`/`:3595` `idwDepthAt`/`impAt` returned depth — both share one accumulation shape
+      (fixed, non-pool-anchored `cellLa`/`cellLo`), tested together, 74/74 identical.
+  - **0 failures across every check.** Harness:
+    `C:\Users\Az\AppData\Local\Temp\claude\D--Claude-Code\7fd6f213-2ed1-426e-8cbb-8b6cc305c268\scratchpad\c3a_bitexact.js`.
+
+**6. §8 CHECKLIST — ALL VERIFIED.**
+  - `node --check` on both extracted script blocks: PASS (Leaflet block 147,552 bytes; app block).
+  - Leaflet inner-content SHA-256: `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`
+    — MATCHES the required value, both before and after the indentation fix that made the arm-A
+    spans byte-identical (re-verified after the final edit, diff against the first extraction was
+    empty).
+  - Diff-grepped absent: `zoneAt(`, `spotsUnlocked`, `notake:true` (ORDER-array/zone-order
+    literal) — 0 matches in the `+`/`-` diff. Manually confirmed still PRESENT and untouched in the
+    file: `zoneAt()` (:1327, unchanged), `const ORDER=["MNP","CPZ","HPZ","GUZ"];` (:1229,
+    unchanged), the green-zone `dragend` safeguard + `spotsUnlocked` (:1576-1580, unchanged — all
+    three sit well outside every diff hunk). Both `<style>` blocks (Leaflet :17-683, app :686-1028)
+    untouched — every diff hunk touching the panel HTML sits at :1049-1168 (build string + the new
+    checkbox), well below the style blocks' line range.
+  - Build string bumped in both locations (`:1052`, `:1091` pre-edit) to **2026.08.11a** — read
+    from the file (was `2026.08.09c`), checked against git log and roadmap history for
+    `2026.08.1[01]` (no match — today is the first build of 11 Aug, so `a` is correct, not a
+    collision).
+  - `git diff` reviewed hunk-by-hunk before commit — matches intended scope exactly, nothing
+    outside it.
+
+**7. §5 — THE ON-PHONE RUN IS NOT DONE. PROTOCOL AND PREDICTION FOR AARON TO RUN.**
+Fixed map centre, overlay ON, flip the `#six-mode-toggle` checkbox every 10 gestures. Force-close/
+reopen the app first; confirm build `2026.08.11a` in-panel before starting. **Flipping clears the
+perf window (§5d)** — protocol per gesture batch: flip → window clears → pan 11 times → screenshot
+at `n=10/10` (by then the window holds gestures 2–11 and the index-rebuild gesture has rolled out
+of it). Screenshot must show the `key <mode>` footer line so the arm that produced the numbers is
+provable from the image itself, not asserted. Run at the same locations/zooms as v16.68.2's table
+(Redcliffe z11, Brisbane z10, Cleveland z11, Bargara z11) for direct comparability.
+**PREDICTION, RECORDED BEFORE THE RUN:** string-key cost is proportional to pixel count and
+INDEPENDENT of bucket occupancy, so at equal W×H the ABSOLUTE saving (arm A minus arm B, on S3)
+should be near-identical at Redcliffe and Brisbane despite their ~100 ms S3 gap (v16.68.2 measured
+189.5 vs 291.0 ms). A saving that instead tracks S3 PROPORTIONALLY falsifies the model and means
+the residual is inner-loop work, not key churn. This build did NOT run that comparison — it only
+proves arm A is byte-identical to shipped and arm B is bit-exact against arm A off-phone.
+
+**NEXT-SESSION NOTE:** build **2026.08.11a**, roadmap **v16.69**, repo head is this entry's own
+commit. Code shipped and off-phone-verified; **on-phone A/B perf run per §5/§7 above is the next
+job** — not a new build. After that run: if C3a lands at the low end of the 49–130 ms estimate
+(§2a's container-bound framing), that is expected and NOT a reason to re-open C3a; the next lever
+is C3b (CSR flat arrays) dispatch-gated on this run's numbers per v16.68.3 §7a. Do not start C3b
+before the on-phone numbers exist. A follow-up commit should delete the dead arm (the 'str' branch
+and the toggle) once the A/B comparison is done and arm B is confirmed safe to ship as the only
+path — not yet, since the on-phone run hasn't happened.
+
 *v16.68.3 · 11 Aug 2026 — planning only, no build, no code. Build stays **2026.08.09c**.
 Repo head `efe3862` at session start (the v16.68.2 entry). **RATING OF `_idwCache` AGAINST C3
 COMPLETE — the v16.68.2 §10 recommendation is REVERSED.** §§1–5, 8 are the planning session's
