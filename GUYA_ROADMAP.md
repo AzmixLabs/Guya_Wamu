@@ -1,5 +1,168 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.68.3 · 11 Aug 2026 — planning only, no build, no code. Build stays **2026.08.09c**.
+Repo head `efe3862` at session start (the v16.68.2 entry). **RATING OF `_idwCache` AGAINST C3
+COMPLETE — the v16.68.2 §10 recommendation is REVERSED.** §§1–5, 8 are the planning session's
+own text. **§6 was written in planning and is WRONG by two orders of magnitude; the derivation
+that corrects it (§§6a–6d) was done by Claude Code against `index.html`, and §6's original
+figures are left in place struck through.** This is the entry the "DERIVE FROM THE FILE, do not
+inherit from planning" instruction was written for, and it is the reason the C3a build did not
+ship a broken key.*
+
+**1. CORRECTION TO v16.68.2 §10 — `_idwCache` CANNOT PAY INTO S3.** §10 read `idw MISS` on every
+pan as the IDW structure rebuilding every pan with the cost landing in S3. v16.65's own
+instrumentation note states the opposite and is authoritative: `buildShade()` nulls `_idwCache` on
+its first line and never repopulates it; only `idwIndex()` (tap-to-read) does. MISS on every pan is
+the PREDICTED reading for a clean pan protocol — a HIT would have meant a contaminated gesture.
+Nothing repopulates it during a pan, so there is no per-pan cost to remove. **Expected S3 saving:
+zero.** §10 also inverted the `six HIT` comparison, which measures a different cache on a different
+path.
+
+**2. THE PROPOSED EDIT IS A NO-OP AS SCOPED.** Re-keying `s.length` → `poolVersion` changes nothing
+while `buildShade()` unconditionally nulls the cache first. A real fix must also remove the nulling,
+which touches tap-to-read and `impIndex()` (the Navionics-comparison path v16.59 deliberately fenced
+off). **Recorded so a future session does not dispatch the bare re-key.**
+
+**3. `_idwCache` RECLASSIFIED, NOT CLOSED.** Stays on OPEN/LOW PRIORITY, moved from "perf / S3" to
+"correctness / tap path": the `s.length` key can collide across two equal-length pools and serve a
+stale index to tap-to-read. Small, real, not a pan cost.
+
+**4. C3 IS THE NEXT DISPATCH.** `sIx[i2+':'+j2]` = 3.24 M concat+hash per shade rebuild at the
+600×600 cap (360,000 px × 9), plus 1.17 M in C1 at 360×360 where contours still build (post-C2,
+Bargara only). At 15–40 ns per concat+hash on JSC that is **49–130 ms**, the right order to be the
+dominant remaining S3 term (measured S3 189.5 / 291.0 / 173.5 / 151.5). Estimate with arithmetic
+exposed, not a measurement.
+
+**5. GATE — IN-BUILD TOGGLE, NOT ALTERNATING BUILDS.** The v16.68.2 §5 binding (S3 moved up to
+119 ms between builds touching nothing in S3) is satisfied more cleanly by shipping both key schemes
+behind a diagnostic toggle, default OFF, flipped every 10 gestures at a fixed map centre — same
+build, same session, same viewport, same pool. Alternating builds requires a Pages round-trip and
+force-close between arms and still spans container state. Same precedent as the perf overlay. Dead
+branch removed in a follow-up commit. **PREDICT THE SEGMENT:** string cost is ∝ pixel count and
+independent of bucket occupancy, so at equal W×H the ABSOLUTE saving should be near-identical at
+Redcliffe and Brisbane despite their ~100 ms S3 gap. A saving that tracks S3 proportionally
+falsifies the model and means the residual is inner-loop work, not key churn.
+
+**6. THE ONE REAL BUG RISK — NEGATIVE CELL INDICES.** `-3:5` is a unique string key;
+`i2*STRIDE+j2` is NOT injective for negative i2/j2, and the 3×3 probe reaches outside the grid on
+any viewport extending past the pool bbox. Silent collision, wrong bucket, no error. **The hazard is
+real and correctly identified; the remedy and the sizing below are both wrong.**
+~~Spec as `((i2+BIAS)<<SHIFT)|(j2+BIAS)` with a runtime guard asserting `j2+BIAS` is inside
+`[0,1<<SHIFT)`. Indicative sizing (pool lat span 2.90° at cellLa≈0.001078° → ~2,690 cells):
+SHIFT=12, BIAS=512, max key ≈13.1 M, a small int in the engine fast path.~~ **SUPERSEDED by §6a.
+The sizing was derived from the pool's cell SPAN (~2,690); `buildSampleIndex()` (`index.html:2098`)
+keys on ABSOLUTE floor-indices, which are ~23k–25.6k (lat) and ~125k–126k (lng). `(i2+512)` stays
+negative for every point in the pool and `(j2+512)` overruns a 12-bit field ~30×, smearing into the
+i2 field. Not an edge case — broken for every point. Additionally the `assert`-style guard is the
+wrong shape; see §6c.**
+
+**6a. DERIVED SIZING — FROM THE FILE, NOT FROM PLANNING.** Read off `index.html` at head `efe3862`:
+
+| quantity | source | value |
+|---|---|---|
+| `cellLa = 120/mLat`, `mLat=111320` | `:2394`, `:2330` | 1.077973e-3° |
+| `i2 = floor(lat/cellLa)`, lat −24.7475…−27.642694 | `:2098` | **−25,644 … −22,958** (2,687 cells) |
+| `mLngMin = 111320·cos(27.642694°)` | `:2391` | 98,622.7 |
+| `cellLo = 120/mLngMin` | `:2394` | 1.216766e-3° |
+| `j2 = floor(lng/cellLo)`, lng 152.47…153.324175 | `:2098` | **125,307 … 126,009** (703 cells) |
+
+Lat/lng extents: repo CSVs give −27.642694…−25.894569 / 152.736646…153.324175; Bargara's
+−24.7475 / ~152.47 arrives via imported datasets, matching the on-phone range in the v16.60 comment
+at `:2377`. **`i2` needs 15 bits plus sign, `j2` needs 17 — so no packing of the ABSOLUTE indices
+fits the fast path (§6b).** The key must be ORIGIN-RELATIVE, anchored on the pool bbox `bb` already
+cached by `ptsBounds()` (`:2148`):
+
+```
+iLo = floor(bb.minLa/cellLa)              jLo = floor(bb.minLo/cellLo)
+iHi = floor(bb.maxLa/cellLa)              jHi = floor(bb.maxLo/cellLo)
+NJ  = jHi - jLo + 1                       ≈ 703   (runtime-derived — see below)
+key = (i2-iLo)*NJ + (j2-jLo)              max ≈ 2686*703 + 702 = 1,888,960
+```
+
+≈1.89 M: a small int and a valid array index. Injective iff `(j2-jLo) ∈ [0,NJ)`, which §6c enforces.
+
+**FORWARD CHECK AT NATIONAL SCALE — the design does not need revisiting for the expansion queue.**
+Working shown: over lng 113–154, lat −10…−44, `mLngMin = 111320·cos(44°) = 80,077`,
+`cellLo = 120/80077 = 1.49856e-3°`, `NJ ≈ 41/1.49856e-3 ≈ 27,359`, `NI ≈ 34/1.077973e-3 ≈ 31,540`,
+`max key ≈ 31,540 × 27,359 ≈ 8.63e8` — still comfortably under 2³² (4.29e9). **`NJ` is
+runtime-derived from `bb` on every build; 703 is illustrative of the current pool only and must
+never be hard-coded.**
+
+**6b. THE TRAP §6 DID NOT REACH — KEYS ≥ 2³² ARE STRINGIFIED ANYWAY.** A plain JS object keeps a
+numeric property in indexed/element storage only for `0 ≤ k < 2³²−1`; past that the engine converts
+the key to a string. Any injective packing of the absolute indices lands ≳6.7e9, so "just use a
+bigger BIAS" **reintroduces the exact concat-and-hash cost C3 exists to remove, while looking like a
+fix** — and would have measured as a null result with no visible defect to explain it. The saving is
+contingent on the key staying under 2³², not merely on it being a number. **General lesson: for a
+JS-object key, "numeric" is not the property that buys the fast path — "numeric AND a valid array
+index" is.**
+
+**6c. ROW-WRAP ALIASING — THE SILENT FAILURE MODE. The bounds test must PRECEDE key formation.**
+"Out-of-window is a skip, bit-identical to the string version's `undefined` miss" holds only in that
+order. Formed first, `j2-jLo = -1` yields `(i2-iLo)*NJ - 1` — a VALID key belonging to the previous
+row's LAST cell. That is a wrong-bucket **HIT**, not a miss: no error, no `continue`, real samples
+returned from a cell one row up and ~700 cells away, firing at exactly the `ci-1` pool-edge case the
+3×3 probe reaches on every viewport touching the bbox edge. **Spec: test `i2` against `[iLo,iHi]`
+and `j2` against `[jLo,jHi]` INDEPENDENTLY, and `continue` BEFORE computing `key`.** With that
+ordering the skip is bit-exact by construction — every sample lies inside the window by definition
+of `bb`, so an out-of-window cell provably holds no sample, and the string version would have missed
+there too. This also subsumes the negative-index hazard §6 raised, without a fallible assert. **A
+guard that asserts is the wrong shape here; the correct shape is a bounds test that skips.**
+
+**6d. ORIGIN PURITY — VERIFIED FROM THE FILE, NOT INHERITED FROM v16.59.** `_sampleIndexCache` is
+`poolVersion`-keyed, so an index built with one origin and probed with another is a silent
+wrong-bucket read for **every pan in that `poolVersion`** — the worst failure shape available here.
+Both preconditions checked directly against `index.html` at `efe3862`:
+
+- `ptsBounds()` (`:2148–2156`) caches on `poolVersion` **in its own body**
+  (`_boundsVersion===poolVersion&&_boundsCache`) and computes min/max over all of `pts` with no
+  viewport term. **Confirmed.**
+- `bb` is `const` in BOTH builders — `:2312` (`buildShade`) and `:2864` (`buildAutoContours`) — each
+  assigned only from `ptsBounds(pts)` and never reassigned anywhere in the app script (checked by
+  grep for `bb =`; only those two sites plus the v16.60 comment at `:2102`). The ±30% viewport
+  clipping at `:2313–2324` and `:2865–2877` writes to separate `let minLa/maxLa/minLo/maxLo` copies,
+  leaving `bb` pure. **Confirmed: `bb` is the pool bbox, not viewport-clipped render bounds.**
+
+**ENFORCE STRUCTURALLY: every probe site reads `NJ`/`iLo`/`jLo` off the SAME object it reads the
+buckets off. Never a module-level copy, never a second call to re-derive them.**
+
+**7. STAGED: C3a THEN, ONLY IF WARRANTED, C3b.** C3a = numeric key only — a bijective re-map of the
+same (i2,j2), bit-exact by construction. ~~`pooledSampleIndex()`/`idwIndex()`/`impIndex()` all
+unaffected.~~ **SUPERSEDED: not achievable. The origin must travel WITH the index (§6d), so
+`buildSampleIndex()`'s RETURN SHAPE changes (`{ix,iLo,jLo,iHi,jHi,NJ}`) and five probe sites change
+with it: `:2427` (r0 precompute), `:2448` (shade pixel loop), `:2950` (`buildAutoContours`), `:2789`
+(`idwIndex` read), `:3595` (`impIndex` read).** Threading the origin ON the returned object is the
+MITIGATION for the v16.59 multi-anchor hazard, not a re-exposure of it — a caller cannot pair one
+index with another's origin unless it mixes objects, which §6d forbids. But the blast radius is
+larger than planned, and `impIndex()` is back in scope: **bit-exactness must now be proven for the
+`idwIndex()` and `impIndex()` probe paths, not only the shade loop. The Navionics-comparison tool
+has no gate of its own.** C3b = CSR flat arrays (removes hashing entirely, not just the concat) is a
+rewrite of `buildSampleIndex()`, which three callers reach with different `cellLo` anchors —
+dispatch only if C3a lands at the low end of the estimate.
+
+**7a. STAGING HOLDS BUT IS WEAKENED.** C3a now changes the return shape and all five probe sites, so
+C3b is a smaller MARGINAL step than planned — the interface churn C3b was going to pay for is paid
+by C3a. C3a still leaves bucket CONSTRUCTION and the container type unchanged; C3b changes both plus
+memory layout. **Measure C3a first regardless.** One asymmetry to record now: C3a's key scales to
+national extent (§6a), but C3b's CSR row-pointer array is sized `NI×NJ+1`, which is ~1.89 M entries
+(~7.6 MB Int32) at the current pool and **~8.63e8 entries (~3.45 GB) at national extent — not
+viable.** C3b would need a hashed or per-row-compressed origin if the pool ever widens. C3a carries
+no such ceiling.
+
+**8. FLAGGED, NOT QUEUED.** C3 removes a constant from a 360,000-iteration loop; it likely will not
+bring Brisbane z10 (compute 326.5) under the ~200 ms threshold on its own. The next lever after it
+is the 600×600 grid cap (`:2328`), which changes output pixels — a visual-quality decision, not a
+bit-exact optimisation. Recorded so the endpoint is not oversold. The 350 ms `moveend` debounce stays
+UNTOUCHED.
+
+**NEXT-SESSION NOTE:** build **2026.08.09c**, roadmap **v16.68.3**, repo head `efe3862` before this
+entry's own commit. No code shipped. Decided: **C3a is the dispatch, `_idwCache` reversed and
+reclassified to low-priority correctness.** Next job: **the C3a build** — origin-relative key per
+§6a, bounds-test-before-key per §6c, origin threaded on the returned object per §6d, toggle-gated
+A/B per §5, bit-exactness proven off-phone across ALL FIVE probe sites including `impIndex()` per
+§7, perf gate on-phone at one fixed centre. Do not dispatch the bare `_idwCache` re-key (§2). Do not
+inherit §6's struck-through sizing.
+
 *v16.68.2 · 9 Aug 2026 — ON-PHONE RUN FOR `2026.08.09c` COMPLETE. **C2 EARLY-OUT CONFIRMED FIRING
 ON-DEVICE; §B RETIRED.** Planning/measurement only, no build, no code. Build stays **2026.08.09c**.
 Repo head `b3a5195` (the v16.68.1 entry, pushed; project-knowledge copy verified byte-identical by
