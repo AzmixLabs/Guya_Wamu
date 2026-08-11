@@ -1,5 +1,123 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.69.1 · 11 Aug 2026 — planning only, no build, no code. Build stays **2026.08.11a**. Repo head
+`82df814` (the v16.69 §8 additions) at session start. **This entry exists to fix the on-phone
+protocol BEFORE it is run, not after.** v16.69 §7's protocol is sound but incomplete in four ways
+that would each cost a re-run, and it carries no prediction for the contour half of C3a. It is
+SUPERSEDED by §2 below. Also records two open verifications and one sync state. **Nothing here is a
+measurement — C3a's saving remains UNMEASURED.***
+
+**1. WHY §7 NEEDED AMENDING — four gaps, each of which invalidates a run rather than degrading it.**
+
+  1. **No pre-flight check that the toggle is live.** The two arms are bit-exact by design, so a
+     toggle that is wired but never actually read yields two identical arms and a null result that
+     is indistinguishable from "C3a doesn't help". §5c wired the `key <mode>` footer off `sIx.mode`
+     precisely so the arm is provable from the image — but §7 never says to CONFIRM THE FOOTER MOVES
+     before spending 70+ gestures.
+  2. **No within-session drift check.** The whole reason C3a shipped a toggle rather than two
+     alternating builds (v16.68.3 §5) was to hold everything constant except the key scheme. That
+     buys nothing unless one location runs **A → B → A** and the second A is compared to the first.
+     v16.68.2 §5 measured S3 moving up to 119 ms between builds that touched nothing in S3; if that
+     effect is intra-session rather than inter-session, a paired A/B is compromised too, and the
+     repeat-A is the only thing that would reveal it.
+  3. **No stated invalidator.** The headline prediction holds only at equal pixel count, so the
+     shade W×H must READ 600×600 on both compared screenshots. And Redcliffe reported `skip 10` in
+     v16.68.2 §9, cause unidentified — a non-zero `skip` means the median rests on fewer rebuilds
+     than the protocol assumes.
+  4. **No prediction for the contour half.** C3a removes ~1.166 M keys per rebuild from the C1
+     field loop as well as ~3.24 M from S3, and Bargara is the ONLY location where contours still
+     build post-C2. §7 predicted S3 and left C1 unpredicted, which makes the Bargara result
+     unfalsifiable.
+
+**2. THE PROTOCOL — SUPERSEDES v16.69 §7. Run this, not that.**
+
+**PRE-FLIGHT (do not skip — this is gap 1).** Force-close and reopen the home-screen app. Confirm
+`2026.08.11a` in the panel header. Enable depth shading, auto contours and the rebuild-timing
+overlay. **Then flip `#six-mode-toggle` ONCE and confirm the `key <mode>` footer line CHANGES.**
+If the footer does not move, ABORT — the checkbox is dead and every subsequent number is worthless.
+
+**PER BATCH.** Flip → the perf window clears (§5d) → pan **11 times** → screenshot at `n=10/10`
+with the `key <mode>` footer visible in frame. Eleven, not ten: the first gesture after a flip
+rebuilds the index and must roll out of the window before the screenshot.
+
+| # | location / zoom | arms | what it is for | droppable |
+|---|---|---|---|---|
+| 1 | Redcliffe z11 | **A → B → A** | headline + the within-session drift check (gap 2) | no |
+| 2 | Brisbane z10 | A → B | the equal-absolute-saving prediction (P1) | no |
+| 3 | Bargara z11 | A → B | the ONLY place C1 is measurable (P2) | no |
+| 4 | Cleveland z11 | A → B | third Moreton point, corroborates P1 | **yes** |
+
+Seven screenshots / 77 gestures required; nine / 99 with Cleveland. **If fatigue sets in, drop
+Cleveland — nothing else.** The repeat-A at Redcliffe is not optional; it is the only check on the
+apparatus itself.
+
+**INVALIDATORS (gap 3).** Confirm the shade grid reads **600×600** on both the Redcliffe and
+Brisbane screenshots — the P1 prediction is void at unequal pixel count. Record `skip` on every
+reading; a non-zero value on either arm means that median rests on fewer rebuilds than assumed and
+must be reported, not smoothed over.
+
+**DO NOT USE v16.68.2's TABLE AS THE ARM-A BASELINE.** v16.69 §7 says to run at the same
+locations/zooms as v16.68.2 "for direct comparability", which is true as a bonus and dangerous as a
+method. The arm-A baseline is the arm-A screenshot from THIS session at THIS centre. Comparing an
+arm-B reading against v16.68.2's numbers reintroduces the exact ±119 ms cross-session confound the
+toggle was built to eliminate (v16.68.2 §5).
+
+**3. PREDICTIONS, RECORDED BEFORE THE RUN.**
+
+- **P1 — S3, the headline.** String-key cost is proportional to pixel count and INDEPENDENT of
+  bucket occupancy, so at equal W×H the ABSOLUTE saving (arm A minus arm B, on S3) should be
+  near-identical at Redcliffe and Brisbane despite their ~100 ms S3 gap (189.5 vs 291.0 in
+  v16.68.2). A saving that instead tracks S3 PROPORTIONALLY falsifies the model: the residual is
+  inner-loop work, not key churn. Unchanged from v16.69 §7; restated so the set is in one place.
+- **P2 — C1 at Bargara, new.** 360×360 × 9 = 1,166,400 keys per contour rebuild; at 15–40 ns per
+  concat+hash that is **17–47 ms** off a measured C1 of 117.0 (v16.68.2). Bargara is the only
+  location where this term exists at all — everywhere else C2's early-out means C1 reads `0.0` and
+  the contour half of C3a is structurally unmeasurable.
+- **P3 — the repeat A.** Redcliffe's second arm-A median should return to within the noise of the
+  first. If it does not, intra-session drift is real, and that is a finding about the MEASUREMENT
+  APPARATUS that outranks the C3a result — do not report a saving derived from a compromised pair.
+- **P4 — how to read a small number.** Per §2a, a sparse integer-keyed object sits in the engine's
+  dictionary-mode elements, not the array fast path, so a saving at the LOW end of the 49–130 ms
+  estimate is **CONTAINER-BOUND and points at C3b as the lever** — it is NOT "C3 doesn't help" and
+  is NOT grounds to re-open C3a.
+
+**4. TWO OPEN VERIFICATIONS.**
+
+**4a. ORIGIN-VARIABLE SCOPE — one grep, before the run.** The three hot probe sites use three
+distinct bucket variables (`_ixo`, `_ixoS`, `_ixoC`) but a SINGLE shared set of origin names
+(`_iLo`/`_iHi`/`_jLo`/`_jHi`/`_NJ`). If those are per-function locals there is nothing to see. If
+any is module-level, that is precisely the §4 origin-purity hazard — one function's origin surviving
+into another function's probe, with a different bucket store — and it bites only with the toggle ON,
+i.e. during the run itself. Check:
+`Select-String -Path .\index.html -Pattern '(let|const|var)\s+_iLo' | Select-Object LineNumber,Line`
+Expected: one declaration inside each function that probes. **A single top-level declaration is the
+finding, and it blocks the run.** Note this is a scope check only; `bkAt()`'s cold path already
+reads origin, bounds and buckets off the one object `C` and is structurally correct by construction.
+
+**4b. PROJECT-KNOWLEDGE SYNC.** The project-knowledge mirror was verified at **v16.68.2** at the top
+of the session that produced v16.68.3 — it is now three entries stale (v16.68.3, v16.69, v16.69.1).
+Re-upload the committed repo copy to project knowledge after this entry lands. Repo → PK, one
+direction, per the standing rule. A chat opening on the stale mirror would read the entire C3a arc
+as not having happened and could not detect that from inside.
+
+**5. STANDING RULE PROMOTED FROM GAP 1.** An A/B toggle between two arms that are bit-exact by
+design has the same observability problem as an early-out sharing a return path (v16.68.2 §2): a
+dead toggle and a zero saving produce the same screenshot. **Any bit-exact A/B must ship an arm
+indicator read off the same object the measured code reads, and the protocol must confirm the
+indicator MOVES before the run begins.** The indicator was built correctly here; the protocol simply
+did not use it.
+
+**NEXT-SESSION NOTE:** build **2026.08.11a**, roadmap **v16.69.1**, repo head is this entry's own
+commit. No code shipped. **Next job: the ON-PHONE A/B RUN per §2 above — not a build.** Do the §4a
+scope check first; it blocks the run. C3a's saving is UNMEASURED and the 49–130 ms figure is
+arithmetic, not a measurement, and may be zero. After the run, in order: the dead-arm cleanup commit
+(delete the `'str'` branch and the toggle, carrying v16.69 §8b's duplicated perf-window clear —
+confirm the perf toggle's own copy survives as the sole remaining one), then C3b dispatch-gated on
+the numbers per v16.68.3 §7a. Do not start C3b before the numbers exist. Do not dispatch the bare
+`_idwCache` `poolVersion` re-key (v16.68.3 §2 — it is a no-op while `buildShade()` nulls the cache
+on its first line; the mode term added to its guard is a separate change and already shipped). The
+350 ms `moveend` debounce and the 600×600 grid cap both stay UNTOUCHED.
+
 *v16.69 · 11 Aug 2026 — C3a SHIPPED: numeric bucket key for `buildSampleIndex()`, diagnostic A/B
 toggle, off-phone verification complete. Build **2026.08.11a**. Repo head before this build was
 `aa87b6b` (the v16.68.3 planning entry). **ON-PHONE PERF RUN NOT YET DONE. C3a's SAVING IS
@@ -112,6 +230,8 @@ magnitude lat/lng, four deliberate bbox corners + one isolated point):
     outside it.
 
 **7. §5 — THE ON-PHONE RUN IS NOT DONE. PROTOCOL AND PREDICTION FOR AARON TO RUN.**
+**SUPERSEDED by v16.69.1 §2 — that protocol adds a pre-flight toggle check, an A→B→A drift arm, stated invalidators and a C1 prediction. Run v16.69.1 §2, not this. Retained for the record.**
+
 Fixed map centre, overlay ON, flip the `#six-mode-toggle` checkbox every 10 gestures. Force-close/
 reopen the app first; confirm build `2026.08.11a` in-panel before starting. **Flipping clears the
 perf window (§5d)** — protocol per gesture batch: flip → window clears → pan 11 times → screenshot
