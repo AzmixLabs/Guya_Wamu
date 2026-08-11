@@ -2,8 +2,11 @@
 
 *v16.69 · 11 Aug 2026 — C3a SHIPPED: numeric bucket key for `buildSampleIndex()`, diagnostic A/B
 toggle, off-phone verification complete. Build **2026.08.11a**. Repo head before this build was
-`aa87b6b` (the v16.68.3 planning entry). **ON-PHONE PERF RUN NOT YET DONE** — this entry ships the
-code and the off-phone proof only; §5's protocol below is written for Aaron to execute.*
+`aa87b6b` (the v16.68.3 planning entry). **ON-PHONE PERF RUN NOT YET DONE. C3a's SAVING IS
+UNMEASURED — NOTHING IN THIS ENTRY MAY BE READ AS VALIDATED.** What is proven here is SAFETY only
+(arm A byte-identical to shipped, arm B bit-exact against arm A, both off-phone). Whether C3a is
+worth anything is an open question until §7's protocol runs on the device; §5's estimate of
+49–130 ms is arithmetic, not a measurement, and may turn out to be zero.*
 
 **1. WHAT SHIPPED.** `buildSampleIndex(pts,cellLa,cellLo,mode)` now takes a `mode` ('str'
 default/arm A = shipped string key, unchanged formula; 'num' = arm B, new) and returns
@@ -58,7 +61,7 @@ the working tree and does a strict string `===`:
 All three: **byte-for-byte identical, including leading whitespace** — arm A's else-branch bodies
 were deliberately left at the PRE-C3a original indentation (not re-flowed to the new if/else
 nesting level) specifically so this comparison is literal, not "equivalent modulo whitespace."
-Harness: `C:\Users\Az\AppData\Local\Temp\claude\D--Claude-Code\7fd6f213-2ed1-426e-8cbb-8b6cc305c268\scratchpad\c3a_span_compare.js`.
+Harness: `D:\Claude Code\scratchpad\c3a_span_compare.js`.
 
 **5. BIT-EXACTNESS — §7.** Geometric, not compositional, per the spec's own framing (a bijective
 re-map has no firing condition, so the v16.68.1 §B representative-pool rule doesn't apply — what
@@ -86,7 +89,7 @@ magnitude lat/lng, four deliberate bbox corners + one isolated point):
     - `:2789`/`:3595` `idwDepthAt`/`impAt` returned depth — both share one accumulation shape
       (fixed, non-pool-anchored `cellLa`/`cellLo`), tested together, 74/74 identical.
   - **0 failures across every check.** Harness:
-    `C:\Users\Az\AppData\Local\Temp\claude\D--Claude-Code\7fd6f213-2ed1-426e-8cbb-8b6cc305c268\scratchpad\c3a_bitexact.js`.
+    `D:\Claude Code\scratchpad\c3a_bitexact.js`.
 
 **6. §8 CHECKLIST — ALL VERIFIED.**
   - `node --check` on both extracted script blocks: PASS (Leaflet block 147,552 bytes; app block).
@@ -123,6 +126,33 @@ should be near-identical at Redcliffe and Brisbane despite their ~100 ms S3 gap 
 the residual is inner-loop work, not key churn. This build did NOT run that comparison — it only
 proves arm A is byte-identical to shipped and arm B is bit-exact against arm A off-phone.
 
+**8. TWO ITEMS CARRIED FORWARD — ONE AGAINST C3b, ONE AGAINST THE CLEANUP COMMIT.**
+
+**8a. `NJ = -Infinity` ON AN EMPTY POOL — HARMLESS FOR C3a, A LIVE HAZARD FOR C3b.** With
+`pts.length === 0` the min/max scan leaves `iLo=+Infinity, iHi=-Infinity, jLo=+Infinity,
+jHi=-Infinity`, so `NJ = jHi-jLo+1 = -Infinity`. **This is NOT a C3a defect** and needs no fix in
+this build: the insert loop never runs (so no `NaN` key is ever written), and every probe is
+rejected by the bounds test before key formation — `i2 < +Infinity` is true for all finite `i2`, so
+`bkAt()` returns `undefined` unconditionally. Verified directly on the shipped code: empty pool
+returns `undefined` at both `(0,0)` and `(1e6,1e6)`; a single-point pool gives `NJ=1`, its own cell
+occupied, and all four neighbours skipping. **RECORD IT AGAINST C3b.** C3b's CSR design sizes a
+row-pointer array at `NI*NJ+1`; on an empty pool that becomes an allocation on `-Infinity`, which
+THROWS rather than degrading quietly. C3a's sparse plain object tolerates a nonsense `NJ` because
+nothing indexes with it; a flat array does not. **C3b must clamp or early-return on an empty/
+degenerate pool before sizing anything.** This is exactly the class of thing that is invisible until
+the container changes — the reason it is written down now rather than found during C3b.
+
+**8b. THE §5d DEVIATION IS ACCEPTED AND BELONGS TO THE DEAD-ARM CLEANUP COMMIT.** v16.68.3 §5d
+specified "reuse the same clearing path the perf toggle already performs — do not reimplement." The
+shipped `#six-mode-toggle` handler instead **copies the five clearing assignments inline**
+(`perfSamples=[];perfSkips=0;perfPre=0;perfNoLoad=0;perfT0=null;`) rather than calling a shared
+function. Correct today and identical in effect, so it is ACCEPTED as shipped — but it is a
+duplicated statement that can drift if the perf-window bookkeeping ever changes. **NAMED HERE SO IT
+IS NOT ORPHANED WHEN THE TOGGLE IS DELETED:** the dead-arm cleanup commit removes the `#six-mode-
+toggle` handler, which removes one of the two copies. That commit must confirm the perf-toggle's own
+copy survives intact and is the sole remaining one — the cleanup must not delete the wrong copy, and
+must not leave the perf toggle without its clear.
+
 **NEXT-SESSION NOTE:** build **2026.08.11a**, roadmap **v16.69**, repo head is this entry's own
 commit. Code shipped and off-phone-verified; **on-phone A/B perf run per §5/§7 above is the next
 job** — not a new build. After that run: if C3a lands at the low end of the 49–130 ms estimate
@@ -130,7 +160,9 @@ job** — not a new build. After that run: if C3a lands at the low end of the 49
 is C3b (CSR flat arrays) dispatch-gated on this run's numbers per v16.68.3 §7a. Do not start C3b
 before the on-phone numbers exist. A follow-up commit should delete the dead arm (the 'str' branch
 and the toggle) once the A/B comparison is done and arm B is confirmed safe to ship as the only
-path — not yet, since the on-phone run hasn't happened.
+path — not yet, since the on-phone run hasn't happened. **That cleanup commit also carries §8b's
+duplicated perf-window clear** (delete the toggle's copy, confirm the perf-toggle's own copy
+survives as the sole remaining one).
 
 *v16.68.3 · 11 Aug 2026 — planning only, no build, no code. Build stays **2026.08.09c**.
 Repo head `efe3862` at session start (the v16.68.2 entry). **RATING OF `_idwCache` AGAINST C3
