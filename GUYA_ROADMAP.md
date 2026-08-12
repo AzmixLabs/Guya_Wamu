@@ -1,5 +1,141 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.69.2 · 11 Aug 2026 — **ON-PHONE A/B RUN COMPLETE. C3a MEASURED AND CONFIRMED — S3 down 54–76%,
+C1 down 64% at Bargara, compute under 200 ms at every location for the first time.** No build, no
+code. Build stays **2026.08.11a**. Repo head `7c0ae14` (the v16.69.1 entry) at session start.
+**BOTH PREDICTIONS FALSIFIED — the string key cost roughly 2× what §3 estimated, and its cost is
+geography-DEPENDENT. C3b is PARKED, not dispatched; the 350 ms `moveend` debounce is now the larger
+lever and is ELIGIBLE for the first time.***
+
+**1. RESULTS.** Force-close/reopen confirmed, `2026.08.11a` in-panel, shading + auto contours +
+rebuild timing all ON. `pool 64306`, `six HIT`, `idw MISS`, `skip 0` in every reading; `ct —` at
+both Moreton locations (C2 early-out still firing). Every batch ran the v16.69.1 §2 protocol: flip →
+window clears → 11 pans → screenshot at `n=10/10` with the `key <mode>` footer in frame.
+
+| location | arm | S3 med/max | C1 | C2 | CT | RESID | comp | total | grid |
+|---|---|---|---|---|---|---|---|---|---|
+| Redcliffe z11 | A1 `str` | 195.5/242.0 | 0.0 | 0.0 | 2.0 | 3.0 | 236.0 | 599.0 | sh 600²=360k · ct — |
+| Redcliffe z11 | B `num` | **84.0**/112.0 | 0.0 | 0.0 | 2.0 | 3.0 | 118.0 | 471.0 | sh 600²=360k · ct — |
+| Redcliffe z11 | A2 `str` | 174.0/228.0 | 0.0 | 0.0 | 2.0 | 3.0 | 209.0 | 565.5 | sh 600²=360k · ct — |
+| Brisbane z10 | A `str` | 310.0/337.0 | 0.0 | 0.0 | 3.0 | 3.5 | 347.5 | 705.0 | sh 600²=360k · ct — |
+| Brisbane z10 | B `num` | **86.0**/137.0 | 0.0 | 0.0 | 2.0 | 3.0 | 123.0 | 474.0 | sh 600²=360k · ct — |
+| Bargara z11 | A `str` | 181.0/288.0 | 143.5 | 9.0 | 152.5 | 152.5 | 350.0 | 714.5 | sh 600²=360k · ct 360²=130k |
+| Bargara z11 | B `num` | **43.5**/54.0 | **51.5** | 20.5 | 72.0 | 72.5 | 129.5 | 483.5 | sh 600²=360k · ct 360²=130k |
+
+**2. P3 PASSES — THE APPARATUS IS SOUND, AND INTRA-SESSION DRIFT IS REAL BUT SMALL.** Redcliffe's
+repeat arm A returned to **174.0** against A1's 195.5 — arm-A territory, nowhere near arm B's 84.0.
+**Drift of 21.5 ms with nothing changed, so the honest Redcliffe saving is a RANGE: 90.0–111.5 ms
+(100.75 against the A mean of 184.75).** This is the intra-session component of v16.68.2 §5's
+±119 ms effect, and it is small enough that a ~100 ms delta survives it intact. **A single A/B pair
+could not have distinguished a real saving from drift. The A→B→A arm is why the toggle was shipped
+instead of two alternating builds, and it earned its cost.**
+
+**3. P1 FALSIFIED — AND SO WAS ITS STATED ALTERNATIVE.** The absolute saving is NOT constant
+(100.75 / 224.0 / 137.5), so key cost is not geography-independent as predicted. But the saving does
+not track S3 proportionally either (54.5% / 72.3% / 76.0%), so v16.69.1 §3's stated falsifier — "the
+residual is inner-loop work, not key churn" — is not what happened. Both branches of the prediction
+are wrong. **Implied unit cost against the 15–40 ns/key estimate:**
+
+| location | segment | probes/rebuild | Δ ms | implied ns/key |
+|---|---|---|---|---|
+| Redcliffe z11 | S3 | 3.24 M | 100.75 | 31 |
+| Bargara z11 | S3 | 3.24 M | 137.5 | 42 |
+| Brisbane z10 | S3 | 3.24 M | 224.0 | 69 |
+| Bargara z11 | C1 | 1.166 M | 92.0 | 79 |
+
+**31–79 ns, a 2.5× spread, against an estimated 15–40 ns.** Probe counts are CEILINGS — masked
+pixels may short-circuit before probing — so the true ns/key is somewhat higher still. **Best
+available model, stated as a HYPOTHESIS and not a finding: string-key cost scales with the number of
+DISTINCT keys resident in the hash table (more distinct buckets at wide zoom ⇒ larger table ⇒ worse
+locality) rather than with probe count alone. Consistent with Brisbane z10 being the worst case. Not
+proven, and not worth a build to chase.**
+
+**4. CORRECTION TO AN INTERIM READING MADE DURING THE RUN.** After Brisbane, arm-B S3 read 84.0 and
+86.0 and was called flat, with the entire Redcliffe/Brisbane S3 gap attributed to key churn.
+**Bargara's arm-B S3 is 43.5 — half that. Inner-loop work DOES vary with geography, just far less
+than key cost did.** Recorded because the two-point version was stated confidently mid-run and is
+wrong. Three points were needed; two were not enough.
+
+**5. P2 FALSIFIED IN MAGNITUDE — C1 SAVED 92.0 ms AGAINST A PREDICTED 17–47.** The contour half of
+C3a is worth roughly double the estimate, in the same direction as the S3 miss and by the same
+mechanism (§3). Bargara remains the only location where this term is measurable at all — everywhere
+else C2's early-out means `ct —` and C1 reads 0.0.
+
+**6. BARGARA IS DIRECTIONAL, NOT RIGOROUS — CITE REDCLIFFE AS THE CONTROLLED PAIR.** The two Bargara
+arms sat at visibly different map centres (arm A on Innes Park, arm B on the Burnett mouth).
+**`C2` rising 9.0 → 20.5 is the tell — different contour geometry in view, on a segment C3a does not
+touch.** Deltas of 137.5 and 92.0 cannot be flipped by that, but the Bargara pair does not meet the
+same-centre standard v16.68.2 §5 set and must not be cited as though it does. **PROTOCOL LESSON:
+"same centre" needs an explicit no-pan-between-arms step, not merely the same named location.
+Panning to reach `n=10/10` moves the centre by design.**
+
+**7. P4 DOES NOT FIRE — THE RESULT IS NOT CONTAINER-BOUND.** v16.69 §2a framed a saving near the
+49 ms low end as evidence the sparse integer-keyed object was sitting in dictionary-mode elements
+rather than the array fast path, which would have pointed at C3b. **The saving landed at or above
+the TOP of the 49–130 ms range at every location.** Whatever container the engine chose, it is not
+the limiting factor, and §2a's escape hatch is not needed.
+
+**8. COMPUTE IS UNDER 200 ms EVERYWHERE — THE DEBOUNCE IS ELIGIBLE FOR THE FIRST TIME.**
+236.0 / 347.5 / 350.0 → **118.0 / 123.0 / 129.5.** v16.68.1 §H deferred the 350 ms `moveend`
+debounce until compute was under ~200 ms; that condition is now met at all three locations with
+margin. **This is ELIGIBILITY, NOT A DECISION. The debounce STAYS UNTOUCHED until it is rated as its
+own change against its own reasoning: the 351 ms is idle main thread, so cutting it moves jank
+closer to the finger rather than removing it; there is no in-flight guard to absorb the extra
+overlap; and improving `T1-T0` moves the totals column without removing a millisecond of work, which
+is the shape of a metric being gamed (v16.66 §8).**
+
+**9. C3b IS PARKED, NOT DISPATCHED.** v16.68.3 §7a made C3b dispatch-gated on these numbers. **The
+gate returns PARK.** C3b removes what remains of hashing inside an arm-B S3 of 43.5–86.0 ms, so its
+ceiling is a fraction of that — against a rewrite of `buildSampleIndex()` reaching three callers on
+two anchors, plus v16.69 §8a's `NJ = -Infinity` allocation hazard and §7a's national-extent CSR
+ceiling (~8.63e8 entries, ~3.45 GB). **The 350 ms debounce is the larger lever by an order of
+magnitude.** C3b is not closed; it sits behind the debounce and behind any future need.
+
+**10. CLEVELAND z11 DELIBERATELY NOT RUN.** Three locations, one controlled A→B→A pair, and
+consistent direction and magnitude across all three. A fourth corroborating Moreton point adds
+nothing the Redcliffe pair does not already carry. **Recorded as a judgement, not an omission** —
+v16.69.1 §2 named Cleveland as the only droppable batch and it was dropped for that reason.
+
+**11. TWO PROTOCOL DEFECTS IN v16.69.1 §2, BOTH IN THE PLANNING TEXT, RECORDED SO THEY DO NOT
+RECUR.**
+
+**11a. THE PRE-FLIGHT CHECK AS WRITTEN WAS IMPOSSIBLE.** §2 said to flip once and confirm the
+`key <mode>` footer CHANGES *before any gestures*. The footer reads off `sIx.mode` — the returned
+index object, deliberately, per v16.69 §5c — so at `n=0/10` no rebuild has occurred, there is no
+object to read, and the footer correctly shows nothing. The first flip therefore looked like a dead
+toggle and nearly triggered an abort. **What actually proves the flip fired is the PERF WINDOW
+CLEARING (§5d): `n` resets to 0/10 and every row returns to `—`, and no other control in the app
+does that.** **STANDING RULE: when a toggle's indicator is DERIVED FROM MEASURED OUTPUT, the
+pre-flight check must be the SIDE EFFECT of flipping, never the indicator itself — the indicator
+cannot exist until the thing being measured has run at least once.**
+
+**11b. THE OVERLAY'S BOTTOM ROWS ARE CLIPPED BY THE v16.63 SCALE BOX.** The `5 km`/`10 km` scale and
+the `z11.0` zoom readout, both moved to bottom-right by v16.63, overlap the left edge of the
+overlay's last two lines. `key <mode>`, `n`, `skip`, `pre` and `noload` all remained legible and
+**no CSS build was needed or taken.** v16.65 recorded the overlay's position as reasoned from the
+CSS/DOM layout and never confirmed against a real narrow viewport; this is that gap surfacing.
+**Fold the overlay position into the dead-arm cleanup commit if it is cheap in the same diff; do not
+spend a build on it alone.**
+
+**12. WHAT THE TOGGLE DESIGN BOUGHT, FOR THE RECORD.** Three locations, seven arms and a repeat-A
+drift check ran in a single session with no force-close, no Pages round-trip and no container-state
+change between arms. The alternating-builds alternative (v16.68.3 §5's rejected option) would have
+required a deploy and a force-close between every arm, and could not have produced §2's drift
+measurement at all. **The dead branch it leaves behind is the price, and the cleanup commit is the
+next job.**
+
+**NEXT-SESSION NOTE:** build **2026.08.11a**, roadmap **v16.69.2**, repo head is this entry's own
+commit. No code shipped this session. **C3a is MEASURED and CONFIRMED — S3 −54% to −76%, C1 −64% at
+Bargara, compute under 200 ms at all three locations.** Next job: **the DEAD-ARM CLEANUP COMMIT** —
+delete the `'str'` branch and the `#six-mode-toggle`, carrying v16.69 §8b (deleting the toggle
+removes ONE of two copies of the perf-window clearing statement; that commit must confirm the perf
+toggle's own copy survives intact as the sole remaining one, and must not leave the perf toggle
+without its clear) and optionally §11b's overlay position. After that: **rate the 350 ms `moveend`
+debounce as its own change (§8)** — now eligible for the first time, still UNTOUCHED until rated.
+**C3b is PARKED (§9).** Do not dispatch the bare `_idwCache` `poolVersion` re-key (v16.68.3 §2 — a
+no-op while `buildShade()` nulls the cache on its first line). The 600×600 grid cap stays UNTOUCHED
+— it changes output pixels and is a visual-quality decision, not a bit-exact optimisation.
+
 *v16.69.1 · 11 Aug 2026 — planning only, no build, no code. Build stays **2026.08.11a**. Repo head
 `82df814` (the v16.69 §8 additions) at session start. **This entry exists to fix the on-phone
 protocol BEFORE it is run, not after.** v16.69 §7's protocol is sound but incomplete in four ways
@@ -30,6 +166,8 @@ measurement — C3a's saving remains UNMEASURED.***
      unfalsifiable.
 
 **2. THE PROTOCOL — SUPERSEDES v16.69 §7. Run this, not that.**
+**RUN COMPLETE — SUPERSEDED by v16.69.2. This protocol was executed on 11 Aug 2026; results, falsified predictions and two defects in this protocol are in v16.69.2 §§1–11. Retained for the record.**
+
 
 **PRE-FLIGHT (do not skip — this is gap 1).** Force-close and reopen the home-screen app. Confirm
 `2026.08.11a` in the panel header. Enable depth shading, auto contours and the rebuild-timing
@@ -84,6 +222,8 @@ toggle was built to eliminate (v16.68.2 §5).
 **4. TWO OPEN VERIFICATIONS.**
 
 **4a. ORIGIN-VARIABLE SCOPE — one grep, before the run.** The three hot probe sites use three
+**DONE — PASSED. Three `const` declarations, one per hot site (`:2508`, `:2547`, `:3089`), each destructured from `sIx`; buckets `_ixo`/`_ixoS`/`_ixoC` from `sIx.ix` at `:2506`/`:2545`/`:3087`, same object, same scope. No module-level declaration. Run unblocked.**
+
 distinct bucket variables (`_ixo`, `_ixoS`, `_ixoC`) but a SINGLE shared set of origin names
 (`_iLo`/`_iHi`/`_jLo`/`_jHi`/`_NJ`). If those are per-function locals there is nothing to see. If
 any is module-level, that is precisely the §4 origin-purity hazard — one function's origin surviving
