@@ -1,5 +1,109 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.70 · 14 Aug 2026 — **C3a DEAD-ARM CLEANUP SHIPPED AND ON-PHONE GATED. The numeric bucket key is
+now the sole path and the measured saving is in normal use for the first time.** Build
+**2026.08.14a**, repo head `851a51c`. Repo head before this build was `69bfc56` (the v16.69.2
+entry). The `'str'` arm, `sIdxMode`, `#six-mode-toggle`, `_pf.sixMode` and the `key <mode>` footer
+row are all deleted. **C3a is CLOSED.***
+
+**1. WHY THIS COMMIT WAS NOT HYGIENE.** `let sIdxMode='str'` was a plain global with no persistence
+— it reset to `'str'` on every launch, so the STRING key was the shipped default and every pan
+between 11 and 14 Aug paid the full arm-A cost. v16.69.2's measurement proved the saving; this
+commit is what delivers it. **Standing lesson: a diagnostic A/B toggle whose default is the OLD arm
+leaves the win unshipped. The cleanup commit is the delivery, and it inherits the on-phone gate, not
+the previous build.**
+
+**2. BRANCH IDENTITY — THE PRIMARY RISK, PROVED FROM OUTSIDE THE FILE.** Deleting the wrong arm
+passes `node --check`, the Leaflet hash, the diff-scope grep and a review read — the same
+valid-JavaScript-wrong-meaning class as v16.65 §5's `subdaxZoom`. The gate harness eval'd HEAD's
+real `buildSampleIndex` and asserted `buildSampleIndex(pts,cellLa,cellLo,undefined).mode === 'str'`,
+independently confirming which arm was the default before deleting it rather than trusting a read of
+the source. **PROMOTE TO STANDING: when a commit's correctness rests on which of two arms is live,
+prove it by EXECUTING the pre-edit code, not by reading it.**
+
+**3. THE CACHE-GUARD HAZARD — CAUGHT IN PLANNING, HANDLED IN THE SAME EDIT.** `mode` was removed
+from the returned and cached objects and the `.mode===sIdxMode` term removed from all THREE guards
+in the same edits: `pooledSampleIndex()` (`:2160`), its perf mirror (`:2440`), `idwIndex()`
+(`:2850`). A surviving `.mode` term against an object that no longer carries `mode` reads
+`undefined`, is false forever, and misses on EVERY rebuild — **slower than the arm it replaced, and
+invisible to every static gate.** Observable only as `six MISS` on-phone. It read `six HIT`.
+
+**4. GATES.** Bit-exact: **961 probe cells, 0 mismatches** (bucket store, r0, shade
+`{num,den,near,nearD,nearR0,nearST}`, contour `{F,OK}`, tap depth, plus a 405-cell exhaustive
+`bkAt` sweep, each via both an inline-mirror and a real-`bkAt` probe). **Plus a SPAN GATE — all
+three hot-site bodies byte-identical to HEAD's arm B after removing exactly one indent level**,
+which is the check that guarantees no accumulator was orphaned in the unwrap and is stronger than
+value comparison alone. `node --check` both blocks exit 0. Leaflet inner-content SHA-256
+`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`, 147,552 bytes, 0 CRLF,
+byte-identical to HEAD's block. `zoneAt`/`ORDER`/`dragend`/`spotsUnlocked`/both `<style>` blocks
+absent from the diff and confirmed still present in the file. 18 hunks, +78/−154. Harness:
+`D:\Claude Code\scratchpad\c3a_cleanup_bitexact.js`. **Note the corpus CHANGED** — 961 cells here
+against `c3a_bitexact.js`'s 74 query points. Strictly larger, but the two are NOT one continuous
+chain of evidence and must not be cited as such.
+
+**5. `core.autocrlf` FIXED — the open minor item from v16.69.2 is closed.** Set to `input` on this
+machine. `git ls-files --eol index.html` read `i/lf w/lf attr/` before and after, working tree
+stayed clean, no renormalisation and no line-ending change. The `.gitattributes` option
+(`* text=auto eol=lf`) was REJECTED — more durable, but it risks a whole-repo renormalisation commit
+and would have broken one-variable-per-build on this diff.
+
+**6. ON-PHONE GATE — PASS. Redcliffe z11, `2026.08.14a`, force-close/reopen confirmed.**
+
+| | arm A (11 Aug) | arm B (11 Aug) | 14 Aug post-cleanup |
+|---|---|---|---|
+| S3 med/max | 195.5/242.0 · 174.0/228.0 | 84.0/112.0 | **119.0/163.0** |
+| comp | 236.0 | 118.0 | **156.5** (max 200.0) |
+| total | 599.0 | 471.0 | **510.0** |
+| S2 | 24.0 | 24.0 | 25.0 |
+
+`skip 0`, `sh 600²=360k`, `ct —`, `pool 64306`, `six HIT`, `idw MISS`, `n=10/10`. Segments reconcile
+exactly: 0.5 + 25.0 + 119.0 + 1.0 + 8.0 + 3.0 = 156.5 = comp. **Toggle gone from the panel, `key
+<mode>` row gone from the footer, and shading redrawing — 10 rebuilds at `skip 0` is the check that
+a surviving `sIdxMode` reference is not throwing behind v16.68.1 §4's silent `catch(e){}`, which
+would have presented as a stale overlay and no error of any kind.**
+
+**7. THE PREDICTION MISSED, AND THE PREDICTION WAS AT FAULT.** The planning chat predicted S3
+70–115 ms, derived from arm B's 84.0 ± the **21.5 ms INTRA-session** drift (v16.69.2 §2). Wrong
+constant: this is a CROSS-session, CROSS-BUILD reading, where the applicable figure is v16.68.2 §5's
+**±119 ms** — the exact confound v16.69.1 §2 warned against importing into an arm-B comparison. The
+band should have been far wider and was therefore a weak test. 119.0 sits nowhere near the
+160–200 ms falsifier and 55.0 ms below even the lower arm-A reading. **STANDING RULE: a
+post-cleanup gate is a CROSS-SESSION reading. Bound it with the cross-session drift figure, or state
+plainly that it is a BRANCH-IDENTITY check and not a magnitude measurement.**
+
+**8. IS +35.0 ms A REGRESSION? BEST READING NO — BUT IT IS NO LONGER MEASURABLE.** No mechanism
+exists in the diff: the §4 span gate proved the loop bodies byte-identical to arm B. S2 moved
++1.0 (+4%) while S3 moved +35.0 (+42%), and S3-specific movement is the documented signature of
+v16.68.2 §5's effect rather than of a code change. The centre also differs from 11 Aug's pan set
+(v16.69.2 §6: a named location is not a centre). **The honest claim is "arm-B territory, ~66 ms
+below the arm-A mean at this centre" — NOT "the 100.75 ms saving was realised."** With the toggle
+deleted this can never be paired again; that was the accepted price, recorded at v16.69.2 §12.
+
+**9. TWO ITEMS THIS READING GENERATES.**
+
+**9a. THE DEBOUNCE ELIGIBILITY MARGIN IS THINNER THAN RECORDED.** v16.68.1 §H's condition (compute
+under ~200 ms) is banked in this file against arm B's 118.0 / 123.0 / 129.5. Redcliffe now reads
+**156.5 median, 200.0 max — the max sits exactly on the threshold.** Still eligible; **rate the
+350 ms `moveend` debounce against 156.5, not 118.0.**
+
+**9b. §11b DID NOT SELF-FIX — IT MOVED ONTO A WORSE LINE.** Deleting the `key <mode>` row shifted
+the footer up one row, so the v16.63 scale box now clips **`pool 64306 z11.0 six HIT idw MISS`**
+instead. That line carries BOTH cache-state indicators; `key <mode>` was retired diagnostic chrome.
+**The clip now costs more than it did.** The planning chat deferred §11b partly on the theory that
+the deletion would relieve it — that theory was wrong, and is recorded as wrong. Fold it into the
+next build that does not depend on reading the overlay; still not worth a build alone.
+
+**NEXT-SESSION NOTE:** build **2026.08.14a**, roadmap **v16.70**, repo head `851a51c` plus this
+entry's own commit. **C3a is CLOSED — shipped, gated, and in normal use.** Next job: **rate the
+350 ms `moveend` debounce as its own change (v16.69.2 §8)**, against §9a's 156.5 ms and not this
+file's older 118.0. Eligibility is NOT a decision — the debounce stays UNTOUCHED until rated against
+its own reasoning (351 ms is idle main thread; cutting it moves jank closer to the finger; no
+in-flight guard exists to absorb the extra overlap; and improving T1−T0 games the totals column
+without removing work, v16.66 §8). **C3b stays PARKED (v16.69.2 §9).** Do not dispatch the bare
+`_idwCache` `poolVersion` re-key (v16.68.3 §2 — a no-op while `buildShade()` nulls the cache on its
+first line). The 600×600 grid cap stays UNTOUCHED — it changes output pixels. Carry §9b's overlay
+position into whichever build comes next.*
+
 *v16.69.2 · 11 Aug 2026 — **ON-PHONE A/B RUN COMPLETE. C3a MEASURED AND CONFIRMED — S3 down 54–76%,
 C1 down 64% at Bargara, compute under 200 ms at every location for the first time.** No build, no
 code. Build stays **2026.08.11a**. Repo head `7c0ae14` (the v16.69.1 entry) at session start.
