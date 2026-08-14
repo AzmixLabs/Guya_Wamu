@@ -1,5 +1,92 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.70.1 · 14 Aug 2026 — planning only, no build, no code. Build stays **2026.08.14a**. Repo head
+`851a51c` (the v16.70 entry) at session start. **THE 350 ms `moveend` DEBOUNCE IS RATED AND CLOSED
+AS A DECIDED NON-CHANGE.** It has been carried as "deferred, then eligible, then rate it" since
+v16.68.1 §H across five entries. This entry ends that. It is NOT deferred, NOT parked and NOT
+awaiting a number — it is decided, with one narrow reopening condition in §6. The C3 optimisation
+arc closes with it.*
+
+**1. THE ELIGIBILITY TEST WAS RUN ON THE WRONG STATISTIC AT EVERY STEP, AND ON THE RIGHT ONE IT
+FAILS.** v16.68.1 §H's condition — compute under ~200 ms — exists to bound HOW LONG THE MAIN THREAD
+IS BLOCKED when a rebuild collides with a gesture. That is a worst-case property. It has been
+evaluated against the MEDIAN every time: v16.69.2 §8 ("118.0 / 123.0 / 129.5 … with margin"), and
+v16.70 §9a, which surfaced the thinner margin and then still concluded "still eligible" off 156.5.
+**Redcliffe's compute MAX is 200.0** (v16.70 §6). The condition reads "under ~200 ms." 200.0 is not
+under 200. The median understates by 43.5 ms here, and the 11 Aug arm-B maxes that banked the
+original "with margin" claim were never recorded at all. **On its own condition, applied to the
+statistic the condition is about, the debounce is NOT eligible. §9a's "still eligible" is
+SUPERSEDED.**
+
+**2. THE BLOCKING OBJECTION IS ARCHITECTURALLY UNFIXABLE — SO IT CAN NEVER GRADUATE.** "No in-flight
+guard exists to absorb the extra overlap" has been carried since v16.68.1 §H as though it were a
+precondition a later build could satisfy. It is not. `buildShade()` is synchronous end to end,
+S1–S5 including the `cv.toDataURL()` encode (v16.65 §2). **Synchronous work cannot be guarded** —
+once the timer callback enters, no touch event is serviced until it returns; there is nothing to
+cancel and nothing to interrupt. The debounce reset IS the guard, and it covers only the
+pending-but-not-started case. The started-and-running case would require slicing the pixel loop
+across rAF with abort checks — a rewrite an order of magnitude larger than C3b, which is already
+parked. **An item gated on a condition that no small build can ever meet is not deferred, it is
+refused. Say so once and stop re-listing it.**
+
+**3. THE COLLISION WINDOW DOES NOT WIDEN — IT RELOCATES. THE REBUILD COUNT IS THE REAL COST.**
+"Cutting it moves jank closer to the finger" is directionally right and mechanically vague, and the
+vagueness has let it be re-argued three times. Precisely: the window in which a new gesture lands on
+a RUNNING rebuild is `compute` ms wide and starts `D` ms after the previous `moveend`. **Width is
+independent of D.** At D=350 the window is gaps ∈ [350, 506.5]; at D=150 it is [150, 306.5] — the
+same 156.5 ms width, relocated. **The current setting is not collision-free either**, which no
+earlier entry states.
+
+The real cost of shortening is second-order: **coalescing collapses.** A five-gesture exploration
+burst at 250 ms spacing is **one** rebuild at D=350 and **five** at D=150, four of them landing
+mid-burst. That is a 5× increase in main-thread blocking, concentrated on the pattern that dominates
+real use of this app — panning a stretch of coast hunting structure — while the benefit lands on the
+single-settled-pan case, which is rarer.
+
+**4. IT REMOVES NO WORK, AND THE VISIBLE DEFECT IT WOULD FIX IS SMALLER THAN THE TOTALS COLUMN
+IMPLIES.** Reconciling v16.70 §6's Redcliffe reading against v16.66 §4 (`T1-T0` 351.0–353.5 median,
+`T3-T2` 2.0–13.5 median): 351 + 156.5 + ~2.5 = **510.0**. **The debounce is 68.8% of user-visible
+latency and 0% of the work.**
+
+```
+D=350 (current)   total 510   —              work removed 0
+D=200             total ~359  −151  (−30%)   work removed 0
+D=150             total ~309  −201  (−39%)   work removed 0
+```
+
+A −39% headline with zero milliseconds of compute removed is exactly the shape v16.66 §8 was written
+about. The counter — "perceived latency IS the metric, so it is not gaming" — has force only if the
+perceived cost is real, and here it largely is not: **the previous overlay is geo-anchored and stays
+on screen for the whole 510 ms.** The visible defect is a newly-revealed viewport edge unshaded for
+about half a second, not a blank map. Not worth a 5× rebuild-count increase.
+
+**5. THE DEBOUNCE WAS NEVER A PERFORMANCE ITEM — THAT IS THE ROOT ERROR.** It is a UX tuning
+constant that got recruited into an optimisation arc and then rated in that arc's currency (compute
+medians against a threshold). **General lesson: rating a latency-tuning constant against a
+work-reduction metric is a category error, and it produced four entries of "eligible but untouched"
+without ever asking what the constant is for.** The honest successor to the complaint the debounce
+appeared to answer is a **coarse-then-refine pass** (render ~150² immediately, refine to 600²) —
+which changes output pixels transiently, needs its own bit-exact story, and is a real build. It is
+NOT dispatched here and is recorded only so the next session does not reach for the debounce again.
+
+**6. REOPENING CONDITION — ONE, AND IT IS NOT CHEAP.** Reopen only if an on-phone instrumentation
+pass records the **distribution of inter-`moveend` gaps in real field use** and shows the mass above
+~500 ms, i.e. that bursts are rarer than §3 assumes. That measurement does not exist, costs an
+instrumentation build plus an on-phone run, and would be spent on a change that removes no work.
+**Do not reopen on a subjective "feels slow" report** — route that to §5's coarse-then-refine
+instead.
+
+**NEXT-SESSION NOTE:** build **2026.08.14a**, roadmap **v16.70.1**, repo head `851a51c` plus this
+entry's own commit. No code shipped this session. **The C3 arc is CLOSED: C3a shipped and gated
+(v16.70), C3b PARKED (v16.69.2 §9), the 350 ms debounce DECIDED-NO (this entry).** The 600×600 grid
+cap stays UNTOUCHED — it changes output pixels. Do not dispatch the bare `_idwCache` `poolVersion`
+re-key (v16.68.3 §2 — a no-op while `buildShade()` nulls the cache on its first line). **The only
+carried code item is v16.70 §9b** — the v16.63 scale box now clips `pool 64306 z11.0 six HIT idw
+MISS`, which carries both cache-state indicators; fold into the next build that does not depend on
+reading the overlay, still not worth a build alone. **Next job: region work — MN v3 Noosa-OSM fetch
+and Noosa tide-port wiring (#15).** Noosa Head is a Standard Port (MSQ 2024 Semidiurnal Tidal
+Planes), own harmonic prediction, no offset math, not yet wired.
+
 *v16.70 · 14 Aug 2026 — **C3a DEAD-ARM CLEANUP SHIPPED AND ON-PHONE GATED. The numeric bucket key is
 now the sole path and the measured saving is in normal use for the first time.** Build
 **2026.08.14a**, repo head `851a51c`. Repo head before this build was `69bfc56` (the v16.69.2
