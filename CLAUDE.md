@@ -69,9 +69,12 @@ before any build.
   Port). Moreton Bay/Redcliffe — Brisbane Bar (Standard Port; Redcliffe = +0:00
   secondary, Brisbane Bar timing applies directly; Bongaree/Bribie ≈ +0:00/-0:15, not
   yet wired as its own port). Sunshine Coast — Mooloolaba (BOM/NTC Standard Port, no
-  offset math). Noosa — Noosa Head (also a Standard Port per MSQ's 2024 Semidiurnal
-  Tidal Planes table, own harmonic prediction, no offset math needed; not yet wired
-  into the app).
+  offset math). Noosa — Noosa Head (Standard Port, own harmonic prediction, no offset
+  math needed). WIRED as the fourth port at v16.71 (build 2026.08.15a): `hat` 2.37 m
+  (two-year embedded max, above MSQ's published HAT 2.35 m — the conservative
+  direction), `FLATS_BOUNDS` [0.917, 1.373]. HAT figures now sourced from MSQ's
+  Semidiurnal Tidal Planes **2025** edition (epoch 2010-2029), superseding the 2020
+  and 2024 editions cited earlier.
 - Moreton Bay zoning: HPZ06 Redcliffe and HPZ08 Pine River are Habitat Protection
   Zones (dark-blue, NOT no-take). Real no-take (Marine National Park) on home water:
   MNP09 Deception Bay, MNP11 Hays Inlet, MNP12/13 Bramble Bay / Pine River mouth.

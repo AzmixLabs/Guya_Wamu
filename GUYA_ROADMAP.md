@@ -1,5 +1,139 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.71.1 · 15 Aug 2026 — planning only, no build, no code. Build stays **2026.08.15a**, repo head
+`ba17a68`. **THE v16.71 ON-PHONE GATE PASSED**, and a read-only spike into best-bite found that the
+anchor was never the defect — **the recompute is.** Also corrects a transcription error committed
+inside v16.71 §7. The next build is a best-bite scoping/staleness fix, not a tide job.*
+
+**1. ON-PHONE GATE — PASS. `pool 64308`, THE PREDICTED DIRECTION.** Noosa centre, build string
+confirmed live as `2026.08.15A` on the home-screen container. `pool 64308` read **identically at
+z11.0 and z12.0**, against the pre-build Redcliffe z11 baseline of **64306** (v16.70 §6) — **+2, a
+rise.** v16.71 predicted the change could only rise or hold, because 2.37 m is strictly looser than
+2.24 m and no point can be removed by a looser gate. It rose. **+2 is the expected magnitude, not a
+disappointment:** Maroochy/Noosa is genuine bathymetry, so almost nothing sits in the 13 cm band
+between −2.24 and −2.37, and the SC contribution was 7 rows pre-thin. **Identical at two zooms
+establishes that `pool` is store-wide, not viewport-scoped** — a fact not previously recorded, and
+one that makes any single-centre `pool` reading valid for the whole store. Left open: a Redcliffe
+z11 reading on this build. If it also reads 64308, +2 is the entire effect and the gate closes.
+
+**2. THE TIDE READOUT DID NOT DISCRIMINATE, AND THE SCREENSHOTS COULD NOT CLOSE THAT.** The Noosa
+tap showed `tide +1.2`. The off-phone probe (v16.71 §5) gave Noosa 1.2793 m and Mooloolaba 1.1391 m
+at the same instant; at the one decimal place the UI renders, those round to 1.3 and 1.1, and the
+displayed **1.2 sits between them**. It is consistent with the new port but proves nothing.
+**Standing lesson: a gate observable must have more precision than the difference it is asked to
+detect.** The discriminating observable was the wind-check button label (`Checking live wind at
+Noosa Head…`, `index.html:1853`), which is unambiguous and was not captured. Use it next time.
+
+**3. CORRECTION TO v16.71 §7 — THE FIGURE IS 464, NOT 505.** As committed, §7 reads "505 rows at
+exactly −2.24 m and 51 at exactly −2.81 m" for a stated total of 515. **505 + 51 = 556.** The
+correct figure is **464**: 464 + 51 = 515 ✓, and 7 of those 464 clearing the looser 2.37 m threshold
+is exactly the measured 515 → 508 drop. 464 was the figure derived in the preceding session; 505 was
+a transcription error in the closing summary that propagated into the committed entry. **The rest of
+§7 stands.** *Standing lesson: a self-written roadmap entry is Claude Code output like any other and
+gets the same verbatim red-team. This one shipped un-reviewed and carried a wrong number into a
+pending-cleanup item, where it would have been trusted rather than re-derived.*
+
+**4. NOOSA IS THE SLOWEST CENTRE YET RECORDED — AND IT STRENGTHENS v16.70.1.** On-phone, build
+2026.08.15a: **z11 comp 174.5 med / 236.0 max; z12 comp 239.5 med / 311.0 max** (z12 total 596.5 /
+666.0, S3 81.5 / 153.0). Against Redcliffe's 156.5 / 200.0 (v16.70 §6). **This does not reopen the
+350 ms debounce — it closes it harder.** v16.68.1 §H's eligibility condition (compute under ~200 ms)
+failed at Redcliffe by 0 ms on the max; at Noosa z12 it fails by **111 ms, 55% over**, at a real
+fishing centre. v16.70.1's DECIDED-NO stands on stronger evidence than when it was written. `T1-T0`
+held at 351.5–353.5 med, confirming the debounce constant is invariant across centres.
+
+**5. §9b IS NO LONGER COSMETIC — IT ATE A DIAGNOSTIC UNDER REAL USE.** The v16.63 scale box clipped
+`six H⋯` in both overlay screenshots at Noosa. `pool` survived; the cache-state indicator did not.
+v16.70 §9b was rated "not worth a build alone" on the assumption nothing depended on reading that
+line. **The on-phone gate depended on reading that line.** Promote it from cosmetic to a real
+carried defect and fold it into the next build. Workarounds that worked in the field: landscape
+rotation, and stepping one zoom level (the Leaflet scale bar changes width with zoom, moving the
+overlap).
+
+**6. BEST-BITE SPIKE — THE PREMISE WAS WRONG. `ANCHOR()` ALREADY FOLLOWS THE MAP CENTRE.** The
+planning chat's diagnosis — that "Coast-wide" pins the anchor to Woongarra — is **FALSE and is
+retracted.** Executed, not read (`index.html:3349-3351`):
+`ANCHOR()` → `curPort()` → `nearestPort(map.getCenter())`, returning the nearest `PORTS[]` entry's
+coordinate. At the app's init centre it is **Brisbane Bar**, not Woongarra. `PORTS[0]` (Burnett
+Heads) is reached only on the `cl.lat==null` path or the `catch`; it is the **fallback, not the
+default**. The `[-27.3667,153.1667]` literal at the tail of `:3351` is Brisbane Bar and is
+unreachable while `PORTS` exists. **There is no hardcoded Woongarra coordinate in this path.**
+"Coast-wide" is `<option value="">` (`:1061`, re-emitted `:3435`) whose only consumer is `:3397`
+(`const sp=$('bb-spot').value?…:null;`) — the tide-preference note. **It never reaches the anchor.**
+
+**7. WHAT THE DEFECT ACTUALLY IS — THREE SEPARATE THINGS, NONE OF THEM THE ANCHOR.**
+- **(a) NOTHING RECOMPUTES ON PAN.** `render()` fires on page load (`:3626`), date change (`:3440`),
+  spot-selector change (`:3441`) and `shiftDay()` (`:3444`). **There is no `moveend` listener in the
+  best-bite IIFE** — the file's only `moveend` is the depth-shade debounce at `:3693`. So panning
+  silently changes what `ANCHOR()`/`curPort()` *would* return while the displayed astronomy, tide
+  table, port name (`:3428`) and rankings **stay at the old port** until the user next touches a
+  control. This is the real bug and it is invisible.
+- **(b) THE SPOT LIST IS UNSCOPED BY DESIGN.** `scoreSpotsFor()` (`:3483`) takes the whole store with
+  no geographic predicate. `rankSpots()` filters by species (default: empty set, no filter), then by
+  `recBandKm` — **default 0 = no distance cap** (`:3449`, `data-km="0"` on `rng-on` at `:1072`) —
+  then `.slice(0,5)`. So Woongarra spots ranked at a Noosa map centre is **correct behaviour for the
+  default**, not a fault. It is also useless. Scope origin is `recOrigin()` (`:3450-3451`) = **raw
+  map centre**, a *different* variable from the anchor's snapped port coordinate; the two always
+  diverge by the centre-to-port offset, and diverge in kind when one-shot GPS origin is on.
+- **(c) THE HEADER IS A FIXED STRING AND CONTRADICTS BOTH.** `index.html:1052` hardcodes
+  `<h1>Woongarra Coast</h1>` / `Great Sandy MP`. **Nothing writes to it** — the only code touching
+  `#phead` is the collapse toggle (`:1320`) and a read-only build-string scrape (`:2263`). At the
+  app's own default centre it is already wrong, sitting above a Brisbane Bar resolution.
+
+**8. TWO DEFECTS THE SPIKE FOUND THAT NOBODY ASKED ABOUT — BOTH WORSE THAN THE HEADER.**
+- **`liveWindDir` NEVER EXPIRES.** Declared `:1417`, written at exactly one site (`:1856`, the
+  `#sp-wind` handler). **No TTL, no timestamp, no staleness check, no in-flight dedupe.** It is set
+  once per button press and persists for the whole page session at whatever port it was fetched for.
+  Pan Bargara → Noosa and every subsequent `scoreSpotsFor()` still scores against **Bargara's wind**,
+  with no indication it is stale or from the wrong region — feeding pin recolouring (`:1493`), spot
+  popups (`:1503-1505`), the list warning badge (`:1584`), the score term (`:3498`) and the catch env
+  stamp (`:1797`). `buildPlan()` (`:3577`) fetches fresh per press and never writes to it.
+- **`stampEnv` PERSISTS A MAP-CENTRE-DERIVED TIDE ONTO A CATCH RECORD.** `:3620-3622` writes tide
+  state and height onto every newly logged catch via `tideTable()` → `nearestPort(map.getCenter())`.
+  **The catch's own coordinates are not used.** Log a Bargara catch while the map sits at Noosa and
+  the record permanently carries Noosa's tide. Unlike everything else here this is **persisted wrong
+  data, not a stale display**, and it is silently wrong in the logbook forever.
+
+**9. THE IIFE BOUNDARY IS INTACT AND IS NOT AN OBSTACLE.** IIFE opens `:3313`, closes `:3627`;
+nothing on `window`; exactly two outward hooks (`window.bbRefreshSpots=populate` `:3438`, and
+`stampEnv=function…` `:3620` assigned to the outer `let` at `:1466`). **Inward needs no hook at
+all:** `const map` is declared at `:1228`, top-level in the same script block *before* `:3313`, so it
+is already in the IIFE's lexical scope and is used inside three times (`:3349`, `:3451`, `:3510`).
+**"Anchor on map centre" is a one-line edit inside `ANCHOR()`, and wiring a `moveend` recompute is
+in-scope today** — no boundary crossing, contrary to the concern that prompted the question.
+
+**10. THERE IS NO ACTIVE-REGION CONCEPT.** No `activeRegion` variable exists. `REGION_SOURCE` /
+`REGION_MASK_EXEMPT` / `regionLabel()` / `#imp-region` are the depth-import **dataset tagging**
+system and have no bearing on tides, astronomy or best-bite — do not conflate them. The de facto
+region is `nearestPort(map.getCenter())`, **re-derived independently at three call sites** (`:3349`
+`curPort()`, `:1853` `_wp`, `:3964` `curP()`), set by any `setView`/drag/pinch/zoom-to-spot
+(`:1317`, `:1366`, `:1382`, `:1395`, `:1591`, `:1614`, `:3201`), with **no change event, no
+invalidation, no re-render and no UI naming it.**
+
+**11. DESIGN DECISION — "HERE" REPLACES "COAST-WIDE"; ANCHOR AND SCOPE COME APART.** Agreed in
+planning: the selector currently does two jobs and they separate. **Anchor** = the coordinate feeding
+astronomy/tide/wind. **Scope** = which spots appear. Default both to the live map centre, labelled
+**"Here"** rather than "Coast-wide" (which reads as a region name once regions are real); an
+explicitly picked spot overrides both. **Recompute on PANEL OPEN, not on `moveend`** — the panel is
+already a deliberate action, it sidesteps the debounce question entirely rather than inheriting it,
+and it avoids a network call per pan. Map centre is also the correct default on privacy grounds
+(hard rule 6 already names it as the no-GPS path). NOT dispatched here.
+
+**NEXT-SESSION NOTE:** build **2026.08.15a**, roadmap **v16.71.1**, repo head `ba17a68` plus this
+entry's own commit. `CLAUDE.md`'s "not yet wired into the app" sentence corrected in the same commit
+— it must land on **both** surfaces (repo + project knowledge) or it forks. **Next job: the
+best-bite scoping/staleness build (§11), one variable at a time** — recommended order (a) recompute
+on panel open, (b) "Here" default + scope, (c) `liveWindDir` TTL, (d) `stampEnv` to use the catch's
+own coordinates. §8's two defects are the highest-severity items found this arc and (d) is the only
+one that corrupts stored data. **Carried:** §5's overlay clip, now promoted. **Do not re-litigate:**
+the C3 arc is closed (v16.70.1), and §6 retires the "Coast-wide pins the anchor" theory permanently.
+**Still queued from v16.70.1:** the `storage_check.html` tooling pass — `navigator.storage.estimate()`
+reports the StorageManager origin quota (39,321.6 MB observed) and **does not bound localStorage**
+(observed usage 2.27 MB against a localStorage key-sum of ~4.9 MB — arithmetically impossible unless
+excluded). The correct gate is a **single sized probe** at `(measured bytes + rollback snapshot +
+10%)`, not the queued KiB-granular binary search, which would drive a container holding real data to
+its ceiling. MN v3 sequencing is unchanged: 3a OSM-only fetch → 3b clip and **measure**, import
+nothing → sized probe → decide.
+
 *v16.71 — 15 Aug 2026 — **NOOSA HEAD WIRED AS THE FOURTH TIDE PORT. Build 2026.08.15a.**
 Repo head `844c889` (the v16.70.1 entry) at session start. Closes the Noosa tide-port item that has
 been carried as a fast-follow since v16.5. One build, three intended effects, all three measured
@@ -73,7 +207,7 @@ Noosa Head itself, so this is a genuine split and not an edge artefact. It also 
 −26.533° bucket boundary already recorded for the AHD→LAT conversion.
 
 **7. PRE-EXISTING, NOT INTRODUCED HERE: 515 ROWS IN THE LIVE SC SET FAIL TODAY'S `okHAT`.**
-`sunshine_coast_flats_v1.csv` contains 505 rows at exactly −2.24 m and 51 at exactly −2.81 m. The
+`sunshine_coast_flats_v1.csv` contains 464 rows at exactly −2.24 m and 51 at exactly −2.81 m. The
 CSV generator kept `depth == -hat`; `okHAT` uses strict `d > -hat` and drops it. A boundary-
 inclusivity mismatch between the generator and the app, pre-dating this build (it is why the drop
 count is 515 before and 508 after, not 0). **Not fixed here — out of scope for this build.**
