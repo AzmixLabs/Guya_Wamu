@@ -1,5 +1,91 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.72 · 16 Aug 2026 — **STAMPENV NOW RESOLVES TIDE FROM THE CATCH'S SPOT, NOT THE MAP CENTRE.
+Build 2026.08.16a.** Repo head `7def0f3` (the v16.71.1 entry) at session start. Best-bite job (d).
+This build **changes the persisted catch record shape** — `env.tide` gains a `port` string. Phase 1
+was a read-only characterisation; Phase 2 is this patch. One variable: an optional trailing `ll`
+threaded down four functions.*
+
+**1. THE DEFECT.** `stampEnv(dateStr,timeStr)` took no coordinate. It resolved its tide table
+through `dayTideSampler` → `tideTable()` → `curPort()` → `nearestPort(map.getCenter())`. So a catch
+logged at Bargara while the map happened to sit over Noosa was persisted with **Noosa Head's tide
+height and state**, written to `localStorage` via `saveSpots()` (index.html:1800) with no marker
+saying which table produced it. A plausible wrong number in a right-looking field, unrecoverable
+after the fact. Wrong values, not missing ones — the reason this outranked the other best-bite items.
+
+**2. PRE-FLIGHT, ALL FOUR CLEAR.** (P1) `dayTideSampler` **memoises nothing** — it rebuilds `evs`
+and returns a fresh closure on every call, so a threaded coordinate cannot hit a cached wrong-port
+sampler. The STOP condition did not fire. (P2) `stampEnv` has exactly three sites: declaration
+`:1466`, assignment `:3620`, **one call `:1796`**. No catch-edit, import or re-stamp path calls it —
+`importBackup` (`:3111`) merges whole spot objects and never re-stamps. The STOP condition did not
+fire. (P3) `nearestPort(centre)` accepts **either** `[lat,lng]` (via `Array.isArray`) **or**
+`{lat,lng}`; `null`/`undefined`/`{}` fall to `cl.lat==null` → `PORTS[0]`. Object shape chosen, to
+match what `map.getCenter()` already hands it. (P4) **Spots CAN be created outside `openSpotSheet`**
+— `importBackup` at `:3116` merges `d.spots` on an `s&&s.id` check alone, with **no lat/lng
+validation**, and `loadSpots` (`:1414`) rehydrates whatever localStorage holds. Non-finite or
+string coordinates are therefore reachable. **The guard in item 4 is load-bearing, not defensive
+decoration.**
+
+**3. WHAT SHIPPED — five lines, additive optional parameter, no existing site touched.**
+`curPort(ll)` `:3349` → `nearestPort(ll||map.getCenter())`, both pre-existing fallback and `catch`
+paths byte-unchanged. `tideTable(ll)` `:3350` → passes through. `dayTideSampler(ymd,ll)` `:3352` →
+passes through, with the dual meaning commented in place: spot-scoped when `ll` is supplied,
+map-centre when omitted. `stampEnv(dateStr,timeStr,ll)` `:3620-3622`. Caller `:1796` →
+`stampEnv(o.date,o.time,{lat:s.lat,lng:s.lng})`; `s` was already in scope from `:1775` and its
+coordinate already used two lines later at `:1800` for `zoneAt`. **The six call sites that pass
+nothing — `:3351` `ANCHOR`, `:3366` `tideCurveSVG`, `:3396` `render`, `:3485` `scoreSpotsFor`,
+`:3563` `planFor`, `:3599` analytics — are absent from the diff and keep map-centre behaviour.**
+
+**4. PROVENANCE AND GUARD.** `env.tide.port` is a **string**, the resolved port's `name`, written
+only when `env.tide` is written. Nested under `tide`, not top-level, because `moonIllum` (`:3325`)
+takes no coordinate — the moon fields are location-independent and a top-level `port` would falsely
+claim to scope them. Guard: `ll&&Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)` — `Number.isFinite`,
+not global `isFinite`, so string coordinates from a hand-edited backup are rejected rather than
+coerced. On failure **no tide fields are written at all and there is no map-centre fallback**.
+Omission reproduces the record shape of the pre-existing blank-date path (`:3621` → `:1798` deletes
+an empty `env`), so **no new record shape is introduced by the failure case**.
+
+**5. MIGRATION — none, deliberately.** Legacy catches carry `env.tide` with no `port`. **Absent
+means UNKNOWN, never assume-correct.** No back-fill pass was written and none should be: the map
+centre at the time those catches were logged is not recoverable, so any back-fill would be a guess
+persisted as fact. Analytics (`:3599`) already falls back to re-deriving tide stage from date/time
+for older entries and is unaffected — it reads `state`, never `port`.
+
+**6. VERIFICATION — executed, not predicted.** `node --check` PASS on both extracted script blocks.
+Inlined Leaflet block body-only SHA-256 `db49d009…5641a` — **unchanged**, 147,552 chars, confirmed
+against the recorded baseline. `zoneAt()` (`:1325`, most-protective `ORDER` rank with the
+`rank===0` early return) and the green-zone `dragend` safeguard (`:1576-1578`) absent from the diff
+and re-read present in the file. All five edited lines re-read from disk and quoted — every one is a
+long single line, and `node --check` would have passed a mangled property name, so `port:_p.name`,
+`Number.isFinite`, and `{lat:s.lat,lng:s.lng}` were each eyeballed in the file rather than trusted
+from the edit. Behavioural harness over the **real patched source lines** with the map parked on
+Noosa throughout and four distinguishable stub tables: existing no-`ll` sites still resolve Noosa
+(`ht 6.00`, `ANCHOR [-26.3833,153.0917]`); the four spot cases resolve **Burnett Heads / Brisbane
+Bar / Mooloolaba / Noosa Head** correctly and independently of the map; all eight bad-coordinate
+cases (omitted, null, NaN, Infinity, string, empty object, missing key) wrote **no tide fields**;
+`typeof env.tide.port === 'string'`; `env.moon` keys remain `["name","illum"]` with no port.
+`git diff --numstat` = `9 9 index.html` — six hunks: `:1052` and `:1091` build string, `:1796`,
+`:3349-3350`, `:3352`, `:3620-3622`. index.html 2,351,226 → 2,351,770 bytes (+544), line count
+4,195 unchanged. Both `<style>` blocks absent from the diff.
+
+**7. NOT DONE, ON PURPOSE.** Display is untouched — no popup, header or panel change; this is a
+persisted-data build only. `env.wind` at `:1797` still stamps `liveWindDir` with no port provenance
+and no staleness check: **that is job (c) and was not touched.** The three other best-bite defects
+from the v16.71.1 spike remain open: missing recompute on `moveend`, the unscoped coast-wide spot
+list, and stale `liveWindDir` persisting across regions for the whole session.
+
+**NEXT SESSION.** Build **2026.08.16a**, head = this commit. Catches now record which tide table
+produced their height. **Recommended next job: best-bite job (c) — `liveWindDir` staleness**, the
+same class of defect as this one and the last unfixed source of wrong persisted data: `:1797` stamps
+a wind reading that may have been fetched at a different port an unbounded time earlier, with no TTL
+and no origin recorded. Pending cleanup, in priority order: (i) job (c) as above; (ii) the missing
+best-bite recompute — no `moveend` trigger exists, so a pan silently desynchronises the panel from
+its port; (iii) the unscoped spot list in `scoreSpotsFor` (`:3483`), which scores every saved spot
+against a single port's astronomy. **Do NOT back-fill `env.tide.port` on legacy records** — absent
+means unknown and must stay that way.
+
+---
+
 *v16.71.1 · 15 Aug 2026 — planning only, no build, no code. Build stays **2026.08.15a**, repo head
 `ba17a68`. **THE v16.71 ON-PHONE GATE PASSED**, and a read-only spike into best-bite found that the
 anchor was never the defect — **the recompute is.** Also corrects a transcription error committed

@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.15a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.16a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.15a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.16a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1793,7 +1793,7 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
     o.species=canonSpecies(o.species);
     if(pendingPhoto){const pid='p'+Date.now()+Math.floor(Math.random()*9999);await photoPut(pid,pendingPhoto);o.photo=pid;}
     var priorBig=biggest(s);
-    try{if(typeof stampEnv==='function')o.env=stampEnv(o.date,o.time)||{};}catch(e){o.env=o.env||{};}
+    try{if(typeof stampEnv==='function')o.env=stampEnv(o.date,o.time,{lat:s.lat,lng:s.lng})||{};}catch(e){o.env=o.env||{};}
     if(liveWindDir!=null){o.env=o.env||{};o.env.wind={dir:Math.round(liveWindDir),kn:(liveWindKn!=null?Math.round(liveWindKn):null)};}
     if(o.env&&!Object.keys(o.env).length)delete o.env;
     var nlen=parseFloat(o.len)||0;if(nlen>0&&nlen>priorBig)o.pb=true;
@@ -3346,10 +3346,10 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
     if(/run-?\s?in|incoming|flood|making|rising|to high|before high|high tide|push/.test(note))return 'H';
     if(/run-?\s?out|outgoing|ebb|falling|to low|before low|low tide|drain/.test(note))return 'L';return null;}
   const $=id=>document.getElementById(id);
-  function curPort(){try{return (typeof nearestPort==='function'&&typeof map!=='undefined')?nearestPort(map.getCenter()):(typeof PORTS!=='undefined'?PORTS[0]:null);}catch(e){return (typeof PORTS!=='undefined')?PORTS[0]:null;}}
-  function tideTable(){const p=curPort();return p?p.table:null;}
+  function curPort(ll){try{return (typeof nearestPort==='function'&&typeof map!=='undefined')?nearestPort(ll||map.getCenter()):(typeof PORTS!=='undefined'?PORTS[0]:null);}catch(e){return (typeof PORTS!=='undefined')?PORTS[0]:null;}}
+  function tideTable(ll){const p=curPort(ll);return p?p.table:null;}
   const ANCHOR=()=>{const p=curPort()||(typeof PORTS!=='undefined'?PORTS[0]:null);return p?[p.lat,p.lng]:[-27.3667,153.1667];};/* region anchor for on-device astronomy: follows the nearest tide port instead of being pinned to Bargara */
-  function dayTideSampler(ymd){const T=tideTable();if(!T)return null;
+  function dayTideSampler(ymd,ll){const T=tideTable(ll);if(!T)return null;/* ll optional and dual-meaning: SPOT-SCOPED port when supplied (stampEnv only, so a logged catch records its own coast's tide), MAP-CENTRE port when omitted (every other caller, unchanged) */
     const pad=n=>('0'+n).slice(-2),base=new Date(ymd+'T00:00:00'),evs=[];
     for(let off=-1;off<=1;off++){const d=new Date(base);d.setDate(base.getDate()+off);const key=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());const arr=T[key];if(!arr)continue;
       arr.forEach(e=>{const hm=e[0].split(':');evs.push({h:off*24+(+hm[0])+(+hm[1])/60,v:e[1]});});}
@@ -3617,9 +3617,9 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
       +caBar(spec,'By species')+caBar(bait,'By bait / lure')+caBar(bySpot,'By spot')+caBar(stage,'By tide stage')+caBar(moon,'By moon phase')+windBar
       +'<div class="bb-note" style="opacity:.75">Your own log only. Tide and moon use the reading stamped when you logged the catch, falling back to the date/time tables for older entries; wind comes only from catches logged with a live reading. Counts, not catch-rate \u2014 they reflect when you fished, not just when fish bit.</div>';}
   const cab=$('ca-btn');if(cab)cab.onclick=renderAnalytics;
-  stampEnv=function(dateStr,timeStr){const env={};
-    try{if(dateStr&&timeStr){const samp=dayTideSampler(dateStr);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);
-      env.tide={state:d>0.01?'rising':d<-0.01?'falling':'slack',ht:Math.round(ht*100)/100};}}}catch(e){}
+  stampEnv=function(dateStr,timeStr,ll){const env={};
+    try{if(dateStr&&timeStr&&ll&&Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)){const samp=dayTideSampler(dateStr,ll);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);const _p=curPort(ll);
+      env.tide={state:d>0.01?'rising':d<-0.01?'falling':'slack',ht:Math.round(ht*100)/100,port:_p.name};}}}catch(e){}/* port = provenance string for ht: WHICH tide table produced it. No usable ll => no tide fields at all, never a map-centre fallback. Legacy catches have env.tide with no port: that means UNKNOWN, never assume-correct. */
     try{if(dateStr){const il=moonIllum(aestDate(dateStr,timeStr?parseHM(timeStr):12));
       env.moon={name:moonName(il.phase),illum:Math.round(il.fraction*100)};}}catch(e){}
     return env;};
