@@ -1,5 +1,106 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.71 — 15 Aug 2026 — **NOOSA HEAD WIRED AS THE FOURTH TIDE PORT. Build 2026.08.15a.**
+Repo head `844c889` (the v16.70.1 entry) at session start. Closes the Noosa tide-port item that has
+been carried as a fast-follow since v16.5. One build, three intended effects, all three measured
+off-phone against the edited file rather than predicted.*
+
+**1. WHAT SHIPPED.** `NOOSA_TIDES_2026` + `NOOSA_TIDES_2027` embedded in the v16.42
+Brisbane/Mooloolaba shape exactly (two year consts, then
+`Object.assign(NOOSA_TIDES_2026,NOOSA_TIDES_2027);/* one lookup spans 2026-2027 */`), 730 date keys
+2026-01-01 → 2027-12-31, **0 overlapping keys between the two consts** so the merge overwrites
+nothing. `PORTS[]` gains a fourth entry, **APPENDED not inserted** — `PORTS[0]` is still Burnett
+Heads, which is what `nearestPort()` returns when `cl.lat==null`. `FLATS_BOUNDS` gains
+`'Noosa Head':[0.917,1.373]`. `hat:2.37` = the two-year embedded max (2026 max 2.36, 2027 max 2.37).
+
+**2. THE HAT SITS IN THE CONSERVATIVE DIRECTION, LIKE ALL THREE EXISTING PORTS.** Checked against
+MSQ's **Semidiurnal Tidal Planes 2025**, tidal datum epoch 2010–2029 (newer than the 2020 edition
+v16.44.1 used, and on the epoch that edition flagged as superseding it). Published Noosa Head
+**HAT 2.35 m**; embedded max **2.37 m** → **+0.02 m above**. Full set on the 2025 edition:
+Bundaberg (Burnett Heads) 3.68 vs 3.70 (+0.02), Brisbane Bar 2.78 vs 2.81 (+0.03), Mooloolaba 2.21
+vs 2.24 (+0.03), Noosa Head 2.35 vs 2.37 (+0.02). **All four above published HAT, consistent to the
+centimetre.** Note the 2025 edition moves the two figures v16.44.1 recorded off the 2020 edition
+(Burnett 3.67→3.68, Brisbane Bar 2.73→2.78) — both still below the embedded values, so v16.44.1's
+conclusion survives the epoch change. Noosa Head MSL is **1.15 m** on the same table.
+
+**3. THE FLATS-BAND METHOD WAS RE-PROVEN FIRST, AND IT MISSES MOOLOOLABA BY 0.677 mm.** Before
+computing anything for Noosa, v16.50's `FLATS_BOUNDS` derivation was re-run: `tideHeightNow()`
+extracted VERBATIM and driven in a Node vm (never reimplemented — the whole validity of the method
+rests on it not being a rival tide model), 1-minute steps, nulls dropped, 1/3 and 2/3 quantiles.
+**The span is the 2026 calendar year, NOT the full 730-day table** — the 730-day span reproduces
+none of the three. On the 2026 span: **Brisbane Bar [1.002, 1.653] EXACT, Burnett Heads
+[1.407, 2.176] EXACT, Mooloolaba [0.774, 1.234] against the shipped [0.775, 1.234]** — raw
+H1 = 0.774323, short by 0.000677 m. **This is not a quantile-definition artefact:** ten estimators
+(floor/ceil/round/+1/n-1/n+1 index forms, R6 and R7 linear interpolation, and a 1 mm cumulative
+histogram) all return 0.774, and the index ranges required to hit 0.775 and 1.234 simultaneously
+have an empty intersection. **It is not input drift either:** `MOOLOOLABA_TIDES_2026`,
+`BRISBANE_TIDES_2026`, `BURNETT_TIDES_2026`, `tideHeightNow()` and `FLATS_BOUNDS` are all
+byte-identical between `9fe0a9d` (v16.50) and HEAD. The gap is inside v16.50's own arithmetic.
+
+**4. THE REAL LESSON: THIS METHOD DOES NOT SUPPORT 3 dp.** A ±48 h phase scan of the 365-day window
+moves every port by 1–2 mm (Brisbane 1.002–1.003 / 1.652–1.653; Mooloolaba 0.774–0.776; Burnett
+1.406–1.409 / 2.175–2.177). **The shipped constants are quoted one to two digits finer than the
+method's own jitter.** That is a standing property of all four entries now, not a Noosa defect.
+Noosa's value is stable across every window tried (H1 0.917–0.922, H2 1.373–1.378), and the 2026-span
+figure was taken because that is the span that reproduces two of three controls exactly.
+**External cross-check:** computed midpoint (0.917+1.373)/2 = **1.145 m** vs MSQ's published
+Noosa Head **MSL 1.15 m**. **The existing three values were deliberately NOT re-derived** — changing
+them would move rendered output for Brisbane River and Sunshine Coast for no gain.
+
+**5. OFF-PHONE VERIFICATION, RUN AGAINST THE EDITED FILE.** `nearestPort()`, `okHAT()`,
+`flatsBand()`, `flatsColor()` and `FLATS_BOUNDS` extracted VERBATIM from the edited `index.html`
+and driven in a Node vm. Over `data/sunshine_coast_flats_v1.csv` (57,565 rows):
+**2,451 rows re-resolve Mooloolaba → Noosa Head** (the only transition that occurs), **55,114
+unchanged**. Band histogram for the 2,451 re-banded rows, BEFORE (Mooloolaba bounds) → AFTER
+(Noosa bounds): band 0 **1,624 → 1,358 (-266)**, band 1 **750 → 858 (+108)**, band 2
+**77 → 235 (+158)**, band 3 **0 → 0**. The 55,114 unchanged rows are **BIT-IDENTICAL**
+(39,952 / 12,105 / 3,057 / 0 before and after). Over `data/brisbane_river_flats_v1.csv` (68,591
+rows): **0 rows resolve to Noosa Head**, histogram bit-identical. `okHAT` drops on the SC set fall
+**515 → 508** — the 7 rows sitting exactly at −2.24 m inside the Noosa catchment now clear the
+looser 2.37 m threshold. Probe resolutions at 2026-08-15 12:00 AEST: Bargara → Burnett Heads
+(2.3343 m), Redcliffe → Brisbane Bar (2.0154 m), Maroochydore → Mooloolaba (1.1391 m),
+Noosa → Noosa Head (1.2793 m). All four tables span 730 keys, 2026-01-01 → 2027-12-31.
+
+**6. THE GEOMETRIC COUNT AND THE POST-DROP SURVIVOR COUNT ARE DIFFERENT NUMBERS — v16.50 CONFLATED
+THEM AND SHIPPED THE WRONG ONE.** On the live `sunshine_coast_flats_v1.csv` the two coincide at
+2,451 **only because that file was already HAT-filtered when it was generated** (deepest value
+−2.81 m, every Noosa-catchment row shallower than −2.37 m). On the pre-drop source
+`sunshine_coast_intertidal_ground_v2.csv` (168,461 rows) they diverge fourfold: **10,499 geometric,
+2,632 post-drop survivors at hat=2.37**. **Never quote one as the other.** The Mooloolaba/Noosa
+haversine bisector sits at **lat ≈ −26.53** (−26.5375 at lng 153.040 to −26.5272 at lng 153.195),
+well inside the SC dataset's latitude range of −27.0773 … −26.3643 — which reaches 2.11 km NORTH of
+Noosa Head itself, so this is a genuine split and not an edge artefact. It also agrees with the
+−26.533° bucket boundary already recorded for the AHD→LAT conversion.
+
+**7. PRE-EXISTING, NOT INTRODUCED HERE: 515 ROWS IN THE LIVE SC SET FAIL TODAY'S `okHAT`.**
+`sunshine_coast_flats_v1.csv` contains 505 rows at exactly −2.24 m and 51 at exactly −2.81 m. The
+CSV generator kept `depth == -hat`; `okHAT` uses strict `d > -hat` and drops it. A boundary-
+inclusivity mismatch between the generator and the app, pre-dating this build (it is why the drop
+count is 515 before and 508 after, not 0). **Not fixed here — out of scope for this build.**
+Worth a decision next time the SC set is regenerated: align the generator to strict `>`, or leave it.
+
+**8. GATES.** `node --check` exit 0 on both script blocks. Leaflet inner-content SHA-256
+`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`, 147,552 bytes, 0 CRLF —
+unchanged. `zoneAt()`, `ORDER`, the green-zone `dragend` safeguard, `spotsUnlocked` and both
+`<style>` blocks absent from the diff and present in the file. `git diff --numstat` = `38 4
+index.html` — four hunks, nothing else touched. index.html 2,284,040 → 2,351,226 bytes (+67,186,
++65.6 KB). CLAUDE.md NOT edited — its "not yet wired into the app" sentence (lines 72–74) is now
+stale, and **Aaron must apply that correction to BOTH the repo copy and project knowledge**;
+editing the repo copy alone forks them.
+
+**NEXT SESSION.** Build **2026.08.15a**, head = this commit. Noosa Head is live as
+`PORTS[3]`/`FLATS_BOUNDS['Noosa Head']`. **Recommended next job: the on-phone acceptance tap at
+Noosa** — confirm a Noosa-area tap reads the Noosa Head table and that flats shading in the
+Noosa catchment shifts as item 5 predicts (band 0 down 266, band 2 up 158 on the SC set). Pending
+cleanup, in priority order: (i) the CLAUDE.md sentence at lines 72–74 on both surfaces;
+(ii) the 515-row `okHAT` boundary mismatch in item 7; (iii) the 3-dp-vs-1-mm-jitter question in
+item 4 — decide whether `FLATS_BOUNDS` should be quoted to 2 dp, which would be a rendering change
+and needs its own build. **Do NOT re-derive the existing three `FLATS_BOUNDS` entries to close the
+Mooloolaba 0.677 mm gap** — it is understood, recorded, and not worth moving shipped output for.
+
+---
+
+
 *v16.70.1 · 14 Aug 2026 — planning only, no build, no code. Build stays **2026.08.14a**. Repo head
 `851a51c` (the v16.70 entry) at session start. **THE 350 ms `moveend` DEBOUNCE IS RATED AND CLOSED
 AS A DECIDED NON-CHANGE.** It has been carried as "deferred, then eligible, then rate it" since
