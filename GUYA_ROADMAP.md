@@ -1,5 +1,124 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.72.1 · 19 Aug 2026 — planning only, no build, no code. Build stays **2026.08.16a**, repo head
+`02091fe`. **The v16.72 code is accepted; the v16.72 ENTRY is not.** Three defects in the
+self-written entry corrected, four claims tagged inline so a top-to-bottom reader cannot act on
+them, and the next job re-sequenced: **the on-phone gate for v16.72 comes before any further
+build.** Also corrects v16.71.1 §8. No code, no data, no schema change.*
+
+**1. v16.72 REINSTATED A DECIDED DESIGN — `moveend` IS RETRACTED, AGAIN.** v16.72 §7 and its
+NEXT-SESSION pending item (ii) both frame the missing best-bite recompute as an absent `moveend`
+listener — item (ii) verbatim: "no `moveend` trigger exists, so a pan silently desynchronises the
+panel from its port". **v16.71.1 §11 decided the opposite four days earlier: recompute on PANEL
+OPEN, not `moveend`** — deliberately, because the panel is already a considered action, it sidesteps
+the debounce question rather than inheriting it, and it avoids a network call per pan. As committed,
+v16.72 hands the next chat an actionable instruction to build the thing that was decided against.
+Both occurrences tagged inline. **The item is "no recompute on panel open", and it is job (a).**
+
+*Standing lesson, now twice-proven (v16.71.1 §3 predicted it): a self-written roadmap entry is
+Claude Code output like any other and gets the same verbatim red-team. v16.71 shipped un-reviewed
+and carried 505-for-464 into the repo; v16.72 shipped un-reviewed and carried a retracted design
+back into the repo. Two consecutive arcs, same root cause, different symptom.*
+
+**2. v16.72 §6's "six hunks" COUNTS CHANGE SITES, NOT GIT HUNKS — UNMEASURED AS COMMITTED.** The
+entry lists six change *sites* and labels the total "six hunks". Those are different quantities:
+git merges hunks whose context windows overlap, and `:3349-3350` and `:3352` are two lines apart, so
+at the default three lines of context they collapse into a single hunk spanning roughly
+`:3346-3355`. On that reasoning the real count is **five**, not six. **Measured directly against the
+commit: 5 hunks, measured 19 Aug.** Hunk count and location is a standing ship gate — a figure
+that is inferred from a site list rather than measured will not reconcile against a real
+`git diff` on the next verification pass, and reconciliation failures are how a good gate gets
+quietly abandoned. §6 tagged inline.
+
+**3. THE ON-PHONE GATE FOR v16.72 IS THE NEXT JOB — NOT JOB (c).** v16.72's NEXT-SESSION note
+sequences job (c) directly after a **persisted-schema change** with no gate in between. The standing
+rule is unambiguous: build it, confirm it on the phone, and only then start the next build. Pushing
+to Pages is how the build reaches the phone; it is not the gate. Tagged inline.
+
+**PROTOCOL.** (1) Force-close/reopen the home-screen app; confirm `2026.08.16a` in-panel. (2) Export
+a `version:2` backup **before logging anything** — pre-change snapshot. (3) Centre the map on Noosa,
+north of the ≈ −26.53 bisector, and confirm the resolution with the wind-check button label
+(`Checking live wind at Noosa Head…`, `index.html:1853`) — the categorical observable v16.71.1 §2
+identified after the 1-dp tide readout failed to discriminate. (4) Log a catch at a **Redcliffe**
+spot, date and time inside the 2026–27 tables. (5) Log a second catch at the **same spot** with the
+map re-centred on Redcliffe — the control. (6) If any spot arrived via `importBackup` rather than
+the map, log a third catch there. (7) Force-close and reopen — iOS flushes localStorage
+asynchronously and a same-session read-back proves nothing. (8) Export `version:2`, move it
+off-device, inspect the new catches' `env`.
+
+**PASS** = catch 1 reads `env.tide.port === "Brisbane Bar"`, and catch 2 reads the identical port
+**and** `ht` (proving the resolution follows the spot rather than a hardcoded result). **FAIL,
+parameter not threaded** = `"Noosa Head"`. **FAIL, guard misfired or field not written** = `port`
+absent with `moon` present. Catch 3 with no `tide` key is **expected** if that spot's coordinates are
+non-numeric, and confirms the §4 guard in the field. Secondary numeric check, now usable for the
+first time: `env.tide.ht` persists at 2 dp (`Math.round(ht*100)/100`), finer than the 1-dp UI that
+could not separate 1.279 from 1.139 at v16.71 — cross-check catch 1's height against the Noosa table
+for the same instant; they must differ.
+
+**CONSTRAINT, recorded because it shapes the gate:** display was deliberately untouched, so **there
+is no in-app readout of `env.tide.port`**. This build cannot be gated on the phone alone; it
+requires an export inspected off-device. That is a consequence of the one-variable rule, not an
+oversight, but it must not be discovered halfway through a gate session.
+
+**4. v16.71.1 §8 CORRECTED — `stampEnv` WAS NOT THE ONLY PERSISTED-DATA DEFECT.** §8 called it
+"unlike everything else here… **persisted wrong data**, not a stale display". That is wrong.
+`env.wind` at `index.html:1797` is the same class on the same record, written one line later:
+`liveWindDir` persisted with no port provenance, no timestamp and no TTL. v16.72 correctly promoted
+job (c) on exactly this basis — the promotion stands, the sequencing does not (see §3). **Sequence
+after the gate passes: (c) `env.wind.port` + TTL, mirroring (d) exactly — a string sibling of `dir`
+and `kn`, absent means unknown, no back-fill; then (a) recompute on PANEL OPEN; then (b) "Here"
+replaces "Coast-wide".** v16.72 §4's nesting rationale already reserves the collision-free slot.
+
+**5. ACCEPTED RISKS FROM v16.72 — logged, not rebuilt.**
+- **`curPort(ll)` resolves twice per stamp** — once transitively via `dayTideSampler`→`tideTable`,
+  once directly for `_p` at `:3622`. Deterministic and synchronous, so the two cannot diverge, and
+  the unguarded `_p.name` is safe for the reason given (a sampler exists only if `tideTable(ll)` was
+  non-null, which requires `curPort(ll)` non-null). But **the recorded port is resolved
+  independently of the table that produced the height, rather than returned by it.** Correct today.
+  Do not make `nearestPort` stateful or memoised without revisiting this coupling.
+- **Catches at imported spots with non-numeric coordinates now silently get no tide fields.** The
+  `Number.isFinite` guard is correct and load-bearing — `importBackup` (`:3116`) merges `d.spots` on
+  an `s&&s.id` check with no coordinate validation, so string and non-finite coordinates are
+  genuinely reachable. Omission is the right failure (no data beats wrong data, per the
+  classifier-fault precedent), but there is **no user-facing signal**. Recorded so it is not later
+  reported as a regression.
+
+**6. STANDING RULES ADDED THIS ARC.**
+- **A STOP condition is written against BEHAVIOUR, not signature or arity.** The Phase 1 dispatch
+  said "stop if the fix requires changing `tideTable()`'s signature **or** behaviour at any call
+  site other than `stampEnv`'s". The arity limb fired on a change with **zero** behavioural blast
+  radius — an additive optional trailing parameter that collapses to the existing expression at all
+  six untouched call sites — and would have parked a safe build. A stop condition that trips on a
+  safe change costs as much as one that misses an unsafe change.
+- **A single-line grep cannot establish the ABSENCE of a phrase in a hard-wrapped file.**
+  `grep -i "not yet wired" CLAUDE.md` returned nothing this session while the phrase was present at
+  lines 70–71, split across the wrap. Same class as the `Measure-Object -Line` rule. To prove a
+  phrase absent, normalise the whitespace first or search a distinctive single word.
+
+**7. SYNC VERIFIED — NO FORK.** The repo copy at `02091fe` was checked against the
+project-knowledge copy at v16.71.1 before this entry was written: stripping the v16.72 entry
+(lines 3–88) leaves a body **byte-identical** across 7,163 lines, `diff` empty. Repo = project
+knowledge + the v16.72 entry, exactly as the one-direction rule requires. Base file for this entry:
+589,795 bytes, 7,251 lines.
+
+**8. STILL QUEUED — unchanged, restated so this entry is self-contained.** v16.71.1 §5 overlay clip
+(carried, promoted, still unfolded — it does **not** ride with a persisted-schema build and did not
+ride with v16.72). `storage_check.html` tooling pass: the correct gate is a **single sized probe**,
+not the KiB-granular binary search; `navigator.storage.estimate()` reports the StorageManager origin
+quota and does not bound localStorage. MN v3 (#15): 3a OSM-only fetch → 3b clip and **measure**,
+import nothing → sized probe → decide. SC `okHAT` boundary inclusivity (464 rows at exactly −2.24 m
++ 51 at −2.81 m = 515). `FLATS_BOUNDS` quoted to 3 dp against a method with ±1–2 mm jitter.
+
+**NEXT SESSION.** Build **2026.08.16a**, roadmap **v16.72.1**, repo head `02091fe` plus this entry's
+own commit. `CLAUDE.md` unchanged this session — no re-upload needed. **Next job: the v16.72
+ON-PHONE GATE (§3). It is not a build, and nothing may be dispatched before it passes.** After it:
+job (c), then (a), then (b) — §4. **Do not re-litigate:** recompute is on PANEL OPEN, not `moveend`
+(§1); the C3 arc is closed (v16.70.1); the 600×600 grid cap stays untouched; "Coast-wide pins the
+anchor" is false (v16.71.1 §6). **Do NOT back-fill `env.tide.port` on legacy records** — absent
+means unknown and must stay that way.
+
+---
+
 *v16.72 · 16 Aug 2026 — **STAMPENV NOW RESOLVES TIDE FROM THE CATCH'S SPOT, NOT THE MAP CENTRE.
 Build 2026.08.16a.** Repo head `7def0f3` (the v16.71.1 entry) at session start. Best-bite job (d).
 This build **changes the persisted catch record shape** — `env.tide` gains a `port` string. Phase 1
@@ -64,23 +183,28 @@ Noosa throughout and four distinguishable stub tables: existing no-`ll` sites st
 Bar / Mooloolaba / Noosa Head** correctly and independently of the map; all eight bad-coordinate
 cases (omitted, null, NaN, Infinity, string, empty object, missing key) wrote **no tide fields**;
 `typeof env.tide.port === 'string'`; `env.moon` keys remain `["name","illum"]` with no port.
-`git diff --numstat` = `9 9 index.html` — six hunks: `:1052` and `:1091` build string, `:1796`,
+`git diff --numstat` = `9 9 index.html` — six hunks
+`[UNVERIFIED — see v16.72.1 §2: this counts change SITES, not git hunks]`: `:1052` and `:1091`
+build string, `:1796`,
 `:3349-3350`, `:3352`, `:3620-3622`. index.html 2,351,226 → 2,351,770 bytes (+544), line count
 4,195 unchanged. Both `<style>` blocks absent from the diff.
 
 **7. NOT DONE, ON PURPOSE.** Display is untouched — no popup, header or panel change; this is a
 persisted-data build only. `env.wind` at `:1797` still stamps `liveWindDir` with no port provenance
 and no staleness check: **that is job (c) and was not touched.** The three other best-bite defects
-from the v16.71.1 spike remain open: missing recompute on `moveend`, the unscoped coast-wide spot
-list, and stale `liveWindDir` persisting across regions for the whole session.
+from the v16.71.1 spike remain open: missing recompute on `moveend`
+`[CORRECTED — see v16.72.1 §1: the decision is PANEL OPEN, not `moveend`]`, the unscoped
+coast-wide spot list, and stale `liveWindDir` persisting across regions for the whole session.
 
 **NEXT SESSION.** Build **2026.08.16a**, head = this commit. Catches now record which tide table
-produced their height. **Recommended next job: best-bite job (c) — `liveWindDir` staleness**, the
+produced their height. **Recommended next job: best-bite job (c) — `liveWindDir` staleness**
+`[SUPERSEDED — see v16.72.1 §3: the ON-PHONE GATE for this build comes first]`, the
 same class of defect as this one and the last unfixed source of wrong persisted data: `:1797` stamps
 a wind reading that may have been fetched at a different port an unbounded time earlier, with no TTL
 and no origin recorded. Pending cleanup, in priority order: (i) job (c) as above; (ii) the missing
 best-bite recompute — no `moveend` trigger exists, so a pan silently desynchronises the panel from
-its port; (iii) the unscoped spot list in `scoreSpotsFor` (`:3483`), which scores every saved spot
+its port `[CORRECTED — see v16.72.1 §1: recompute is on PANEL OPEN; `moveend` was decided
+against]`; (iii) the unscoped spot list in `scoreSpotsFor` (`:3483`), which scores every saved spot
 against a single port's astronomy. **Do NOT back-fill `env.tide.port` on legacy records** — absent
 means unknown and must stay that way.
 
