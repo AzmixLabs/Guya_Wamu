@@ -1,5 +1,124 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.72.2 · 19 Aug 2026 — **THE v16.72 ON-PHONE GATE PASSED.** No build, no code, no data, no
+schema change. Build stays **2026.08.16a**; repo head `02091fe` plus the v16.72.1 entry's own
+commit. The gate ran off-device against a `version:2` export, exactly as v16.72.1 §3 warned it would
+have to. The result below was read out of the export file, not accepted from a report. Three
+structural findings, one open residual, and three defects in the gate protocol itself.*
+
+**1. GATE RESULT — PASS, verified from the file.** Export `woongarra-backup-2026-08-19.json`,
+21,811,399 bytes, `"version":2`, `"exported":"2026-08-19T13:22:18.904Z"`, 22 spots, 134,372 imported
+depth points, **5 catch records**. Every `env` in the file, unedited:
+
+- `Nudibranch Tip` (−24.84089) · 2023-12-27 08:27 — `env` is `null`.
+- `Test` (−27.23753) · 2025-09-23 13:26 — `moon` + `wind` present, **no `tide` key**.
+- `Test` (−27.23753) · 2026-08-19 23:04 — `tide: {ht:1.29, port:"Brisbane Bar", state:"rising"}`.
+- `Test` (−27.23753) · 2026-08-19 23:21 — `tide: {ht:1.35, port:"Brisbane Bar", state:"rising"}`.
+- `Test02` (−26.38157) · 2026-08-19 22:53 — `tide: {ht:1.26, port:"Noosa Head", state:"rising"}`.
+
+**Both limbs of the crossed test are satisfied.** The 23:21 catch sits at a −27.238 spot and records
+`"Brisbane Bar"` while the map centre was at Mooloolaba — **excludes map-centre resolution**.
+`Test02` at −26.382 records `"Noosa Head"` — **excludes a hardcoded or stuck result**, which the
+protocol as originally written could not have detected (§8). The field is written, it carries the
+spot's own port, and it varies with the spot. **The v16.72 invariant holds in the field: `stampEnv`
+resolves from the catch's own coordinates, never the map centre.**
+
+**THE ONE UNTESTABLE LINK, recorded rather than glossed.** Nothing in the export records where the
+map was. That the 23:21 stamp occurred with the centre at Mooloolaba rests on the wind-check label
+read before and after logging, reported as confirmed. The file cannot corroborate it, and no export
+ever will. Any future gate on a centre-versus-spot question inherits this: the centre is
+screenshot evidence, never file evidence.
+
+**2. THE GUARD IS DEMONSTRATED — on a path no test was designed for.** The 2025-09-23 catch was
+stamped by v16.72 code at a spot with perfectly good coordinates, but its date falls outside the
+loaded tables. `tideTable()` returned null, no sampler was built, and the record carries `moon` and
+`wind` with **no `tide` key and no fallback value of any kind**. That is the v16.72 §4 guard
+behaving correctly — omission rather than a wrong number — on an out-of-range *date* rather than
+the bad-*coordinate* path it was written for. Two failure routes, one correct outcome. This record
+was originally logged in error (a photo-EXIF date), which is how a path nobody scoped got covered.
+
+**3. NO BACK-FILL — confirmed positively, not on trust.** The one legacy catch predating v16.72
+carries `env: null` outright. It has not acquired a `port`, or an `env`. v16.72 shipped with no
+migration and the absent-means-unknown rule held across a real export/reopen cycle. The standing
+instruction stands: **do not back-fill `env.tide.port`.**
+
+**4. JOB (c)'s DEFECT IS VISIBLE IN THE FIELD DATA.** Every `env.wind` in the export is exactly
+`{dir, kn}` — no port, no timestamp, no TTL. v16.72.1 §4 promoted job (c) on a code reading; this
+is the same conclusion from persisted records. The promotion is now evidence-backed.
+
+**5. STRUCTURAL — OPENING A SPOT FROM THE SPOT MENU RE-CENTRES THE MAP ONTO IT.** Confirmed on
+device: tapping a spot in the list pans the map to that spot before anything else happens. There is
+**no route to an off-screen spot that leaves the viewport where it was**, and a spot created from
+the map lands at the map centre by construction. Two consequences, both durable: (a) a freshly
+created spot can never serve as a centre-versus-spot discriminator; (b) any future gate needing
+spot ≠ centre must tap the pin **directly on the map**, at a zoom that holds both the pin and the
+intended centre. Three catches were burnt as null tests before this was understood.
+
+**6. STRUCTURAL — THE WIND-CHECK PORT LABEL IS TRANSIENT, AND IT IS VALID.** The label at
+`index.html:1853` (`Checking live wind at <port>…`) appears only during the fetch and is replaced by
+a result that names no port. It is the **only** user-visible readout of `curPort()`, and capturing
+it requires screenshotting mid-fetch. Fragile, and worth knowing before designing a gate around it.
+It was verified to track the live map centre this session: Noosa centre → `Noosa Head`, Redcliffe
+centre → `Brisbane Bar`. v16.72.1 §2's choice of observable therefore holds. Had it turned out to
+be cached or anchored, every "confirm the resolution with the wind-check button" step in the
+protocol would have been unfounded — that was the worse branch and it is excluded.
+
+**7. RESIDUAL, OPEN — THE HEIGHT'S PROVENANCE IS NOT VERIFIED.** v16.72.1 §5 records that
+`curPort(ll)` resolves **twice per stamp**: once directly for the recorded `port` string
+(`index.html:3622`), once transitively via `dayTideSampler`→`tideTable()` for the height. **The gate
+verified the string. It did not verify that `ht` came from that same port's table.** The numbers
+cannot settle it either — 1.26 → 1.29 → 1.35 across 22:53 → 23:04 → 23:21 is +0.03 m over 11 min
+(0.0027 m/min) then +0.06 m over 17 min (0.0035 m/min), a smooth rising curve running straight
+through a Noosa Head → Brisbane Bar change. Plausible for two SEQ ports at a similar phase, but it
+means **the §3 "secondary numeric check" discriminated nothing at 2 dp**; the categorical port
+string carried this gate alone, exactly as the §2 precision rule predicted it would have to.
+**Proposed close — read-only, off-phone, Sonnet, one file, no edits:** read the Brisbane Bar and
+Mooloolaba tables from `index.html`, interpolate both at 2026-08-19 23:21, and check 1.35 against
+each. Matching Brisbane Bar and not Mooloolaba retires the residual. Not a build; may run before or
+after job (c).
+
+**8. THREE DEFECTS IN v16.72.1 §3's OWN GATE PROTOCOL — recorded because protocols get reused.**
+- **Every expected-PASS value was the same string.** §3 asked for `"Brisbane Bar"` from catch 1 and
+  the identical port from catch 2. That set excludes centre-resolution but **passes cleanly on a
+  hardcoded or stuck resolution**. The fix was one extra catch in the mirror direction, expected to
+  read a *different* port. A gate whose every passing observable is one value is not a gate.
+- **Nothing confirmed the centre at the instant of the stamp.** §3 checked the wind label before
+  logging and never after. Given §5, that gap is not hypothetical — it is exactly the failure that
+  voided three catches. Re-read the observable *after* the action, not only before.
+- **§3 step 6 mis-specified its own expectation.** It treated "arrived via `importBackup`" as a
+  proxy for non-finite coordinates. It is not: most imported spots carry good coordinates and
+  produce an entirely normal record. The step was dropped. Coordinate finiteness is checked in the
+  export, not predicted from a spot's provenance.
+
+*Standing lesson, and the third arc running on the same root: v16.71's entry carried 505-for-464,
+v16.72's carried a retracted design, and v16.72.1's carried a gate that could pass on a stuck
+value. Self-written planning output gets the same verbatim red-team as Claude Code output — and
+that now demonstrably extends to **test protocols**, not just entries and code.*
+
+**9. STILL QUEUED — unchanged.** v16.71.1 §5 overlay clip (carried, promoted, still unfolded; it did
+not ride with v16.72 and does not ride with job (c)). `storage_check.html` tooling pass: single
+sized probe, not the KiB-granular binary search; `navigator.storage.estimate()` reports the
+StorageManager origin quota and does not bound localStorage. MN v3 (#15): 3a OSM-only fetch → 3b
+clip and **measure**, import nothing → sized probe → decide. SC `okHAT` boundary inclusivity (464
+rows at exactly −2.24 m + 51 at −2.81 m = 515). `FLATS_BOUNDS` quoted to 3 dp against a method with
+±1–2 mm jitter.
+
+**HOUSEKEEPING.** The three test spots and five test catches (`Test` `s1787143687537239`, `Test02`
+`s1787143995330639`) remain on the device. Delete after the §7 residual closes — not before, since
+the 23:21 record is the only field evidence of the invariant, and the 2025-09-23 record is the only
+field evidence of the guard. Export first.
+
+**NEXT SESSION.** Build **2026.08.16a**, roadmap **v16.72.2**, repo head `02091fe` plus the v16.72.1
+and this entry's commits. `CLAUDE.md` unchanged — no re-upload needed. **The v16.72 gate is CLOSED
+(§1). Next job: (c) `env.wind.port` + TTL at `index.html:1797`, mirroring (d) exactly** — a string
+sibling of `dir` and `kn`, absent means unknown, no back-fill, Phase 1 read-only characterisation
+before any patch, and its own on-phone gate designed against §5, §6 and §8 above. Then (a) recompute
+on PANEL OPEN; then (b) "Here" replaces "Coast-wide". **Do not re-litigate:** recompute is on PANEL
+OPEN, not `moveend` (v16.72.1 §1); the C3 arc is closed (v16.70.1); the 600×600 grid cap stays;
+"Coast-wide pins the anchor" is false (v16.71.1 §6); `env.tide.port` is never back-filled (§3).
+
+---
+
 *v16.72.1 · 19 Aug 2026 — planning only, no build, no code. Build stays **2026.08.16a**, repo head
 `02091fe`. **The v16.72 code is accepted; the v16.72 ENTRY is not.** Three defects in the
 self-written entry corrected, four claims tagged inline so a top-to-bottom reader cannot act on
