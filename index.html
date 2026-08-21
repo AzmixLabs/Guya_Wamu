@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.16a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.21a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.16a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.21a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1414,7 +1414,7 @@ const SSTORE='woongarra_spots_v1';
 function loadSpots(){try{const a=JSON.parse(localStorage.getItem(SSTORE))||[];if(localStorage.getItem('woongarra_rating_scale')!=='10'){a.forEach(s=>{const r=parseFloat(s.rating);if(r)s.rating=Math.min(10,r*2);});localStorage.setItem('woongarra_rating_scale','10');try{localStorage.setItem(SSTORE,JSON.stringify(a));}catch(e){}}return a;}catch(e){return [];}}
 function saveSpots(){try{localStorage.setItem(SSTORE,JSON.stringify(spots));}catch(e){}}
 let spots=loadSpots(),spotOn=true,placingSpot=false,spotsUnlocked=false;
-let liveWindDir=null,liveWindKn=null;
+let liveWindDir=null,liveWindKn=null,liveWindPort=null,liveWindAt=null;
 /* ---------- PROFILES (local, device-only "who's logging") ---------- */
 const PSTORE='woongarra_profiles_v1';
 const PROFILE_AVATARS=['\ud83c\udfa3','\ud83d\udc1f','\ud83d\udc20','\ud83e\udd88','\ud83d\udc19','\ud83e\udd91','\ud83e\udd80','\ud83e\udd9e','\ud83d\udc2c','\ud83d\udc33','\ud83d\udc21','\ud83e\udd90','\u2b50','\ud83d\udc22','\ud83c\udf0a','\ud83e\ude9d'];
@@ -1794,7 +1794,7 @@ function openCatchSheet(spotId){const s=spots.find(x=>x.id===spotId);if(!s)retur
     if(pendingPhoto){const pid='p'+Date.now()+Math.floor(Math.random()*9999);await photoPut(pid,pendingPhoto);o.photo=pid;}
     var priorBig=biggest(s);
     try{if(typeof stampEnv==='function')o.env=stampEnv(o.date,o.time,{lat:s.lat,lng:s.lng})||{};}catch(e){o.env=o.env||{};}
-    if(liveWindDir!=null){o.env=o.env||{};o.env.wind={dir:Math.round(liveWindDir),kn:(liveWindKn!=null?Math.round(liveWindKn):null)};}
+    if(liveWindDir!=null){o.env=o.env||{};var w={dir:Math.round(liveWindDir),kn:(liveWindKn!=null?Math.round(liveWindKn):null)};if(liveWindPort!=null)w.port=liveWindPort;if(liveWindAt!=null)w.at=liveWindAt;o.env.wind=w;}
     if(o.env&&!Object.keys(o.env).length)delete o.env;
     var nlen=parseFloat(o.len)||0;if(nlen>0&&nlen>priorBig)o.pb=true;
     s.catches=s.catches||[];s.catches.push(o);saveSpots();renderSpots();const z=zoneAt(s.lat,s.lng);spotLayer.eachLayer(l=>{if(l._spotId===s.id){l.setPopupContent(spotPopup(s,z));l.openPopup();}});});
@@ -1853,7 +1853,7 @@ document.getElementById('sp-drop').onclick=()=>{placingSpot=true;document.body.c
   wb.onclick=async()=>{var _wp;try{_wp=nearestPort(map.getCenter())||PORTS[0];}catch(e){_wp=PORTS[0];}o.innerHTML='Checking live wind at '+(_wp?_wp.name:'the coast')+'\u2026';
     try{const u='https://api.open-meteo.com/v1/forecast?latitude='+(_wp?_wp.lat:-27.3667)+'&longitude='+(_wp?_wp.lng:153.1667)+'&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn&timezone=Australia%2FBrisbane';
       const r=await fetch(u);if(!r.ok)throw 0;const j=await r.json();const c=j.current||{};
-      liveWindDir=c.wind_direction_10m;liveWindKn=c.wind_speed_10m;renderSpots();
+      liveWindDir=c.wind_direction_10m;liveWindKn=c.wind_speed_10m;liveWindPort=(_wp&&_wp.name)||null;liveWindAt=Date.now();renderSpots();
       const flagged=spots.map(s=>({s:s,w:windStatus(s)})).filter(x=>x.w&&x.w.lvl!=='ok').sort((a,b)=>(a.w.lvl==='bad'?0:1)-(b.w.lvl==='bad'?0:1));
       let h='Wind now <b>'+Math.round(liveWindKn)+' kn '+compassOf(liveWindDir)+'</b> (gust '+Math.round(c.wind_gusts_10m||0)+' kn). ';
       if(!flagged.length)h+='No mapped spots read as onshore in this wind \u2014 still check the swell and your own eyes.';
