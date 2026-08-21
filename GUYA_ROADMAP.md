@@ -1,5 +1,182 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.73 · 21 Aug 2026 — **JOB (c) SHIPPED: `env.wind` NOW CARRIES PROVENANCE. Build 2026.08.21a.**
+Repo head `5ec347b`; roadmap head at build time `06a4c3c` (v16.72.3). This build **changes the
+persisted catch record shape** — `env.wind` gains optional `port` and `at`. One variable: additive
+provenance only, no change to WHEN wind is written. **The on-phone gate has NOT been run — it is the
+next job and nothing may be dispatched before it.***
+
+**1. (c) IS NOT A MIRROR OF (d) — the handoff instruction was wrong and was corrected before
+dispatch.** v16.72.2's NEXT SESSION said "mirroring (d) exactly". A literal mirror would write
+`port: nearestPort(spotCoords).name`, stamping the port nearest the CATCH onto a wind value fetched
+for a different port — replacing honest silence (`{dir,kn}`, no provenance) with a confident wrong
+answer on a persisted field. Same failure shape as the `FLATS_BOUNDS` key-miss. **Phase 1 found the
+fetch is better than assumed:** `index.html:1854` sends `_wp.lat`/`_wp.lng` — the PORT's own
+coordinates, resolved from `nearestPort(map.getCenter())` at `index.html:1853`. So `env.wind.port`
+is not an approximation of where the wind came from, it **is** the fetch coordinate. Stronger
+provenance than `env.tide.port`, which names a table rather than a measurement point.
+
+**2. TTL-AS-OMISSION WAS DROPPED. The raw fetch instant is stored instead.** The tide guard omits
+because a wrong `ht` has no field that could rescue it. Wind is not that: `{dir,kn,port,at}` is
+self-describing at any age, so a reader can compute staleness and decide. Omitting on age would
+destroy a real observation to prevent a misreading that provenance already prevents. **`at` is
+`Date.now()` at fetch time — an absolute UTC instant, frame-free by construction, which sidesteps
+the v16.72.3 §7 tide/moon frame mismatch rather than inheriting it.**
+
+**3. THE CHANGE — three lines plus the build string.**
+
+- `index.html:1417` — `let liveWindDir=null,liveWindKn=null,liveWindPort=null,liveWindAt=null;`
+- `index.html:1856` — `liveWindPort=(_wp&&_wp.name)||null;liveWindAt=Date.now();` appended before
+  `renderSpots()`, in the same statement run as the two existing assignments, so the four scalars
+  are never observable in a mixed state where `dir` is fresh and `port` is stale.
+- `index.html:1797` — `port` and `at` written CONDITIONALLY onto a local `w`, so a null is never
+  persisted for either. **Absent means unknown, exactly as `env.tide.port`.** The pre-existing
+  `kn:null` asymmetry (`dir` unconditional, `kn` independently null-checked) is preserved
+  byte-for-byte — recorded, deliberately out of scope, do not "fix" it in a later build without
+  its own variable.
+- No read site changed: `1489` (catch row), `1798` (delete-if-empty), `3488` (`scoreSpotsFor`),
+  `3607` (`windRows` filter) all byte-identical.
+
+`stampEnv`, `nearestPort`, `curPort` and `PORTS` re-hashed against the values recorded in the
+previous two sessions: untouched. Wind remains stamped OUTSIDE `stampEnv` — `index.html:3606`
+states the reason in the file: there is no historical wind table to reconstruct from. The fetch
+FAILURE path (`index.html:1857-1864`) assigns to none of the four scalars — `1863` writes only
+`o.innerHTML` — so on a failed fetch all four retain their prior values, which is the pre-existing
+behaviour of the two existing ones, unchanged.
+
+**4. VALIDATION — BYTE ARITHMETIC BOUNDS THE CHANGE COMPLETELY.** 2,351,947 − 2,351,770 = **+177**,
+reconciling exactly against the three line deltas: (71−37) + (220−134) + (138−81) = 34 + 86 + 57 =
+177. All added characters are ASCII, so char delta = byte delta; **the total matching to the byte
+means no other line changed length**, and LINES unchanged at 4,195 excludes an added line. With 5
+MEASURED `@@` headers at the 5 expected locations, a same-length edit elsewhere is also excluded.
+Leaflet block hash exact (`db49d009…5641a`, 147,552 bytes), both script blocks `node --check` exit
+0, exactly 2 `<script>` blocks, `zoneAt()` still ranking by `ORDER` with the early return only at
+`rank===0` (most-protective on overlap, not first-match), green-zone drag safeguard intact at
+`1576-1578`. `git diff --numstat` 5/5. **Standing method, promoted: a byte-delta reconciliation
+against per-line character deltas is strictly stronger than a hunk count — it excludes same-length
+edits elsewhere in the file, which a hunk count alone does not.**
+
+**5. STANDING FACT — THE BUILD STRING IS AT TWO SITES, NOT ONE.** `index.html:1052` (header) and
+`index.html:1091` (footer). Both read `2026.08.16a` before this build, so they have never drifted.
+The dispatch said "the line found in P3", singular; Claude Code bumped both and flagged the
+deviation, correctly. **Every future dispatch must name BOTH sites** — a half-bump ships a header
+and footer disagreeing about the build, and "confirm the build string in-panel" is the first step of
+every on-phone gate. Five other `2026.08.NNa` matches (`2000`, `2219`, `2227`, `2415`, `2965`) are
+historical references in comment prose and must stay untouched.
+
+**6. NEW — `at` CAN PRECEDE ITS OWN CATCH, BY YEARS.** `date`/`time` are user-editable form fields;
+a backdated catch (as the 2025-09-23 EXIF record was) gets TODAY's wind stamped on it, so
+`catchTime − at` goes hugely negative. The behaviour is pre-existing and unchanged by (c); what
+changed is that it is now **detectable**, which is (c)'s own argument in miniature. **Any consumer
+of `at` must treat it as describing the WIND OBSERVATION, never the catch.** `at` is UTC-absolute
+while `date`/`time` are wall-clock strings — not the same clock, never to be subtracted naively.
+
+**7. v16.72.3 §6 CORRECTED — WRONG PORT NAMED.** §6 said a Fiji catch stamps
+`port:"Burnett Heads"`. **It resolves to Noosa Head at 2,649.71 km**; Burnett Heads is 2,670.84 km.
+The substance stands — a Fiji catch stamps a QLD port and a QLD tide height — but a gate written
+against "expect Burnett Heads" would fail for the wrong reason and read as a code defect. Root
+cause: the port name was asserted from reasoning ("northernmost port, so closest to Fiji") rather
+than computed. **Fiji is east, not north.** v16.72.3 §3's separate claim — that a `{0,0}` harness
+stub resolves to Burnett Heads — is unaffected and correct. Tagged inline at §6. **Third
+consecutive arc in which a self-written planning artefact carried a defect into the repo; the new
+failure mode is unverified NUMBERS inside an otherwise red-teamed entry. Numbers get computed, not
+asserted.**
+
+**8. v16.72.3 §6 UNDER-SPECIFIED — THE CAP MUST NOT LIVE INSIDE `nearestPort()`.** Two call sites
+swallow a null return and substitute `PORTS[0]`: `index.html:1853`
+(`nearestPort(map.getCenter())||PORTS[0]`) and `index.html:3349` (`curPort()`'s
+`catch(e){return PORTS[0]}`). A guard returning null from `nearestPort()` would therefore make a
+Fiji session fetch wind at **Burnett Heads' coordinates** and stamp **Burnett's tide table** —
+replacing a wrong-by-20 km answer with a wrong-by-2,670 km one, silently. Worse than the defect.
+Four further call sites (`1977` `flatsBand`, `2817` `okHAT`, `2834` `tideHeightNow`, `3964` `curP`)
+are render/query paths where a null breaks display rather than protecting data. **The cap belongs
+at the PERSISTENCE site — a separate predicate consulted by `stampEnv`'s tide branch, never a
+change to the shared resolver.** And once wind carries provenance (§1), the distance problem is a
+**tide-path problem only**: a Fiji wind record reads honestly as "Noosa Head wind, timestamped",
+while a Fiji tide record reads as authoritative nonsense. Tagged inline at §6.
+
+**9. CAP VALUE DECIDED: 200 km.** Working, from Phase 1's coastline sweep (lat −24.0 to −28.5, 0.1°
+steps, coastline longitude interpolated piecewise-linearly through the four `PORTS` entries):
+
+- Largest sampled coast-to-nearest-port distance **126.28 km** — but at the sweep boundary lat
+  −28.5, roughly 35 km into NSW past Point Danger. Artificial: the value increases monotonically
+  toward the limit, so it is set by where the sweep was told to stop, not by port geometry.
+- Real southern limit, Point Danger (−28.17, 153.55) → Brisbane Bar ≈ **97 km**.
+- Largest genuine INTERIOR maximum **93.17 km** at lat −25.6 — the Noosa Head / Burnett Heads
+  handover near Rainbow Beach / Double Island Point. Second interior maximum 35.29 km at lat −27.0,
+  the Brisbane Bar / Mooloolaba handover.
+- Fiji **2,649.71 km**.
+
+200 km gives 1.6× headroom over the largest measured value including the artificial boundary case,
+2.1× over the real-world worst, and sits 13× below Fiji. Anything from ~150 to ~500 km separates the
+two populations cleanly — there is no tuning risk here. **HARD FLOOR: the cap must exceed 126.28
+km**, or a legitimate Gold Coast catch loses its tide stamp — a "fix" that deletes real field data.
+Port-to-port separations for reference (km): Burnett–Brisbane 299.56, Burnett–Mooloolaba 225.32,
+Burnett–Noosa 193.08, Brisbane–Noosa 109.60, Brisbane–Mooloolaba 76.15, Mooloolaba–Noosa 33.45.
+
+**10. RESIDUAL, LOW.** The `var w` collision check at `index.html:1797` searched lines 1789–1800,
+but `var` hoists to the whole enclosing function (`openCatchSheet`, per the hunk header). Contained
+in fact — `1798`–`1800` do not reference `w` — but the search window was narrower than the scope it
+needed to cover. Close whenever convenient with a 1770–1805 sweep for `\bw\b`.
+
+**11. THE ON-PHONE GATE — NOT RUN. THIS IS THE NEXT JOB.** There is no in-app readout of `port` or
+`at` (`index.html:1489` renders `dir` and `kn` only), so like (d) this **cannot be gated on the
+phone alone** — it requires a `version:2` export inspected off-device. That is a consequence of the
+one-variable rule, not an oversight, and it must not be discovered halfway through a gate session.
+
+**SETUP.** Force-close/reopen the home-screen app; confirm `2026.08.21a` in BOTH the header and the
+footer (§5 — first field check of the two-site bump). Export a `version:2` backup **before logging
+anything**. Create two fresh test spots, one at Redcliffe and one at Noosa.
+
+- **LIMB 1 — THE DISCRIMINATING ONE.** Centre the map on Noosa, press the wind button, confirm the
+  label reads `Checking live wind at Noosa Head…`. **Pan to Redcliffe WITHOUT pressing the button
+  again.** Log a catch at the Redcliffe spot. **PASS** = `env.wind.port === "Noosa Head"` AND
+  `env.tide.port === "Brisbane Bar"` — **two provenance strings on one record that must DISAGREE.**
+  The naive mirror of (d) rejected in §1 would put "Brisbane Bar" in both. Also field-tests that
+  `liveWindPort` survives a ~110 km pan, as the Phase 1 characterisation predicted.
+- **LIMB 2 — `at` IS FETCH TIME, NOT STAMP TIME.** Without re-fetching, log a second catch at the
+  same Redcliffe spot a minute or two later. **PASS** = `at` **identical to the millisecond** across
+  both records while their `time` fields differ. A difference means `Date.now()` landed at the stamp
+  site — a real defect that no other limb detects.
+- **LIMB 3 — CONTROL.** Press the wind button with the map at Redcliffe, confirm the label reads
+  `Brisbane Bar`, log a third catch there. **PASS** = `wind.port === tide.port === "Brisbane Bar"`
+  and `at` strictly greater than limb 1's.
+- **LIMB 4 — ABSENT MEANS UNKNOWN.** Force-close and reopen (all four scalars reset to null at
+  `1417`). Without touching the wind button, log a catch at the Noosa spot. **PASS** = **no `wind`
+  key at all** — not `null`, not `{}`. `env` survives with tide and moon, so `1798` will not delete
+  it.
+
+Then force-close, reopen, export `version:2`, move it off-device, and inspect all four records.
+Sanity-check `at` as a plausible epoch-ms value for 21 Aug 2026 (≈1.787×10¹²), not merely present
+and equal. **No tap-the-pin discipline is needed here** — that rule serves gates requiring spot ≠
+map centre, and no limb above depends on where the map is.
+
+**12. HOUSEKEEPING.** `Test` (`s1787143687537239`) and `Test02` (`s1787143995330639`) and their five
+catches are **unfrozen** (v16.72.3 §8) and may be deleted before the gate — export first, and keep
+`woongarra-backup-2026-08-19.json` untouched as the §7/§4 evidence artefact. **The four NEW gate
+records and their two spots are frozen until the (c) gate closes.**
+
+**13. STILL QUEUED — unchanged.** v16.71.1 §5 overlay clip (carried, promoted, still unfolded; it
+did not ride with v16.72 and did not ride with (c)). `storage_check.html` tooling pass: single sized
+probe, not the KiB-granular binary search; `navigator.storage.estimate()` reports the StorageManager
+origin quota and does not bound localStorage. MN v3 (#15): 3a OSM-only fetch → 3b clip and
+**measure**, import nothing → sized probe → decide. SC `okHAT` boundary inclusivity (464 rows at
+exactly −2.24 m + 51 at −2.81 m = 515). `FLATS_BOUNDS` quoted to 3 dp against a method with ±1–2 mm
+jitter. `nearestPort()` distance cap (§8/§9) — decided, not built, needs its own gate.
+`env.tide`/`env.moon` frame mismatch (v16.72.3 §7).
+
+**NEXT SESSION.** Build **2026.08.21a**, roadmap **v16.73**, repo head `5ec347b` plus this entry's
+own commit. `CLAUDE.md` unchanged — no re-upload needed. **Next job: the (c) ON-PHONE GATE (§11). It
+is not a build, and nothing may be dispatched before it passes.** After it: the `nearestPort()`
+distance cap at 200 km, at the persistence site (§8/§9); then (a) recompute on PANEL OPEN; then (b)
+"Here" replaces "Coast-wide". **Do not re-litigate:** recompute is on PANEL OPEN, not `moveend`
+(v16.72.1 §1); the C3 arc is closed (v16.70.1); the 600×600 grid cap stays; "Coast-wide pins the
+anchor" is false (v16.71.1 §6); `env.tide.port` is never back-filled (v16.72.2 §3); `ht`/`port`
+provenance is settled (v16.72.3 §1); (c) is NOT a mirror of (d) (§1); the cap does not go inside
+`nearestPort()` (§8).
+
+---
+
 *v16.72.3 · 21 Aug 2026 — **THE §7 RESIDUAL IS CLOSED — PASS.** No build, no code, no data, no
 schema change. Build stays **2026.08.16a**; repo head `bbc5e22` plus this entry's own commit.
 Read-only characterisation plus an extracted-code harness, run against `index.html` at blob
@@ -63,6 +240,12 @@ discriminates only against Burnett Heads (1.87) and Mooloolaba (1.12), never aga
 **§7 closes on the 23:21 record alone** — precisely the record the housekeeping freeze protected.
 Flagged by Claude Code unprompted; the dispatch's C2 limb would have been read as corroboration it
 cannot supply.
+
+> **CORRECTED 21 Aug 2026 — see v16.73 §7 and §8.** Two defects in §6 below. (i) The port is
+> **Noosa Head** (2,649.71 km), not Burnett Heads (2,670.84 km) — Fiji is east, not north; the
+> substance stands, only the name was wrong. (ii) "Build the guard after (c)" is under-specified:
+> the cap must NOT go inside `nearestPort()` — two call sites swallow a null into `PORTS[0]` and
+> would silently make it worse. Cap value decided: **200 km, at the persistence site** (v16.73 §9).
 
 **6. NEW, OPEN — `nearestPort()` HAS NO MAXIMUM-DISTANCE GUARD.** `index.html:3310` is
 `let best=PORTS[0],bd=Infinity` over four QLD ports: it always returns one, at any distance. A catch
