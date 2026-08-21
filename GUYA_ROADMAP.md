@@ -1,5 +1,120 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.72.3 · 21 Aug 2026 — **THE §7 RESIDUAL IS CLOSED — PASS.** No build, no code, no data, no
+schema change. Build stays **2026.08.16a**; repo head `bbc5e22` plus this entry's own commit.
+Read-only characterisation plus an extracted-code harness, run against `index.html` at blob
+`2068474366c9a6522b563756154577b714e3b7c4` (working tree = committed blob, verified). Housekeeping
+unfreezes. Two new findings, neither of which rides with job (c).*
+
+**1. THE INVARIANT HOLDS — `ht` AND `port` COME FROM THE SAME TABLE.** `curPort()` resolves twice
+per `stampEnv` call: indirectly via `dayTideSampler`→`tideTable()`→`curPort(ll)`
+(`index.html:3621`→`3352`→`3350`), which chooses the table that produces `ht`; and directly at
+`index.html:3621` (`const _p=curPort(ll)`), which produces the `port` string. Both receive the same
+`ll` object, `stampEnv` gates the whole tide branch on `Number.isFinite` coords so the
+`ll||map.getCenter()` arm at `index.html:3349` is never taken, and `nearestPort()`
+(`index.html:3310`) is a pure function of `(ll, PORTS)` — fixed haversine over a module-level
+constant, no time or state input. Same input, same output. **The 23:21 field record's
+`ht: 1.35` reproduces exactly from the Brisbane Bar table and its `port` reads `"Brisbane Bar"`.**
+
+**REPRODUCED BY HAND from the raw table rows, not taken from the harness.** Cosine interpolation
+(`index.html:3358`), `p.v+(n.v−p.v)(1−cos πf)/2`, bracketing across `dayTideSampler`'s ±1-day
+window (`index.html:3354`) — the 19 Aug stamps all fall past that day's last event, so the
+bracketing pair spans into 20 Aug:
+
+- Brisbane Bar, p = 19 Aug 20:25 L 0.97 (h 20.4167), n = 20 Aug 01:51 H 1.64 (h 25.85), span
+  5.4333 h. **23:21** (h 23.35): f = 2.9333/5.4333 = 0.53988, πf = 97.18°, w = 0.56249 →
+  0.97 + 0.67×0.56249 = 1.34687 → **1.35** ✓. **23:04** (h 23.0667): f = 2.65/5.4333 = 0.48773,
+  πf = 87.79°, w = 0.48072 → 0.97 + 0.67×0.48072 = 1.29208 → **1.29** ✓
+- Mooloolaba, p = 19:10 L 0.82, n = 20 Aug 00:22 H 1.19, span 5.2 h. **23:21**:
+  f = 4.1833/5.2 = 0.80449, πf = 144.81°, w = 0.90858 → 0.82 + 0.37×0.90858 = 1.15617 → **1.16** ✓
+- Noosa Head, p = 18:59 L 0.93, n = 20 Aug 00:18 H 1.33, span 5.3167 h. **22:53** (h 22.8833):
+  f = 3.9/5.3167 = 0.73354, πf = 132.04°, w = 0.83495 → 0.93 + 0.40×0.83495 = 1.26398 → **1.26** ✓
+
+Four of the twelve harness cells reproduce from the table rows independently. The harness was not
+taken on trust — which mattered, because the returning transcript again dropped characters (the P3
+integrity rows for `3247` and `3305` arrived mangled and `3257`'s hash truncated). Standing lesson:
+**where a transcript is the channel, arithmetic that can be re-derived from short quoted rows is a
+better instrument than a hash table that only the sender can check.**
+
+**2. FOUR-WAY DISCRIMINATION, not the two-way the check was designed for.** `stampEnv` called at
+2026-08-19 23:21 with each port's own `PORTS` coordinates returns **1.95 / 1.35 / 1.16 / 1.30**
+(Burnett Heads / Brisbane Bar / Mooloolaba / Noosa Head). The recorded 1.35 is unique. Nearest
+competitor is Noosa Head at 1.30 — **0.05 m = 5× the 2 dp persisted resolution**; the attested map
+centre, Mooloolaba, is **0.19 m = 19×**. The separation was computed and declared before the match
+was interpreted, per the v16.72.2 §2 precision rule, and the matrix is non-degenerate.
+
+**3. THE STRONGEST LIMB WAS UNPLANNED — the stub became the control.** The harness runs under Node
+with `globalThis.map` stubbed to `{getCenter(){return{lat:0,lng:0}}}`. Had either resolution taken
+the `map.getCenter()` arm, all twelve cells would have returned **Burnett Heads** — nearest of the
+four to the equator. All twelve returned the forced port, and `ht` varied across all four. **Both
+resolutions demonstrably follow `ll`, by execution rather than by reading the source.** Standing
+lesson, promoted: **a harness stub chosen to be IMPLAUSIBLE rather than neutral converts itself
+into a control limb for free.** A stub at Redcliffe would have proven nothing.
+
+**4. §7 DOES NOT INHERIT §1's UNTESTABLE LINK.** v16.72.2 §1's map-centre claim rests on the
+wind-check label read in the field, which no export records and none ever will. §7 does not depend
+on it: `ht` and `port` are shown mutually consistent **regardless of where the map was**. Had the
+centre been Redcliffe rather than Mooloolaba, the §7 conclusion is unchanged. **The residual closes
+strictly harder than the gate it was residual to.**
+
+**5. `Test02` IS NOT EVIDENCE FOR THIS — and the checks as written did not catch that.** At 22:53
+Brisbane Bar and Noosa Head both return **1.26**, identical at 2 dp. The `Test02` record therefore
+discriminates only against Burnett Heads (1.87) and Mooloolaba (1.12), never against Brisbane Bar.
+**§7 closes on the 23:21 record alone** — precisely the record the housekeeping freeze protected.
+Flagged by Claude Code unprompted; the dispatch's C2 limb would have been read as corroboration it
+cannot supply.
+
+**6. NEW, OPEN — `nearestPort()` HAS NO MAXIMUM-DISTANCE GUARD.** `index.html:3310` is
+`let best=PORTS[0],bd=Infinity` over four QLD ports: it always returns one, at any distance. A catch
+logged in **Fiji (Sheraton Tokoriki, Oct–Nov 2026)** stamps `port:"Burnett Heads"` and interpolates
+a Burnett-table height — persisted wrong data of exactly the class job (d) just fixed. `stampEnv`'s
+guard omits tide only on non-finite coordinates, never on remoteness. **It creates a third state —
+PRESENT BUT MEANINGLESS — that job (c)'s "absent means unknown" semantics do not cover, and
+`env.wind.port` will inherit the same unbounded resolver.** Decision: **fix the cap value during
+(c)'s Phase 1 characterisation so (c)'s documented semantics are right from the start; build the
+guard after (c), as its own one-variable build with its own gate.** It does not ride with (c).
+Field deadline is the Fiji trip.
+
+**7. NEW — `env.tide` IS DEVICE-WALL-CLOCK FRAMED WHILE `env.moon` IS HARD-AEST.** The tide path
+never forms an instant: `parseHM` (`index.html:3332`) returns a bare float, table times become
+`off*24+HH+MM/60` (`index.html:3355`), and nothing in the code asserts or converts a zone — while
+`index.html:3623` calls `moonIllum(aestDate(...))` with a hardcoded −10 h (`index.html:3330`). **Two
+frames on one record.** Correct on a Brisbane-set phone and only on a Brisbane-set phone; on a
+Fiji-set phone (UTC+12) the tide stamp shifts two hours and the moon stamp does not. Compounds with
+§6 on the same trip. Documented, not scheduled. Related, same read: `new Date(base)` +
+`setDate(base.getDate()+off)` (`index.html:3354`) is a local-calendar day step — safe in QLD (no
+DST), not safe in a DST locale, where the ±1-day neighbours shift an hour against the `off*24`
+constant.
+
+**8. HOUSEKEEPING UNFROZEN.** Test spots `Test` (`s1787143687537239`) and `Test02`
+(`s1787143995330639`) and their five catches may now be deleted. The evidence is already durable
+off-device in `woongarra-backup-2026-08-19.json` (21,811,399 bytes), which carries all five `env`
+blocks including the 23:21 invariant record and the 2025-09-23 guard record. **File that export
+permanently as the §7/§4 evidence artefact — do not overwrite it, do not let a routine export cycle
+consume the filename.** Take a fresh `version:2` export after the deletion as the working backup,
+and force-close/reopen before trusting it (iOS async flush).
+
+**9. STILL QUEUED — unchanged.** v16.71.1 §5 overlay clip (carried, promoted, still unfolded; it did
+not ride with v16.72 and does not ride with job (c)). `storage_check.html` tooling pass: single
+sized probe, not the KiB-granular binary search; `navigator.storage.estimate()` reports the
+StorageManager origin quota and does not bound localStorage. MN v3 (#15): 3a OSM-only fetch → 3b
+clip and **measure**, import nothing → sized probe → decide. SC `okHAT` boundary inclusivity (464
+rows at exactly −2.24 m + 51 at −2.81 m = 515). `FLATS_BOUNDS` quoted to 3 dp against a method with
+±1–2 mm jitter.
+
+**NEXT SESSION.** Build **2026.08.16a**, roadmap **v16.72.3**, repo head `bbc5e22` plus this entry's
+own commit. `CLAUDE.md` unchanged — no re-upload needed. **The §7 residual is CLOSED (§1). Next job:
+(c) `env.wind.port` + TTL at `index.html:1797`, mirroring (d) exactly** — a string sibling of `dir`
+and `kn`, absent means unknown, no back-fill, Phase 1 read-only characterisation before any patch,
+and its own on-phone gate designed against v16.72.2 §5, §6 and §8. **Phase 1 must also settle the
+`nearestPort()` distance cap value (§6)**, though the guard itself is a later build. Then (a)
+recompute on PANEL OPEN; then (b) "Here" replaces "Coast-wide". **Do not re-litigate:** recompute is
+on PANEL OPEN, not `moveend` (v16.72.1 §1); the C3 arc is closed (v16.70.1); the 600×600 grid cap
+stays; "Coast-wide pins the anchor" is false (v16.71.1 §6); `env.tide.port` is never back-filled
+(v16.72.2 §3); and `ht`/`port` provenance is settled — do not re-open §7.
+
+---
+
 *v16.72.2 · 19 Aug 2026 — **THE v16.72 ON-PHONE GATE PASSED.** No build, no code, no data, no
 schema change. Build stays **2026.08.16a**; repo head `02091fe` plus the v16.72.1 entry's own
 commit. The gate ran off-device against a `version:2` export, exactly as v16.72.1 §3 warned it would
@@ -62,6 +177,10 @@ It was verified to track the live map centre this session: Noosa centre → `Noo
 centre → `Brisbane Bar`. v16.72.1 §2's choice of observable therefore holds. Had it turned out to
 be cached or anchored, every "confirm the resolution with the wind-check button" step in the
 protocol would have been unfounded — that was the worse branch and it is excluded.
+
+> **CLOSED 21 Aug 2026 — see v16.72.3 §1: PASS.** The residual below is retired: `ht` and `port`
+> came from the same table, verified by execution and reproduced by hand. The proposed close has
+> been executed. Do not re-run it.
 
 **7. RESIDUAL, OPEN — THE HEIGHT'S PROVENANCE IS NOT VERIFIED.** v16.72.1 §5 records that
 `curPort(ll)` resolves **twice per stamp**: once directly for the recorded `port` string
