@@ -1,5 +1,223 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.74 · 24 Aug 2026 — **BUILD 2026.08.24a SHIPPED: THE 200 km TIDE-PERSISTENCE CAP.** Repo head
+`82571ac` plus this entry's own commit; pre-build head `7c4a111`, pre-build `index.html` blob
+`5385f5b9b1929aaeaeab2fb4082050deef8a5647`. One variable: `env.tide` is omitted when the nearest
+port is further than 200 km. **No schema change** — it reuses the existing omission semantics.
+**The on-phone gate has NOT been run; it is the next job and nothing may be dispatched before it.**
+Also: a repo incident that removed this file for three days (§7), and a validation-source
+contradiction that has been live since v16.73.1 (§5).*
+
+**1. THE CHANGE — three sites, four hunks, measured not inferred.**
+
+- **`index.html:3311`, NEW** — `const PORT_MAX_KM=200;function portInRange(ll){…}`, one physical
+  line, column 0, inserted immediately after `nearestPort` at `3310` and **sibling to it** — top
+  level of the second `<script>` block, *outside* the best-bite IIFE opening at `3313`. Visible to
+  `stampEnv` by closure; no IIFE-boundary hook needed.
+- **`index.html:3622`** (was `3621`) — `&&portInRange(ll)` appended as the **last** conjunct of the
+  existing `if(...)`, after both `Number.isFinite` checks. **`3623`, the `env.tide=` write, was not
+  touched.**
+- **`index.html:1052` and `:1091`** — build string `2026.08.21a` → `2026.08.24a`, both sites.
+
+`git diff --numstat` **4 3**; hunk count **4**, counted off `git diff -U0` and each header read
+back, not inferred from the site list. Three in-place rewrites (3 added + 3 removed) plus one pure
+insertion (`@@ -3310,0 +3311 @@`, 1 added + 0 removed) reconciles to 4/3 exactly.
+
+**2. LAST-CONJUNCT PLACEMENT IS LOAD-BEARING, NOT STYLISTIC.** `portInRange` dereferences `ll.lat`
+and `ll.lng` directly, while `nearestPort` also accepts the **array** form
+(`Array.isArray(centre)?{lat:centre[0],lng:centre[1]}`). Placed anywhere before the two
+`Number.isFinite` checks, an array or a non-finite `ll` would reach the predicate. Short-circuit
+guarantees an object with numeric coordinates before it runs. **Recorded because a future
+reformatting of that line could reorder the conjuncts and silently remove the guarantee.**
+
+**3. THE 321-BYTE RECONCILIATION, AND WHY THE TOTAL IS UNIQUELY PINNING.** 2,351,947 →
+2,352,268 = **+321**, predicted before the write and measured after. Arms derived from line text on
+disk: declaration **303** (pure ASCII, chars = bytes) + **1** LF separator + **17** for
+`&&portInRange(ll)` (`&&` 2 + `portInRange` 11 + `(` 1 + `ll` 2 + `)` 1). Build-string arms
+contribute **0** — same-length by construction. Lines 4,195 → 4,196; trailing byte still `62` (`>`),
+no EOF newline introduced.
+
+**The arms cannot trade off.** The dispatch specified `&& portInRange(ll)`; the build shipped
+`&&portInRange(ll)`, matching the four existing conjuncts on the same line. Spaced variants total
+322 or 323. **So 321 pins the declaration to full length AND the conjunct to exactly that text** —
+a stronger property than a matching total usually carries, and the opposite of the v16.73.1 §2
+same-length blind spot.
+
+**4. THE BUILD-STRING BUMP WAS READ BACK INDEPENDENTLY, AS §2 OF v16.73.1 REQUIRES.** The byte
+delta is blind to a half-bump. Whole-file token counts after the edit: **`2026.08.21a` = 0**,
+**`2026.08.24a` = 2**. Also `portInRange` 2 (1 decl + 1 call), `PORT_MAX_KM` 2, `nearestPort` 11
+(was 10; the +1 is the new call inside `portInRange`), **`curPort` 5, unchanged**.
+
+**5. THE LEAFLET PIN IS NOT IN `CLAUDE.md`, AND THAT MAKES A STANDING RULE UNSATISFIABLE.**
+
+The first pass at check 2 hashed lines 1209–1214 **including the `<script>` tags**, pre and post,
+and confirmed they matched *each other*. That is not the check: it proves the block did not change
+during the session, and compares nothing to the pin. **A self-comparison is not a pin comparison.**
+Re-run body-only against the recorded value: **`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`,
+character-identical.** The tags-included form `156fc90a…` also matches a value recorded at
+`GUYA_ROADMAP.md:2367`, so both forms are pinned and the first pass measured something real — just
+not the specified thing.
+
+**Root cause, and it is not the operator's.** `CLAUDE.md` (6,780 bytes) holds the *requirement* and
+**zero hex runs, zero digest/hash/sha256 mentions**. The pin lives in this file, nine occurrences,
+with `GUYA_ROADMAP.md:1618` naming the body-only method. v16.73.1 §7 made it standing that
+**validation steps come from `CLAUDE.md` read at the time, never from a handoff or a chat's
+recollection.** For this check that rule is **unsatisfiable** — reading `CLAUDE.md` yields a check
+with no value and no method, so the value must come from somewhere else, which is precisely the
+sourcing §7 forbids. That is how the check drifted to a self-comparison.
+
+**ACTION, own build, not this one: write the pin and the body-only method into `CLAUDE.md`.** Until
+then §7 has a hole with a known shape. *Standing lesson: a rule that says "get it from file X" must
+be checked against file X actually containing it. An unsatisfiable rule does not fail loudly — it
+gets satisfied from memory and looks like compliance.*
+
+**6. THE PHASE-1 CHARACTERISATION CORRECTED v16.73 §8's BLAST RADIUS.** §8 enumerates six
+`nearestPort` call sites and that list is **complete and current**. But `stampEnv` does not call
+`nearestPort` — it calls **`curPort(ll)`**, whose own four call sites §8 never enumerates:
+`tideTable` (3351), `ANCHOR` (3352), best-bite render (3397), and **`stampEnv`'s tide branch
+(3622)**. Ten sites total. **Exactly one reaches persistence — `3622`** — and six of the other nine
+already tolerate null. Had Phase 2 been dispatched against §8's list alone, the patch site would
+have been reasoned about through the wrong function.
+
+**7. LINE NUMBERS AT AND AFTER 3311 HAVE SHIFTED +1.** The insert displaces everything below it.
+Post-build: `curPort` **3350**, `tideTable` **3351**, `ANCHOR` **3352**, best-bite render **3397**,
+`stampEnv` assignment **3621**, tide branch **3622**, `env.tide=` write **3623**, `curP` **3965**.
+Unchanged (above the insert): `stampEnv` forward declaration 1466, persistence site 1796/1798,
+`zoneAt` 1325, drag safeguard 1576–1578, `flatsBand` 1977, `okHAT` 2817, `tideHeightNow` 2834,
+`nearestPort` 3310. **Any dispatch quoting a pre-build line number at or past 3311 is stale.**
+
+**8. THE FOUR `CLAUDE.md` CHECKS — PASS, none self-reported.** `node --check` on both extracted
+blocks: **PASS / PASS** under node v24.18.0, with `block2.js` confirmed to contain exactly one
+`function portInRange` (so the new code is inside the block that was checked). Leaflet body-only
+digest character-identical to the pin (§5). `zoneAt()` intact **on the merits** — ranks every
+containing polygon and keeps the winner via `rank<bi`, early return reserved for rank 0, with
+`ORDER=["MNP","CPZ","HPZ","GUZ"]` at `1227`; most-protective-on-overlap holds. Drag safeguard intact
+at `1576`–`1578` — re-runs `zoneAt()` on the dropped coordinates and fires the deferred no-take
+alert. **None of the four sits in any diff hunk**, verified against the measured hunk list.
+
+**Independent corroboration across sessions:** post-edit app-block body = **2,134,764 characters**,
+against v16.73.1 §4's pre-edit **2,134,443** plus this build's **321**. Difference from expected:
+**0**. Two measurements, three days and two sessions apart, reconciling through the byte delta.
+(Block1 = 147,552 bytes, matching v16.73.1 §4 exactly; Leaflet is pure ASCII so bytes = chars.)
+
+**9. BEHAVIOURAL NOTES ON THE SHIPPED CODE — recorded, none blocking.**
+
+- The tide path now resolves `nearestPort` **twice** per stamp: once in `portInRange(ll)`, once via
+  `curPort(ll)`. Pure function over a 4-entry `const`, so cost is nil and the two cannot disagree —
+  **but if `nearestPort` is ever made stateful or memoised, this doubles the coupling.**
+- `if(!p)return false` is **dead today** — Phase 1 established `nearestPort` never returns null
+  (both exits yield a `PORTS[]` element). Defensive only, and it fails **closed**: an unresolvable
+  port omits the stamp rather than inventing one.
+- `env.moon` is untouched, so a Fiji catch still gets moon data. Correct — moon phase is not
+  port-derived.
+- Boundary is **inclusive** (`<=PORT_MAX_KM`): exactly 200.000 km still stamps. Against the measured
+  floor of 126.28 km and Fiji at 2,649.71 km, immaterial.
+- **Nothing is back-filled.** A previously-stamped out-of-range catch keeps its wrong port until a
+  separate, explicitly authorised pass addresses it. No migration, no schema change.
+- Pre-edit backup held outside the repo at `…\Temp\claude\…\scratchpad\index.html.pre2026.08.24a.bak`.
+
+**10. NEW, OPEN — THE DISPLAY PATH STILL LIES OUT OF RANGE. Same field deadline.** The cap guards
+persistence only. `flatsBand` (1977), `okHAT` (2817), `tideHeightNow` (2834) and `curP` (3965) all
+resolve a port at any distance. **At Tokoriki the app will show a tide readout interpolated from
+Noosa Head's table and gate depth shading on Noosa's HAT, while correctly refusing to stamp tide on
+the catches logged beside it.** The asymmetry is deliberate and defensible — persisted wrong data is
+permanent, a display is transient, and one variable per build — **but it is a decision, not an
+oversight, and it must not be discovered in Fiji in October.** A field user reading `tide 1.4 m
+rising` on Tokoriki has no way to know it is nonsense. Scope when reached: these are display paths
+where a null breaks rendering, so the fix is a *readout suppression*, not a null return.
+
+**11. REPO INCIDENT — `2e16a5c` REMOVED THIS FILE FROM THE REPO AND NOBODY NOTICED FOR THREE DAYS.**
+
+The v16.73.1 commit is `GUYA_ROADMAP.md | 7796 deletions(-)`, **zero insertions** — a pushed
+`git rm --cached`, not an entry addition, under a commit message describing an entry addition. The
+working-tree file survived untracked and kept accumulating, so no content was lost; `origin/main`
+simply carried **no roadmap at all** from 21 to 24 Aug. Restored at `7c4a111` as a fresh add
+(`create mode 100644`, 8,003 insertions).
+
+**Lineage proven byte-exact before the restore**, by git's own hashing rather than a text
+comparison: stripping the two new entries from the restored file reproduced
+`870bddb:GUYA_ROADMAP.md` = **`d46721a1446eb3834e277dee61d3981a933fc9de`** (632,849 bytes, matching
+v16.73.1 §5's independently recorded figure). Nothing drifted in the three untracked days.
+
+**THE SESSION-CLOSE CHECK COULD NOT HAVE CAUGHT THIS, AND STILL CANNOT.** "`git status` clean and up
+to date with `origin/main`" **passed on 21 Aug** — it had to, because the deletion was committed and
+pushed. A clean status proves the working tree matches HEAD; it says nothing about whether HEAD
+contains the file. **NEW MANDATORY SESSION-CLOSE CHECK, alongside `git status`:**
+
+    git ls-tree -r HEAD --name-only | Select-String 'ROADMAP'
+
+It must return `GUYA_ROADMAP.md`. *Standing lesson: a check cannot detect its own subject going
+missing. Existence in HEAD was assumed by the entire authority model and never once verified.*
+
+**12. v16.73.2 §9 CORRECTED — its repo-head claim points at the deletion.** As committed it reads
+"repo head is v16.73.1's commit plus this entry's own". v16.73.1's commit is `2e16a5c`, which
+removed the file. **The correct pre-build head is `7c4a111`.** Not amended in place — the commit is
+pushed and gets a correcting entry, not a rewrite. *Fourth consecutive arc in which a self-written
+planning artefact carried a defect into the repo.*
+
+**13. THE TRANSCRIPT IS A LOSSY CHANNEL — CHARACTERISATION OUTPUT GOES TO A FILE.** Phase 1's answers
+reached the planning chat truncated **twice, differently**, with a `√ Update installed · Restart to
+update` status line overwriting the pane; two copy attempts of the same completed run produced
+different text. Recovered by having the session write its answers to `scratchpad/` (gitignored) and
+attaching the file. Compare v16.72.3 §1 (dropped characters, mangled integrity rows) and v16.73.1 §3
+(console-width truncation showing that a site contains *a* build string but not *which*). **Third
+distinct instance.** **STANDING: any Claude Code output longer than a few lines is written to
+`scratchpad/` and attached, never pasted.** The transcript has no integrity check and its corruption
+is undetectable from inside the receiving chat.
+
+**14. TWO DISPATCH-PROMPT DEFECTS, both caught by Claude Code rather than by review.**
+
+- **A discovery prompt must not state an expected match count.** Phase 1 said "single match
+  expected" for `stampEnv`. There are two — a forward declaration at `1466` and the assignment at
+  `3620`. A search told what to expect stops looking once it finds it, converting a measurement into
+  a confirmation. Had it stopped at the first match, it would have characterised `let stampEnv=null`
+  as the function body.
+- **A build dispatch adapted from a read-only characterisation inherits its terminal conditions,
+  and they are wrong.** Phase 2 carried over "`git status` must be clean when you finish", which no
+  build editing a tracked file can satisfy. Flagged rather than silently resolved. Correct wording
+  for a build: *nothing staged, nothing committed, no untracked files.*
+
+**15. THE ON-PHONE GATE — NOT RUN. THIS IS THE NEXT JOB.** No in-app readout of `env.tide.port`
+exists, so as with (c) and (d) this **cannot be gated on the phone alone** — it needs a `version:2`
+export inspected off-device. Confirm a Pages Actions run completed and `2026.08.24a` reads live in
+the app before starting; a push is not a deployment.
+
+**SETUP.** Force-close/reopen the home-screen app; confirm `2026.08.24a`. Export a `version:2`
+backup before logging anything. Three spots, reached by panning the map — no travel required.
+
+- **LIMB A — THE CAP FIRES.** Spot at Tokoriki (≈ −17.62, 177.05), ≈2,650 km from Noosa Head. Log a
+  catch. **PASS** = **no `tide` key at all** — not `null`, not `{}` — with `moon` present.
+- **LIMB B — THE DISCRIMINATING ONE.** Spot near Point Danger (≈ −28.17, 153.55), ≈97 km from
+  Brisbane Bar. Log a catch. **PASS** = `tide` **present**, `port:"Brisbane Bar"`, `ht` plausible
+  against the Brisbane Bar table for that instant. **This limb is what stops a cap that is too
+  tight, and a cap set to 0 passes LIMB A perfectly.** It protects real Gold Coast field data —
+  §9's hard floor of 126.28 km exists for exactly this failure.
+- **LIMB C — CONTROL.** Redcliffe spot, unchanged behaviour: `tide` present,
+  `port:"Brisbane Bar"`.
+
+A and B are **mutually discriminating**: a broken `dayTideSampler` fails both, a dead predicate
+fails A, an always-true predicate fails B. Force-close, reopen, export, inspect off-device. **Parse
+the export, never print it** — a `version:2` export carries base64 photos and is megabyte-scale.
+**Epoch/date bounds must be recomputed for the day the gate actually runs** (v16.73.2 §1: a computed
+bound carries the date it was computed for, and a stale bound fails open).
+
+**16. STILL QUEUED — unchanged unless noted.** `CLAUDE.md` pin + method (§5, NEW, own build);
+display-path remoteness (§10, NEW); v16.71.1 §5 overlay clip (carried, still unfolded);
+`storage_check.html` tooling pass; MN v3 (#15) Noosa-OSM fetch + Noosa tide-port wiring; SC `okHAT`
+boundary inclusivity; `FLATS_BOUNDS` 3-dp precision; `env.tide`/`env.moon` frame mismatch
+(v16.72.3 §7 — now with a downstream dependent, the bite-time graph scrub at v16.73.2 §7); bite-time
+graph scrub (v16.73.2 §7).
+
+**17. NEXT SESSION.** Build **2026.08.24a**, roadmap **v16.74**, repo head `82571ac` plus this
+entry's own commit. `CLAUDE.md` unchanged — but see §5, it is now known to be incomplete. **Next
+job: the ON-PHONE GATE (§15). It is not a build, and nothing may be dispatched before it passes.**
+After it: (a) recompute on PANEL OPEN; then (b) "Here" replaces "Coast-wide". **Do not
+re-litigate:** everything in v16.73's, v16.73.1's and v16.73.2's lists, plus — the cap is built and
+sited at the persistence site (§1); the display path is deliberately out of scope for this build
+(§10); the (c) gate is closed and is not to be re-run.
+
+---
+
 *v16.73.2 · 24 Aug 2026 — **THE (c) ON-PHONE GATE IS CLOSED. ALL FOUR LIMBS PASS.** No build, no
 code, no data, no schema change. Build stays **2026.08.21a**; repo head is v16.73.1's commit plus
 this entry's own. Evidence: `woongarra-backup-2026-08-24.json`, a `version:2` export taken
