@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.21a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.24a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.21a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.24a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -3308,6 +3308,7 @@ const PORTS=[
   {name:"Noosa Head",lat:-26.3833,lng:153.0917,table:NOOSA_TIDES_2026,hat:2.37}
 ];
 function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:centre[1]}:(centre||{});if(cl.lat==null)return PORTS[0];const R=6371,toR=Math.PI/180,hv=(a,b,c,d)=>{const dy=(c-a)*toR,dx=(d-b)*toR,s=Math.sin(dy/2)**2+Math.cos(a*toR)*Math.cos(c*toR)*Math.sin(dx/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));};let best=PORTS[0],bd=Infinity;for(const p of PORTS){const d=hv(cl.lat,cl.lng,p.lat,p.lng);if(d<bd){bd=d;best=p;}}return best;}
+const PORT_MAX_KM=200;function portInRange(ll){const p=nearestPort(ll);if(!p)return false;const R=6371,toR=Math.PI/180,dy=(p.lat-ll.lat)*toR,dx=(p.lng-ll.lng)*toR,s=Math.sin(dy/2)**2+Math.cos(ll.lat*toR)*Math.cos(p.lat*toR)*Math.sin(dx/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(s)))<=PORT_MAX_KM;}
 
 /* ===== Best-bite times: on-device solunar + sun/moon, embedded Burnett Heads 2026 tides ===== */
 (function(){
@@ -3618,7 +3619,7 @@ function nearestPort(centre){const cl=Array.isArray(centre)?{lat:centre[0],lng:c
       +'<div class="bb-note" style="opacity:.75">Your own log only. Tide and moon use the reading stamped when you logged the catch, falling back to the date/time tables for older entries; wind comes only from catches logged with a live reading. Counts, not catch-rate \u2014 they reflect when you fished, not just when fish bit.</div>';}
   const cab=$('ca-btn');if(cab)cab.onclick=renderAnalytics;
   stampEnv=function(dateStr,timeStr,ll){const env={};
-    try{if(dateStr&&timeStr&&ll&&Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)){const samp=dayTideSampler(dateStr,ll);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);const _p=curPort(ll);
+    try{if(dateStr&&timeStr&&ll&&Number.isFinite(ll.lat)&&Number.isFinite(ll.lng)&&portInRange(ll)){const samp=dayTideSampler(dateStr,ll);if(samp){const h=parseHM(timeStr),ht=samp(h),d=samp(h+0.25)-samp(h-0.25);const _p=curPort(ll);
       env.tide={state:d>0.01?'rising':d<-0.01?'falling':'slack',ht:Math.round(ht*100)/100,port:_p.name};}}}catch(e){}/* port = provenance string for ht: WHICH tide table produced it. No usable ll => no tide fields at all, never a map-centre fallback. Legacy catches have env.tide with no port: that means UNKNOWN, never assume-correct. */
     try{if(dateStr){const il=moonIllum(aestDate(dateStr,timeStr?parseHM(timeStr):12));
       env.moon={name:moonName(il.phase),illum:Math.round(il.fraction*100)};}}catch(e){}
