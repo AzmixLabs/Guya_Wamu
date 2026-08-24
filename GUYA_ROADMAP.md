@@ -1,5 +1,218 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.74.1 · 25 Aug 2026 — **THE 200 km CAP'S ON-PHONE GATE IS CLOSED. ALL FIVE LIMBS PASS AND BOTH
+BRANCHES ARE EXERCISED IN THE FIELD.** No build, no code, no data, no schema change. Build stays
+**2026.08.24a**; repo head is `c83854a` plus this entry's own commit. Evidence: three `version:2`
+exports inspected off-device across two rounds — round 1 proved only the pass-through path and is
+recorded as a **null result**, round 2 closed the gate. Also: the desk-side boundary measured off
+the shipped file before the phone was touched (§7), a fourth transport failure in a NEW direction
+(§12), and two new defects in the export/id layer (§8, §9). **`env.tide` remoteness is confirmed in
+the field and the queue is unblocked.***
+
+**1. THE GATE, VERBATIM FROM THE EXPORTS.**
+
+| limb | dist km | resolved port | `Object.keys(env)` | verdict |
+|---|---|---|---|---|
+| `CapCairns` | **1,117.64** | Burnett Heads | `["moon"]` — **no `tide` key** | PASS |
+| `CapKeppel` | **243.10** | Burnett Heads | `["moon"]` — **no `tide` key** | PASS |
+| `CapCurtis` | **160.37** | Burnett Heads | `["tide","moon"]`, `ht 1.04 falling` | PASS |
+| `CapB1` | **13.49** | Mooloolaba | `["tide","moon"]`, `ht 0.6 falling` | PASS |
+| `CapC` | **3.76** | Mooloolaba | `["tide","moon"]`, `ht 0.6 falling` | PASS |
+
+`tide:null` and `tide:{}` have **zero occurrences** across all five catches. The build reuses the
+existing omission semantics with no schema change, exactly as v16.74 §1 claimed. `port` on the
+in-range side is `"Mooloolaba"` and `"Burnett Heads"` — spot-coordinate-derived, not map-centre-derived,
+corroborating v16.72.3 §3 for a third time.
+
+**2. FOUR CANDIDATE DEFECTS EXCLUDED BY OBSERVATION, NOT INFERENCE.** A dead predicate or an
+always-true predicate stamps Keppel and Cairns — neither is stamped. A cap of 0, or any cap below
+160.37 km, strips Curtis, B1 and C — none is stripped. A broken `dayTideSampler` fails the in-range
+side — it does not. Deletion of `env` at the omission site takes `moon` with it — `moon` survives on
+both omitting catches. **This is the property v16.73.1 demanded and round 1 could not supply: every
+passing observable is not the same string.**
+
+**3. THE `ht` CONSISTENCY CHECK PASSES, AND IT COST NOTHING.** `CapB1` at `23:47` and `CapC` at
+`23:49`, two minutes apart, both resolving Mooloolaba: `ht 0.6`, `state "falling"`, identical. No
+second table is being reached. **Recorded as a reusable technique: two limbs at the same port a few
+minutes apart give a table-identity check with no external tide source and no extra dispatch** —
+strictly better than "`ht` plausible against the published table for that instant", which requires a
+source the gate does not carry.
+
+**4. BURNETT HEADS WAS EXERCISED ON BOTH SIDES OF THE BOUNDARY — UNPLANNED.** The gate was designed
+entirely against Brisbane Bar. The re-siting forced by §6 moved every new limb north, so the
+predicate is now confirmed in-range at Curtis and out-of-range at Keppel and Cairns against a
+**second port**. **Standing lesson, third instance after v16.73.2 §4: a constraint that forces a
+protocol off its designed path has repeatedly produced a stronger gate than the design.** Record the
+accident; do not pretend it was the plan.
+
+**5. ROUND 1 IS A NULL RESULT AND IS KEPT AS ONE.** The first pass logged catches on `CapB1`
+(13.49 km) and `CapC` (3.76 km) only. `CapA` and `CapB2` were created but carry **zero catches**, and
+all four round-1 spots resolve `portInRange=true`. **That export evidences the pass-through path
+alone — precisely what a completely dead cap also produces.** It was reported as a null result rather
+than as a clean run, and the distinction is the entire value of the round. Round-1 artefacts:
+`woongarra-backup-2026-08-24 pre cap.json` (20,012,001 B) and
+`woongarra-backup-2026-08-24capgate.json` (20,014,212 B); spots 22 → 26; delta **2,211 B** across 4
+spots + 2 catches ≈ 368 B/record, which agrees with the catch count and not with four.
+
+**6. THE ROUND-1 MISPLACEMENT WAS A DISPATCH-LANGUAGE DEFECT, NOT A USER ERROR, AND NOT AN APP
+DEFECT.** The planning chat wrote "exact placement doesn't matter" (true — the export carries the
+pin's real coordinates and the distance is recomputed from those) alongside "drop the pin there".
+Together those read as *anywhere*. They meant *anywhere within ~20 km of the stated coordinate*.
+Distance to the nearest port is the predicate's only input, so the pin's location **is** the test
+input. **Standing rule: when a dispatch says a tolerance is loose, it must state the tolerance.**
+The two candidate explanations — misplacement versus coordinate clamping in the app — were
+distinguished by one field: `CapA` at `153.117150` is a QLD longitude, so the pins went where they
+were put. Ruling out the app defect mattered more than the gate, since coordinate integrity
+underwrites every distance-derived behaviour in the file.
+
+**7. THE BOUNDARY WAS MEASURED OFF THE SHIPPED FILE BEFORE THE PHONE WAS TOUCHED.** A read-only
+harness at `scratchpad\capgate_sites.js` lifted `PORTS`, `nearestPort`, `portInRange` and the
+function-local `hv` arrow **verbatim** from `index.html` — the `hv` slice verified as a genuine
+substring by `.Contains()`, not retyped. Sweep along `lng 153.40`, `lat −27.40 → −30.00` at 0.005°:
+**521 rows, 351 true, 170 false, exactly one flip, `Brisbane Bar` the only port seen** — so the
+boundary is a single distance crossing, not a port-handover artefact. Last true `−29.150` at
+**199.6059 km**; first false `−29.155` at **200.1582 km**. **`PORT_MAX_KM` is where it claims to be,
+measured on disk.**
+
+*Independently reproduced in the planning chat from the same lifted formula: Redcliffe →
+Brisbane Bar **15.62 km**, character-identical to the harness, from a copy that travelled a
+different path.*
+
+**8. NEW DEFECT — EXPORT FILENAMES APPEAR TO BE UTC-DATED, NOT LOCAL. NEEDS ONE-LINE CONFIRMATION.**
+The round-2 export was written at `2026-08-24T14:09:27.774Z` = **00:09:27 AEST on 25 August**, and
+its filename stem reads `woongarra-backup-2026-08-24`. Round 1 exported at `13:49:42.526Z` = 23:49
+AEST 24 Aug, where UTC and local agree and the stem is uninformative. **Caveat, and it is why this is
+not yet asserted: Aaron hand-suffixed both files, so the stem's date cannot be proven to be the app's
+rather than typed.** Confirm by exporting once between 00:00 and 10:00 AEST and reading the offered
+filename before renaming. **If confirmed, it amplifies the v16.73.2 §6 collision hazard rather than
+repeating it** — every export in the 00:00–10:00 AEST window carries the *previous* day's date, so a
+late-night and a next-morning export collide by construction, and no amount of care about
+same-day exports prevents it.
+
+**9. NEW DEFECT, LOW — SPOT IDS ARE VARIABLE-LENGTH.** `index.html:1611` builds ids as
+`'s'+Date.now()+Math.floor(Math.random()*999)`. The random tail is **not zero-padded**, so ids run
+15–17 characters: `s178757909871556` (tail `56`), `s178758041951444` (tail `44`),
+`s1787579039491992` (tail `992`). Harmless today because the epoch is a fixed 13 digits and every
+decode in use takes a **prefix**. **Any future parse using a fixed offset from the END of the id will
+break, silently and only sometimes.** The epochs in this entry are trustworthy because Claude Code
+read `1611` to confirm the format instead of assuming a 13-digit decode — the right instinct, and the
+reason the defect was found at all.
+
+**10. THE MIDNIGHT STRADDLE HAPPENED, AND KEEPING BOTH WINDOWS LIVE IS WHAT SAVED IT.** Round-1 spots
+were created 23:43:59–23:45:26 AEST on 24 Aug; round-2 spots 00:05:21–00:06:59 AEST on **25 Aug**
+(`1,787,580,321,915` / `…358,968` / `…419,514`, all inside the 25 Aug window
+`1,787,580,000,000 – 1,787,666,400,000`). A single 24 Aug bound — the obvious reading of v16.73.2 §1 —
+would have **rejected three valid records**. **Extension to that rule: when a gate is run near a day
+boundary, both adjacent windows stay live until the records are read.** A recomputed bound is not
+sufficient if the recomputation assumes one day.
+
+**11. THE TWO-SITE BUILD-STRING FIELD CHECK IS CLOSED.** Header **and** footer both read
+`2026.08.24a` on the phone. Open since v16.73.1 §5 and never run for `2026.08.21a`. Deployment
+confirmed first, as required: Pages Actions runs succeeded for `82571ac` (47 s) and `c83854a` (41 s),
+the latter carrying the live `https://azmixlabs.github.io/Guya_Wamu/` URL on its deploy job.
+
+**12. TRANSPORT — A FOURTH FAILURE, IN A NEW DIRECTION, PLUS TWO OF A FIFTH KIND.**
+
+- **INBOUND truncation, first observed instance.** A dispatch carrying ten candidate coordinate rows
+  arrived with **one**. The loss was **mid-prompt**, not a tail cut — STEP 4 and the terminal
+  conditions after the candidate block both arrived intact, so it was not self-announcing. Standing
+  rule (2) routes long *outputs* to `scratchpad\`; **nothing protected the outbound leg of a
+  dispatch.** Detected only because Claude Code reported the received count instead of proceeding
+  with what it had.
+- **Non-arrival, twice.** `capgate_sites.txt` and `capgate_results.txt` were both reported attached
+  by Claude Code and neither crossed into the planning chat. **Strictly better than truncation — a
+  missing file is visible, a truncated one is not.** Both were eventually attached by Aaron directly
+  from `scratchpad\`.
+
+**STANDING, NEW — three rules from the above:**
+1. **A dispatch that transports a fixed list carries that list's length, and the prompt requires the
+   received count to be reported back before the list is used.** This does **not** conflict with
+   v16.74 §14's rule against stating an expected match count: that rule governs *discovery*, where a
+   stated count stops the search early. A supplied list is not a discovery — its length is transport
+   metadata, not a finding. **The two must not be conflated.**
+2. **Better still, do not transport the list.** Round 2's prompt had the harness *generate* its
+   candidates from a rule (a swept meridian). A generated list cannot truncate in transit and
+   produced a stronger measurement than the transported one would have — §7's single-crossing proof
+   was a by-product.
+3. **An attach is confirmed on the receiving end, not asserted on the sending end.** Dispatches now
+   require the artefact's byte size to be stated back so arrival can be distinguished from a claim.
+
+**13. A DISPATCH THAT CARRIES BOTH A COMPUTATION AND A LABEL FOR IT CONTAINS TWO THINGS THAT CAN
+DISAGREE.** The round-1 sweep prompt labelled `crossing − 0.20°` as "inside, with margin". Latitudes
+are negative and grow more negative southward, so `− 0.20°` is *further* from the port — outside. The
+planning chat had it backwards. **Claude Code computed exactly what was specified, then flagged the
+label as inverted rather than silently swapping to the evidently-intended meaning.** A silent swap
+would have produced a correct-looking table untraceable to a defective prompt, and the prompt would
+have been reused. **Standing: execute the computation, flag the label, never reconcile them
+silently.**
+
+**14. NEW, QUEUED — THE HAVERSINE IS IMPLEMENTED TWICE, AND v16.74 §9 DOES NOT COVER IT.** §9 records
+that the tide path *resolves* `nearestPort` twice. This is a different and slightly worse thing:
+`nearestPort`'s function-local `hv` arrow (`index.html:3310`) and `portInRange`'s bare inline
+expression (`:3311`) are **two independent copies of the distance formula**, not a call site and a
+caller. Verified algebraically identical today — same `R=6371`, same half-angle terms, same
+`cos(ll.lat)·cos(p.lat)` pairing, same `Math.min(1,…)` domain clamp, same argument order once
+`hv(cl.lat,cl.lng,p.lat,p.lng)` binds. **But an edit to one leaves the other untouched**, after which
+`portInRange` could admit or reject a point that `nearestPort`'s own distance disagrees about. §9's
+"the two cannot disagree" reasoning covers the resolved **port**, not the **distance**. Also
+confirmed while extracting: there is **no geodesic helper function anywhere in the file** — a
+declaration-anchored sweep for `dist|haversine|equirect|km|bearing` returned six hits, none of them a
+distance helper (`angDist` :1478 compass-bearing, `distA` :2523 proximity score, `okMASK` :2822,
+`PORT_MAX_KM` :3311, `recBandKm` :3450 UI cap, `distTxt` :3517 drive-time formatter).
+
+**15. THE FIELD BRACKET IS LOOSER THAN DESIGNED, AND THAT IS FINE FOR A STATED REASON.** Pins landed
+off-nominal — Curtis at 160.37 km against a 179 km target, Keppel at 243.10 km against 229.75 km — so
+the **field** bracket is cap ∈ (160.37, 243.10), which still admits 175 or 225 as hypothetical values.
+**Precision comes from §7's harness, which read the shipped file and put the boundary inside
+0.55 km of 200; the phone's job is to confirm the harness describes the real container, and it does.**
+For the property that actually protects field data, v16.74 §9's floor is 126.28 km and every value
+the field bracket admits clears it. **Do not re-run the gate to tighten the bracket** — a tighter
+field bracket would add nothing the harness has not already measured more precisely.
+
+**16. BASE MAP — ESRI SATELLITE AND STREET BOTH RENDER GLOBALLY; THE QLD AERIAL IS CLIPPED.** The
+default aerial layer (`State of Queensland (Dept of Resources)`) has no imagery outside QLD, which is
+why a Fiji limb could not be sited by eye. The label layer was global throughout (OpenStreetMap /
+CARTO), and the map stays georeferenced over blank tiles — **absent imagery never blocked pin
+placement, it only made it blind.** `CapFiji` was therefore dropped from this gate and Cairns
+(1,117.64 km) exercised the same false branch. **This unblocks §10's display-path gate, which
+genuinely does need a Fiji spot**: switch BASE MAP to ESRI before siting it.
+
+**17. RESIDUALS, NEITHER BLOCKING.**
+
+- **Durability of the three round-2 catches is unproven.** Logged 00:07–00:09, exported 00:09:27 —
+  whether a force-close intervened is not recoverable from the file. `CapB1` and `CapC` **are**
+  proven durable: they were written before round 1's confirmed force-close and are present in round
+  2's separately-sessioned export. Per v16.73.2 §5, an export reads localStorage's in-memory view, so
+  a same-session export is evidence of **shape**, never of **disk**. This closes for free the next
+  time the app is opened and re-exported; it does not warrant its own session.
+- **`CapA` and `CapB2` carry no catches at all** and are inert spots at 13.33 km and 11.42 km.
+
+**18. HOUSEKEEPING.** Seven `Cap*` spots now on the device, plus the frozen `GateRC` (3 catches) and
+`GateNoosa` (1 catch) from the (c) gate. **Delete the `Cap*` set only after this entry is committed**
+— `CapKeppel` and `CapCairns` are the only field evidence that the cap fires. Export first. Round-2
+artefact: `woongarra-backup-2026-08-24 cap cairns.json` (20,016,446 B); spots 26 → 29; delta
+**2,234 B** across 3 spots + 3 catches. Harness artefacts `capgate_sites.js` (136,996 B),
+`capgate_report.js` and both results files are in `scratchpad\`, gitignored at `.gitignore:18`.
+
+**19. STILL QUEUED — unchanged unless noted.** `CLAUDE.md` pin + method (v16.74 §5, own build);
+display-path remoteness (v16.74 §10 — now with a confirmed route to siting a Fiji limb, §16);
+**haversine implemented twice (§14, NEW)**; export filename UTC dating (§8, NEW, needs the one-line
+confirmation first); spot-id variable length (§9, NEW, low); v16.71.1 §5 overlay clip (carried, still
+unfolded); `storage_check.html` tooling pass; MN v3 (#15) Noosa-OSM fetch + Noosa tide-port wiring;
+SC `okHAT` boundary inclusivity; `FLATS_BOUNDS` 3-dp precision; `env.tide`/`env.moon` frame mismatch
+(v16.72.3 §7); bite-time graph scrub (v16.73.2 §7, blocked behind the frame mismatch).
+
+**20. NEXT SESSION.** Build **2026.08.24a** (unchanged — this entry ships no code), roadmap
+**v16.74.1**, repo head `c83854a` plus this entry's own commit. `CLAUDE.md` unchanged. **The gate is
+CLOSED (§1). Next job: (a) recompute on PANEL OPEN** — a build, so it claims the clean integer
+**v16.75** and a fresh build string. Then (b) "Here" replaces "Coast-wide". **Do not re-litigate:**
+everything in v16.73's, v16.73.1's, v16.73.2's and v16.74's lists, plus — the cap gate is closed and
+is not to be re-run (§1); the field bracket is not to be tightened (§15); recompute is on PANEL OPEN,
+not `moveend` (v16.72.1 §1); the display path remains deliberately out of scope for the cap build
+(v16.74 §10).
+
+---
+
 *v16.74 · 24 Aug 2026 — **BUILD 2026.08.24a SHIPPED: THE 200 km TIDE-PERSISTENCE CAP.** Repo head
 `82571ac` plus this entry's own commit; pre-build head `7c4a111`, pre-build `index.html` blob
 `5385f5b9b1929aaeaeab2fb4082050deef8a5647`. One variable: `env.tide` is omitted when the nearest
