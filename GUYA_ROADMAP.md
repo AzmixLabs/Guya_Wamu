@@ -1,5 +1,134 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75 · 30 Aug 2026 — **JOB (a) SHIPPED: THE BEST-BITE PANEL NOW RECOMPUTES WHEN IT BECOMES
+VISIBLE. Build 2026.08.30a.** Repo head `4f1e0f7` plus this build's commits. Three sites, one
+variable, `+212` bytes, five hunks. Explicitly **not** on `moveend` (v16.72.1 §1, twice retracted).
+The on-phone gate is **NOT RUN** — this entry ships code only.*
+
+**1. WHAT SHIPPED.** Phase 1 (`scratchpad/panelopen_phase1.txt`) established that the panel is stale
+not because a cache went stale but because a fresh computation never happens: `ANCHOR()` and
+`curPort()` are pure and are read at the instant `render()` runs, and nothing re-runs `render()`
+after a pan. The fix is therefore a re-run, not an invalidation. Three sites:
+
+- **`index.html:3440` — NEW LINE, `window.bbRender=render;`** beside the existing
+  `window.bbRefreshSpots=populate;` at `:3439`, which is the pattern one line away. This is the
+  second app hook across the best-bite IIFE boundary (3313–3629). It binds the **first** `render()`
+  (`:3394`); the unrelated badges `render()` at `:4152` is in a different IIFE and is not exposed.
+- **`index.html:1318`** — inside `setCollapsed`, after the existing `classList.toggle` and
+  `textContent` statements: `if(!c&&typeof window.bbRender==='function')window.bbRender();`.
+  Expand direction only. Guarded in the style of `:1830`.
+- **`index.html:3938`** (was `:3937`) — inside the `.lbl` click handler, after the existing toggle
+  **and** after the `localStorage` write:
+  `if(blk.querySelector('#bb-out')&&!blk.classList.contains('collapsed')&&typeof window.bbRender==='function')window.bbRender();`
+- **`index.html:1052` and `:1091`** — build string `2026.08.24a` → `2026.08.30a`, both sites.
+
+**2. BOTH OPEN MECHANISMS ARE HOOKED, WHICH WAS THE POINT.** Phase 1 §7A: the whole-panel collapse
+(`:1318`) and the per-section collapse (`:3938`) are independent, and hooking one leaves the other
+desynchronised. §7B is why the whole-panel arm is the load-bearing one in the field: `Best bite
+times` is in `KEEP_OPEN` (`:3932`), so the section starts open and its `.lbl` click can only fire
+after the user has first collapsed it — whereas `1615/1843/1894` force `setCollapsed(true)` at
+≤600 px, so on the phone the user is *made* to re-expand. A section-only fix would have shipped
+nothing for the common case.
+
+**3. THE SECTION IS DETECTED STRUCTURALLY, NOT BY ITS LABEL.** `blk.querySelector('#bb-out')`, not a
+match on the string `'Best bite times'` — that string is display copy and a future rename must not
+silently kill the recompute. `querySelector` on an element searches its descendants only, so it is
+correctly scoped without `:scope`. Note the deliberate asymmetry: the collapse IIFE's own state key
+`k` **is** the label text (`:3934`), because that is the existing persisted `localStorage` schema and
+changing it would orphan `woongarra_collapsed_v2`. Structural detection sits alongside it rather than
+replacing it.
+
+**4. BOTH CALL SITES TOLERATE `window.bbRender` BEING UNDEFINED, AND THAT IS NOT DEFENSIVE PADDING.**
+Phase 1 §7C flagged boot order and it is real: `setCollapsed` is defined at `:1318`, the hook is not
+assigned until `:3440`, and the collapse IIFE at `:3931` applies its classes only after the best-bite
+IIFE has already run its own `render()` at `:3628`. Any expand that fires inside that window is a
+no-op instead of a `TypeError`.
+
+**5. NOTHING WAS THROTTLED, DEBOUNCED OR CACHED, ON PURPOSE.** Phase 1 §4 found no memo anywhere on
+the render path (`compute()` at `:3334` rebuilds all 289 samples unconditionally; the eight
+cache-ish variables in the file all belong to the depth/shading/zone pipelines) and §5 found zero
+`fetch` on it. So there is nothing to invalidate and no rate to limit. The cost of a recompute is
+pure CPU. **This does NOT carry over to `buildPlan()`** — see §9.
+
+**6. VALIDATION, DESK-SIDE.** The four `CLAUDE.md` checks, run on the shipped file:
+
+| check | result |
+|---|---|
+| `node --check` block 1 (inlined Leaflet, `:1209–1214`, 147,552 B) | PASS |
+| `node --check` block 2 (app, `:1215–4194`, 2,135,293 B) | PASS |
+| Leaflet block byte-identical vs the pre-edit backup | `cmp` identical; sha256 `db49d009…f4e5641a` both sides |
+| `zoneAt()` (`:1325`) + green-zone drag safeguard (`:1578`) | both unmoved, unmodified, no hunk within them |
+
+`zoneAt()` was read back in full: `ORDER=["MNP","CPZ","HPZ","GUZ"]` at `:1227`, `rank<bi` lowering
+only, `return best` at the end — most-protective-on-overlap, not first-match, intact. Blocks were
+located structurally (two `<script>`, two `</script>` confirmed), not by remembered line numbers.
+
+**7. THE DELTA WAS PREDICTED BEFORE THE WRITE AND RECONCILED AFTER.** `+212 B` predicted, `+212 B`
+measured (2,352,268 → 2,352,480); the edit script asserted the two against each other and would have
+thrown before writing. Arms off the line text on disk: site 1 `+26` (25 chars + its own LF), site 2
+`+61`, site 3 `+125`, build string `+0` (11 chars → 11, both sites). Cross-checked against line
+lengths read back: `:1318` 151→212, `:3937` 183→308. `git diff --numstat` = `5 4` — four lines
+modified in place plus one inserted. **Hunk count measured off `git diff -U0`, not inferred from the
+site count: 5, not 3**, because the build string is its own hunk at each of its two sites; only
+`@@ -3439,0 +3440 @@` is an insertion. File is LF-only with no trailing newline; confirmed 0 CR
+before and after.
+
+**8. LINE-NUMBER SHIFT MAP.** One region moved, by `+1`, because site 1 is the only insertion.
+Lines 1–3439 unshifted (`:1052`, `:1091`, `:1318` were edited in place); `:3440` is new; old
+3440–4196 → 3441–4197. Landmarks: `window.bbRefreshSpots` 3439→3439, `todayAEST` 3440→3441,
+`onchange=render` 3441/3442→3442/3443, `shiftDay` 3445→3446, boot `render()` 3627→3628, IIFE close
+3628→3629, collapse IIFE 3930→3931, `.lbl` handler 3937→3938, badges `render()` 4151→4152,
+`</script>` 4193→4194. **Every Phase 1 number at or after 3440 is now off by one.**
+
+**9. `buildPlan()` WAS LEFT ALONE AND THE DEBT IS RESTATED, NOT CLOSED.** `:3575` (was `:3574`) has
+the identical desynchronisation defect — it resolves `ANCHOR()` at click time only — and it was out
+of scope here. It is **not** a candidate for the same one-line treatment: it fetches Open-Meteo, so
+§5's no-throttle conclusion does not transfer. Any future panel-open recompute extended to that block
+needs its own rate decision first.
+
+**10. RECORDED AS A DECISION, NOT AN OVERSIGHT: SITE 2 OVERSHOOTS.** A whole-panel expand fires
+`render()` even when the best-bite `.blk` is itself still collapsed, writing `#bb-out` into a hidden
+node. Cost is one `compute()` and no network. Guarding it would duplicate site 3's predicate and
+create a second thing to keep in sync, to save work only for a user who has explicitly collapsed a
+`KEEP_OPEN` section. Left in.
+
+**11. NO jsdom STEP; BOTH ARMS WERE EXERCISED ANOTHER WAY.** The two guard expressions were
+**extracted by regex from the file on disk** — not retyped — and run against stub objects: 8/8 pass,
+covering fire-on-expand, silent-on-collapse, fire on the bb block when it opens, silent on the bb
+block when it closes, silent on a non-bb block in both directions, and no-throw with `bbRender`
+undefined on both arms. Both branches of both guards are therefore exercised desk-side. Script:
+`scratchpad/panelopen_branch_probe.js`; full evidence `scratchpad/panelopen_build_report.txt`.
+**This is desk-side only and is not a substitute for the on-phone gate.**
+
+**12. HARNESS NOTE, WORTH CARRYING.** Two attempts to write the build report via a bash quoted
+heredoc failed identically with a shell parse error at the same offset, with no file produced; the
+repo was verified unaffected each time before retrying, and the report was written with the file-write
+tool instead. Heredocs are not reliable for large report payloads in this harness — write the file
+directly.
+
+**13. ON-PHONE GATE FOR `2026.08.30a` — NOT RUN, AND IT NEEDS BOTH ARMS.** Force-close/reopen the
+home-screen app; confirm `2026.08.30a` in **both** the header and the spots-block footer. Then:
+**(i) whole-panel arm** — with the panel expanded, note the port name printed in the Tides heading;
+collapse the panel with the `–` button, pan the map far enough to change the nearest port (Redcliffe
+↔ Bargara is the reliable pair), expand again, and confirm the Tides heading now names the **new**
+port. **(ii) section arm** — with the panel already open, collapse just the `Best bite times`
+section by its label, pan to change the nearest port, re-open that section only, and confirm the same.
+**(iii) negative control** — collapse and re-open a *different* section (e.g. `Map layers`) after a
+pan and confirm the best-bite output does **not** change; that is what distinguishes site 3's
+structural predicate from an always-true one. A run that only exercises (i) is a **null result** for
+site 3 — record it as one (v16.74.1 §5).
+
+**14. NEXT SESSION.** Build **2026.08.30a**, roadmap **v16.75**, repo head `4f1e0f7` plus this
+build's commits. `CLAUDE.md` unchanged. **Next job: run the §13 gate** (all three limbs, or say
+plainly which were skipped), then **(b) "Here" replaces "Coast-wide"**. Pending cleanup carried:
+`buildPlan()` `ANCHOR()` desync (§9, now with a rate decision attached); display path still out of
+range (v16.74 §10); everything in v16.74.1 §19's list. **Do not re-litigate:** recompute is on panel
+open, **not** `moveend` (v16.72.1 §1, twice retracted, and this build did not add a single map
+listener); the 200 km cap gate is closed and is not to be re-run (v16.74.1 §1); the field bracket is
+not to be tightened (v16.74.1 §15); site 3 detects the block structurally and must not be changed to
+match on label text (§3).
+
+---
 *v16.74.1 · 25 Aug 2026 — **THE 200 km CAP'S ON-PHONE GATE IS CLOSED. ALL FIVE LIMBS PASS AND BOTH
 BRANCHES ARE EXERCISED IN THE FIELD.** No build, no code, no data, no schema change. Build stays
 **2026.08.24a**; repo head is `c83854a` plus this entry's own commit. Evidence: three `version:2`
