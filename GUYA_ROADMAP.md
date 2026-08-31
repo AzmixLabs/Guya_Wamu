@@ -1,5 +1,230 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.1 · 31 Aug 2026 — **THE PANEL-OPEN GATE IS CLOSED. FIVE LIMBS, FIVE PASSES, BUILD
+2026.08.30a CONFIRMED IN THE FIELD AT BOTH BUILD-STRING SITES.** No build, no code, no data, no
+schema change. Build stays **2026.08.30a**; repo head is `4531b38` plus this entry's own commit.
+Also carried in: **two corrections to committed entries** (§5, §7), a **process failure in this
+planning chat** that a limb caught (§8), and the **29 Aug field-review backlog F1–F6** (§11–§16),
+with **F3 promoted ahead of F1 on safety grounds.***
+
+**1. THE GATE, AS OBSERVED ON DEVICE.**
+
+| limb | map at | action | `TIDES ·` | first high | verdict |
+|---|---|---|---|---|---|
+| baseline | Redcliffe | expand best-bite section | `BRISBANE BAR` | 11:26 2.14 m | — |
+| **L2** | Noosa | collapse section, pan, expand | `NOOSA HEAD` | 09:48 1.76 m | **PASS** |
+| **L1** | Redcliffe | collapse whole panel, pan, expand | `BRISBANE BAR` | 11:26 2.14 m | **PASS** |
+| **L3** | Noosa | collapse+expand **Map layers** | `BRISBANE BAR` — unchanged | 11:26 2.14 m | **PASS** |
+| **L4** | Noosa | pan only, touched nothing | `BRISBANE BAR` — unchanged | 11:26 2.14 m | **PASS** |
+| **L5** | Redcliffe | force-close, reopen | `BRISBANE BAR` | 11:26 2.14 m | **PASS** |
+
+Reference states, both read off device: **Redcliffe / Brisbane Bar** 05:28 0.38 · 11:26 2.14 · 17:33
+0.51 · 23:27 2.20, sunset 17:34, moonset 07:26. **Noosa / Noosa Head** 03:42 0.35 · 09:48 1.76 ·
+15:45 0.49 · 21:53 1.80, sunset 17:35, moonset 07:27.
+
+**2. THE STRONGEST OBSERVABLE WAS NOT THE PORT LABEL — IT WAS A ONE-MINUTE ASTRONOMY SHIFT.**
+Sunset moved 17:34 → 17:35 and moonset 07:26 → 07:27 between the Redcliffe and Noosa reads, and the
+bite windows moved with them (moonset window 06:56–07:56 → 06:57–07:57). **A port name is a selected
+label and could in principle arrive from some other path; the astronomy cannot.** A one-minute delta
+means `compute(ymd,lat,lng)` re-ran with different coordinates, so `ANCHOR()` genuinely moved.
+**Standing, and cheaper than it looks: where a panel derives several values from one anchor, gate on
+the DERIVED QUANTITY that no other code path could produce, not on the identifier.** This is the
+same principle as v16.73.2 §4 (measured quantity over selected label), one step further on.
+
+**3. L3 AND L4 ARE THE DISCRIMINATING PAIR AND THE ONLY REASON THIS GATE MEANS ANYTHING.** L1, L2
+and L5 pass **identically** whether the `#bb-out` structural guard discriminates or fires on every
+section toggle. Only L3 separates those. And only L4 establishes that the recompute is attributable
+to the open event rather than to some unrelated re-render — without it, an incidental re-render from
+any cause would have made L1 and L2 pass while nothing was actually hooked. **Both negative limbs
+pass by NOT updating: the panel reads a value that contradicts the map, and that contradiction is
+the evidence.**
+
+**4. L4 ALSO CONFIRMS THE ACCEPTED LIMITATION IN THE FIELD.** Panning with the panel open leaves the
+panel stale. This is the cost of choosing panel-open over `moveend` and the decision stands
+(v16.72.1 §1, twice retracted) — but it is now **observed behaviour, not an inference**. On desktop
+the panel is a persistent sidebar and may never close, so it can stay stale indefinitely; on mobile
+the 1615/1843/1894 forced collapses at ≤600 px make the collapse-pan-expand cycle the normal path.
+**Not a defect. Do not re-open it as one.**
+
+**5. CORRECTION TO v16.74.1 §11 — THE FOOTER CHECK WAS NEVER RUN.** §11 records the two-site
+build-string field check as closed for `2026.08.24a`. It was not. The planning chat asked whether
+header **and** footer both read the build string and accepted "yes"; the footer is at
+`index.html:1091`, inside the **Fishing spots & catches** block, which was collapsed, and it was
+later established on device that it had not been seen. **A single "yes" to a two-part question is
+one answer, not two, and it was recorded as two.** The claim in §11 is withdrawn. v16.73.1 §5 was
+never run either, so `2026.08.21a` and `2026.08.24a` both shipped without this check.
+
+**6. THE CHECK IS NOW GENUINELY CLOSED, FOR `2026.08.30a`.** Header reads `BUILD 2026.08.30A`
+(`:1052`, uppercased by the `.sub` line's CSS); spots-block footer reads `build 2026.08.30a`
+(`:1091`, lowercase as authored), under "Logging as Me". **The case difference is presentational and
+is NOT a defect** — `panelopen_diff_U0.txt` shows both hunks carrying the identical lowercase token
+in the source. Recorded so a future check does not flag the mismatch. Practical note for scoping any
+future run: both sites live in the same deployed file, so a correct header read already proves the
+deployed file is the built file; the footer limb adds very little, which is exactly why it should
+never have been recorded as evidence it did not supply.
+
+**7. SUPERSEDES v16.75 §13 — THE GATE SPEC WENT FROM THREE LIMBS TO FIVE.** §13 was written by
+Claude Code alongside the build it validates, and specified three limbs: whole-panel, section, and a
+negative control on a different section. **A self-written test protocol receives the same red-team
+as any patch.** Two additions were made before the run: the pan-without-opening limb (L4), which
+§13's set omitted and which is the attributability check; and the boot limb (L5), covering Phase 1
+§7C's ordering concern. §13's own negative control was a genuine addition the planning chat had not
+specified and is retained as L3. **The five-limb set in §1 is the record; §13's three-limb list is
+superseded.**
+
+**8. PROCESS FAILURE IN THE PLANNING CHAT, CAUGHT BY A LIMB.** On the report "expanding and
+collapsing map layers does change it", the planning chat declared L3 FAILED and began diagnosing a
+propagation defect in site 2 — **before asking what had changed.** The screenshots showed the
+`TIDES ·` heading and all four tide values unmoved; what changed was Map layers' own toggle list
+rendering and the sections below it shifting up. **L3 had passed.** This is precisely the
+two-outcome reading of a many-outcome observation that the same chat had flagged three messages
+earlier in F1's test design (§12), applied to itself and missed. **Standing: when a field report says
+"it changed", establish WHAT changed before classifying the result. A verdict issued ahead of the
+observation is a guess wearing a verdict's clothes.**
+
+**9. L5 AS RUN WAS BETTER THAN L5 AS SPECIFIED.** The planning chat said a retry with the panel
+pre-set to Noosa "would test nothing", because the app always boots at Redcliffe (`#home` hard-codes
+`map.setView([-27.2275,153.0950],12)`) and the expected and stale values would coincide. **Wrong.**
+Aaron set the panel to `NOOSA HEAD`, force-closed, reopened, and got `BRISBANE BAR` — which
+distinguishes *boot render ran fresh against the current map centre* from *boot restored the last
+displayed value*. Phase 1 §4 predicted no persistence of computed values; this observed it. **A
+limb whose two outcomes coincide under one hypothesis may still separate two OTHER hypotheses.**
+
+**10. SITE 2's DELIBERATE OVERSHOOT IS BENIGN IN THE FIELD.** v16.75 §10 recorded that a whole-panel
+expand fires `render()` even when the best-bite `.blk` is itself collapsed. No lag, no error and no
+visible artefact was observed across the run. Remains accepted and unguarded.
+
+---
+
+**BACKLOG — 29 AUG FIELD-REVIEW SESSION (planning only, no build).** Six items, recorded here for
+the first time. **Sequencing changed from the field notes: F3 goes first.**
+
+**11. F3 — DEPTH SHADING OBSCURES THE MARINE-PARK ZONE FILL. [needs verify] PROMOTED TO FIRST.**
+Shading OFF: CPZ06 fill renders as a visible wash inside the boundary. Shading ON: the fill is not
+visible and only the orange boundary line survives. Layer-order or opacity. **This is the only item
+on the list that degrades a SAFETY cue, and it does so specifically in the mode used for planning
+casts** — hard rules 1–3 exist to surface zone information, and shading quietly removes it. Elevated
+further by the Hoffmans Rocks finding: there is a live green-zone boundary immediately north of a
+spot in active use. **"Needs verify" is not a reason to sequence it later** — the verification is a
+shading toggle on a known zone edge, cheaper than F1's walking test, and if it confirms, everything
+else waits.
+
+**12. F1 — POINT QUERY HAS NO MAXIMUM-DISTANCE GUARD. [confirmed defect]** "Est. height here"
+returned `dries ≈ 1.7 m · exposed now · data 35 m away` on a 10–15 m headland at Nudibranch Park
+that the tide never reaches. The nearest stored value is returned and labelled as the value AT the
+query point. **Same class as `nearestPort()`'s `let best=PORTS[0], bd=Infinity` — a "present but
+meaningless" third state.** Offshore readings are unaffected and internally consistent (63 m → +0.1 m,
+118 m → 3.9 m, 180 m → 5.6 m; monotonic). Also a computation/label disagreement: the headline says
+"here", the fine print says 35 m away, and the headline wins the reader's attention.
+
+**THE DISCRIMINATING TEST HAS FOUR OUTCOMES, NOT TWO.** The field notes framed it as two. Record
+BOTH numbers at every tap walking inland and read the pair afterwards; **do not classify into a
+bucket in the field** — a test that can only return one of two answers will return one of them
+whatever is true:
+
+| height | "data N m away" | reading |
+|---|---|---|
+| pins ~1.7 | climbs | F1 as stated — no distance guard |
+| varies | stays small | land points in the store — datum/classification, **worse** |
+| pins ~1.7 | stays small | nearby points all carrying the same value — a flat fill in the store |
+| varies | climbs | sparse nearest-neighbour behaving correctly — **no defect** |
+
+Wording correction for the eventual fix: nearest-neighbour does not *extrapolate*, it returns the
+nearest stored value unchanged. "Pins near 1.7 m" is exactly correct NN behaviour at distance.
+**The defect is the absent guard and the "here" label, not the arithmetic.** Fix shape, post-test,
+one variable: a distance guard returning "no data here" rather than a number, mirroring
+`portInRange()`.
+
+**13. F2 — NO LAND MASK ON THE DEPTH READOUT OR THE SHADE PAINT. AND IT MUST BE CHARACTERISED
+BEFORE F1 IS FIXED.** Shading paints over the same headland in the same frame as F1. The readout and
+the renderer are separate call sites and a shared root cause is **UNVERIFIED**. The OSM/DEA
+STRICT-AND mask exists and is not consulted at either site. **The interaction the field notes did
+not capture: an F1 distance guard suppresses the headland reading REGARDLESS of whether a land mask
+is ever consulted — so shipping F1 first makes F2 harder to detect, not easier, and leaves the app
+painting over land while reporting "no data here" at the same point.** Sequence F2's characterisation
+spike before F1's fix. If they share a call path, one fix serves both; if not, that is known before
+the guard hides the evidence.
+
+**14. NEW — THE NEAREST-NEIGHBOUR-WITHOUT-A-GUARD PATTERN IS A CLASS, AND IT HAS NEVER BEEN
+AUDITED.** Three instances now: `nearestPort()` (v16.74 §9), `portInRange()` — which fixed it at
+**one call site only**, leaving the display path open (v16.74 §10) — and now the point query (§12).
+v16.74.1 §14 adds that the haversine itself is implemented twice. **Add an audit item: sweep every
+nearest-neighbour or proximity lookup in the file for a maximum-distance guard.** `_sampleIndexCache`
+(`:2148`), `_idwCache` (`:2851`) and `distA` (`:2523`) all surfaced in the Phase 1 sweeps and none
+has been checked. **Fixing instances one at a time as the field finds them is how this reached
+three.**
+
+**15. F6 — ZONE RULE CARD, HOOK DEFINITION. [new] BLOCKED ON VERIFICATION, NOT ON BUILD.** Spot
+popups surface zone type + ID + "verify rules yourself" but not the hook definition — the rule most
+likely to be got wrong in the field, and got wrong twice in the 29 Aug session. Candidate: a static
+reference card under the zone line — CPZ 2 rods/2 hooks, GUZ+HPZ 3/6, gang ≤6 = 1 hook, lure ≤3
+hooks = 1 hook, bait jig ≤6 hooks size 1–12 = 1 hook, with the QPWS FAQ link. **STATIC TEXT ONLY,
+never computed, never presented as a legality call** — that framing is right and respects hard rule 1.
+**But hard rule 4 marks the recorded rod/hook limits as UNCONFIRMED, and a reference card is read as
+authoritative precisely because it is a card.** Displaying unverified limits is worse than displaying
+none: the user stops checking. **Verify CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source
+BEFORE the card is built.** If they do not verify, the card degrades to a link plus a "check before
+you fish" line, which is still an improvement on nothing. That the numbers were got wrong twice in
+one session is evidence both that the card is needed and that they are easy to get wrong.
+
+**16. F5 AND F4.**
+- **F5 — SCORE HYGIENE. Operational, no code change.** `liveWindDir` never expires (v16.71 §8);
+  `recBandKm` defaults to 0, i.e. no distance cap. Both silently degrade ranking away from home water.
+- **F4 — RULER, FAN MODE. [enhancement] SPEC UNSPECIFIED.** The field notes read "[spec below]" with
+  nothing below them. **Recorded as a placeholder deliberately rather than reconstructed** — a spec
+  written from chat recollection is what the standing rules forbid, and a plausible-looking wrong
+  spec is worse than an honest gap. Aaron to supply.
+
+**17. RETRACTED FROM THE 29 AUG NOTES — MEASURE-TOOL LABEL/TOTAL DISCREPANCY (logged 28 Aug). NO
+DEFECT.** Vertex labels are cumulative, not per-segment; 77/143/211/381 was a closed loop totalling
+381. **Kept with its reasoning rather than deleted, so it is not re-raised.** Worth noting the shape:
+this is a computation/label disagreement — the same class as v16.74.1 §13 — but it resolved the
+other way round, with the label correct and the expectation wrong.
+
+**18. NEW OBSERVATION, UNVERIFIED, LOW — THE SPECIES FILTER IS RENDERING SPOT NOTES AS CHIPS.** Under
+FILTER BY SPECIES, entries appear reading "— geometry warning pin; fish from the frontage pin S of
+here.", "Beachworms + pippis at low on the open sand…", and several Cool:/Warm: species-hint lines,
+alongside the expected `Catch1`–`Catch4` chips. These read like spot notes and species-hint text
+landing in a UI slot meant for short labels. **May be intended. Not investigated, not in the F1–F6
+set, recorded so it is not lost.**
+
+**19. HOUSEKEEPING.** Device shows **Show spots 29**, matching the round-2 capgate export's
+`spots=29` exactly — so the spot store has survived five days and many force-closes, which also
+retires v16.74.1 §17's durability residual for the spots themselves. Seven `Cap*` spots and the
+frozen `GateRC` (3 catches) / `GateNoosa` (1 catch) remain. **Delete the `Cap*` set only after this
+entry is committed** — `CapKeppel` and `CapCairns` are the only field evidence the 200 km cap fires.
+Export first. Scratchpad note: the 30 Aug build session wrote its artefacts to a **session temp
+directory**, not `D:\Claude Code\scratchpad\`, after a bash heredoc failure forced a fallback to the
+file-write tool; `panelopen_edit.js` exists in both locations, same byte count, five minutes apart.
+**A fallback that preserves the content can still break the location, and a terminal condition that
+checks the repo is clean will not notice.** All artefacts recovered. **Standing: state artefact paths
+ABSOLUTELY in dispatches, never as bare `scratchpad\`.**
+
+**20. STILL QUEUED — unchanged unless noted.** **F3 zone-fill occlusion (§11, FIRST)**; F2
+characterisation spike then F1 guard (§12–§13); NN-guard class audit (§14, NEW); F6 blocked on rule
+verification (§15); F5 operational (§16); F4 awaiting spec (§16); `CLAUDE.md` Leaflet pin + method
+(v16.74 §5 — still open; the 30 Aug build's digest check was satisfiable only because the ROADMAP
+carries the pin `CLAUDE.md` requires); display-path remoteness (v16.74 §10, with a confirmed route
+to siting a Fiji limb via the ESRI global base map, v16.74.1 §16); haversine implemented twice
+(v16.74.1 §14); export filename UTC dating (v16.74.1 §8 — **still needs the one-line confirmation**:
+export once between 00:00 and 10:00 AEST and read the offered filename BEFORE renaming);
+spot-id variable length (v16.74.1 §9, low); `buildPlan()`'s identical `ANCHOR()` defect (v16.75 §9 —
+and its no-throttle exemption does NOT transfer, it fetches Open-Meteo); v16.71.1 §5 overlay clip;
+`storage_check.html` tooling pass; MN v3 (#15) Noosa-OSM fetch + Noosa tide-port wiring; SC `okHAT`
+boundary inclusivity; `FLATS_BOUNDS` 3-dp precision; `env.tide`/`env.moon` frame mismatch (v16.72.3
+§7); bite-time graph scrub (v16.73.2 §7, blocked behind the frame mismatch).
+
+**21. NEXT SESSION.** Build **2026.08.30a** (unchanged — this entry ships no code), roadmap
+**v16.75.1**, repo head `4531b38` plus this entry's own commit. `CLAUDE.md` unchanged. **The
+panel-open gate is CLOSED (§1). Next job: F3 verification** — a read-only on-phone toggle on a known
+zone edge, not a build, nothing dispatched before it returns. Then job (b), "Here" replaces
+"Coast-wide". **Do not re-litigate:** everything in v16.73's, v16.73.1's, v16.73.2's, v16.74's,
+v16.74.1's and v16.75's lists, plus — the panel-open gate is closed and is not to be re-run (§1);
+panning with the panel open leaves it stale and that is accepted, not a defect (§4); site 2's
+overshoot is accepted and unguarded (§10); site 3 detects the block structurally and must not be
+changed to match on label text (v16.75 §13); the measure-tool discrepancy is retracted (§17).
+
+---
 *v16.75 · 30 Aug 2026 — **JOB (a) SHIPPED: THE BEST-BITE PANEL NOW RECOMPUTES WHEN IT BECOMES
 VISIBLE. Build 2026.08.30a.** Repo head `4f1e0f7` plus this build's commits. Three sites, one
 variable, `+212` bytes, five hunks. Explicitly **not** on `moveend` (v16.72.1 §1, twice retracted).
