@@ -1,5 +1,138 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.3 · 4 Sep 2026 — **MACHINE MOVE COMPLETE AND VERIFIED BYTE-FOR-BYTE. CARRY ITEM (iv)
+CLOSED.** No app code, no data, no schema change. Build stays **2026.08.30a**. Head is **`b49ff94`**,
+preceded by `543db29` (data/audit), `c2b262d` (.gitattributes) and `2f930dd` (v16.75.2). Three Pages
+runs green. Build workflows now live on the laptop; the desktop is retired to archive duty.*
+
+**1. THE NEW MACHINE.** Repo root **`C:\Guya\Guya_Wamu`**, scratchpad
+**`C:\Guya\Guya_Wamu\scratchpad`** — state that path **absolutely** in every dispatch (v16.75.1 §s1).
+Toolchain: **pwsh 7.6.5**, Git 2.55.0, **Node 24.20.0** (current line, not LTS — recorded so any
+future `node --check` oddity is attributable), AMD64. Claude Code installed via npm; **npm 12 blocks
+postinstall scripts by default**, so the package needs
+`npm install -g --allow-scripts=@anthropic-ai/claude-code` — the one-shot form, never
+`npm config set allow-scripts --location=user`, which is the same shape as a session-wide edit grant
+and is declined for the same reason.
+
+**2. THE CLONE VERIFIED CLEAN ON THE FIRST ATTEMPT.** Fresh `git clone`, never a directory copy.
+Head `543db29`; `git diff --stat` **empty**; `index.html` **4197 lines** and SHA-256
+**`BF738E0D9CD4FC70A94F4EDD477175F4CFDC43190A019CCBAD09A7EE7D801288`** — identical to the desktop,
+byte for byte; build string `2026.08.30a` present at **both** `:1052` and `:1091`; **23** files under
+`data/audit`. **The hash match across two machines is the whole proof** — it is the only check that
+would have caught a line-ending conversion, and `git diff` cannot, because it normalises on the way
+back.
+
+**3. `.gitattributes` COMMITTED (`c2b262d`), AND IT CAUGHT SOMETHING ON ITS FIRST USE.**
+`core.autocrlf` was set **repo-locally** to `input` and **repo-local config does not survive a
+clone** — a fresh clone on Windows inherits the system default `true`, checks out CRLF, breaks the
+hash check, and shows **nothing** in `git diff`. That is a failure with no visible cause. Pinned with
+`* text=auto eol=lf`. On the very next commit it flagged two CRLF files
+(`moreton_manifest.json`, `moreton_hyb_manifest.json`) written that way by the original pipeline.
+**Written via `[System.IO.File]::WriteAllText` with a BOM-less `UTF8Encoding`** — see §5.
+
+**4. `data/audit/` CREATED (`543db29`) — 23 files, 4.37 MiB, 6,022 insertions. A DELIBERATE
+REVERSAL, STATED IN THE OPEN.** v16.18–v16.24 designated these "gitignored scratch". That was correct
+while they were mid-process working files; it stopped being correct when the drop-mask shipped.
+**They are now the sole evidentiary basis for 40,747 points dropped across BR/SC and 6,861 cells
+across Moreton, and they existed in exactly one place, on one disk, in a directory labelled
+disposable.** Promoted: `audit_results.json` (2,268 entries), `audit_results.pre_dedupe.bak.json`
+(2,282), `audit_results.pre_gap.bak.json` (1,375), `hybrid_mask_cells.json` + `hybrid_manifest.json`
+(1,184 tiles each), `audit_manifest.json`, Moreton's own audit (193 tiles, renamed
+**`moreton_audit_results.json`** — three files shared that name at different depths), Moreton's mask
++ two manifests, and **13 pipeline scripts** under `data/audit/tools/`.
+
+**Entry counts were reconciled against the roadmap BEFORE promotion, not after:** 1,375 + 907 =
+2,282; 2,282 − **14** byte-identical duplicates (v16.23) = 2,268; Moreton 193 (v16.28's
+`audit_class2.py` run, PID 1514). **Every figure closed with no unexplained residue.** The scripts
+went with them deliberately — the roadmap leans on their exact behaviour repeatedly
+(`audit_class2.py` "reused unmodified", `process_tiles.py`'s two approved deviations documented line
+by line), and without them the recorded figures can be trusted but not reproduced.
+
+**Explicitly NOT the v16.48 failure mode.** That sweep committed
+`guya_species_qld_v3.md` against two on-record "project knowledge only, never the repo" notes and
+nobody noticed for nine days. This reverses a standing decision **on purpose, with the reasoning
+recorded in the same commit**. The distinction is the record, not the action.
+
+**5. STANDING RULE — POWERSHELL 5.1 ENCODING. This is a data-corruption hazard, not a nuisance.**
+Windows PowerShell 5.1 reads as cp1252 by default (observed: `.gitignore` rendering an em-dash as
+`â€"`) and its `-Encoding UTF8` **writes a BOM**. Two distinct failures follow:
+- **`Set-Content -Encoding UTF8 .gitattributes` would have produced a BOM'd file that git's attribute
+  parser does not strip** — the first pattern reads `\ufeff* text=auto` and matches nothing. A
+  `.gitattributes` that is committed, looks correct in every editor, and does **absolutely nothing**.
+- **`(Get-Content .\index.html) | Set-Content .\index.html` would mangle every em-dash in the app's
+  visible UI copy** ("lights the seabed from the NW — drop-offs and gutter walls"). `node --check`
+  passes. The build-string check passes. Mojibake ships to the phone.
+**Never round-trip a repo file through `Get-Content`/`Set-Content`/`Out-File` under 5.1.** Use
+`[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding $false))`, or
+PowerShell 7. **This machine standardises on pwsh.** Now recorded in `CLAUDE.md` at `b49ff94`.
+
+**6. CARRY ITEM (iv) IS CLOSED (`b49ff94`).** Validation check 2 said *"Confirm the inlined Leaflet
+block is byte-identical"* — **byte-identical to what?** No reference value was given; the digest
+lived only in this file, nine times. Unsatisfiable from `CLAUDE.md` alone, exactly as v16.74 §5
+recorded, and it bites hardest on a fresh clone. `CLAUDE.md` now carries the reference adjacent to
+the check: body-only SHA-256
+**`db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a`**, `<script>`/`</script>` tags
+excluded, **147,552 bytes**.
+
+**Claude Code recomputed the digest from `index.html` at HEAD before writing it, rather than
+accepting the dispatched constant** — the right instinct, and the standing skepticism rule applied to
+a value handed to it by the dispatch. It also recorded the **with-tags** digest
+`156fc90aa436d569480491a5009458ac1375630726e3fe096059305f6565fc58` (147,569 bytes) for
+disambiguation, and confirmed the span has no boundary ambiguity: `<script>` is immediately followed
+by `/* @preserve` with no newline, and `</script>` immediately follows `leaflet.js.map`. **The byte
+count was added beyond the dispatch text, declared as a deviation** — a second independent tripwire
+on the same span, checkable without running a hash. Accepted.
+
+**7. THE PIN NOW EXISTS IN TWO PLACES, AND THAT IS A FORK WAITING TO HAPPEN.** `CLAUDE.md` (one
+occurrence, **operative**) and `GUYA_ROADMAP.md` (nine, **historical record**). A Leaflet version bump
+would have to update ten sites or check 2 starts failing against a stale reference. **Standing: on any
+future Leaflet upgrade, `CLAUDE.md` is the single source of truth and roadmap occurrences get
+`[SUPERSEDED]` tags, not edits.** No upgrade is planned, so this is not urgent — it is exactly the
+kind of thing that stays invisible until it fails.
+
+**8. DISPATCH FAULT, RECORDED — THE PLANNING CHAT'S, NOT THE MODEL'S.** The first laptop dispatch
+stated it *"closes carry item (iv)"* **and** forbade touching `GUYA_ROADMAP.md`. Both instructions
+correct in isolation, incompatible together: the edit shipped while the roadmap still showed the item
+open, so the two files disagreed about its state until this entry. **Claude Code caught it and
+flagged it unprompted.** The standing rule already says red-team a dispatch before sending; this
+sharpens it — **check a dispatch against itself for internal contradictions, not only for whether
+what it asks is correct.** Two individually-correct instructions can be jointly unsatisfiable, and
+that is invisible when each is read on its own.
+
+**9. `data/raw/` — 217.1 GiB, 265 files — MOVED TO `D:\Guya_raw_archive\`. NOT DELETED.** Still
+gitignored, out of the repo path. Breakdown: Sunshine-Coast 119.6 GiB / 17 files, Brisbane-River 90.6
+/ 3, `_inventory` 4.6 / 128, Bathymetric-LiDAR-SC 2.1 / 45, Gold-Coast 0.2 / 1, three spike dirs ~0 /
+67. **By the letter of the disposal rule the SC/BR bulk (96.8%) is disposable** — the
+class-9-adjacency audit, the drop-mask, the v2 CSVs and the confirmed on-device REPLACE all completed
+(v16.17–v16.28, field-verified v16.52). **Kept anyway**, because a future SC/BR **v3 re-export** is
+the recorded vehicle for the Option 3 STRICT-AND land mask, and ELVIS is order-and-email-link only
+with 48-hour expiry — a multi-day manual slog to reclaim disk on a machine that is not going
+anywhere. `Bathymetric-LiDAR-Sunshine-Coast` (the 2011 Fugro LADS green-laser survey) and
+`_landmask_spike` (OSM tiles, the MN v3 clip input) are small and irreplaceable in practice.
+
+**10. THE DESKTOP.** Retired at head `543db29`, tree clean, nothing stashed, nothing unpushed.
+The rename to a STALE name **failed on a file lock and was abandoned as not worth chasing** — a
+`STALE-DO-NOT-USE.txt` marker serves the same purpose and is what a future Claude Code session
+opening that directory would actually see. **The protection was never the folder name**: everything
+is at `origin/main`, the laptop clone is verified byte-identical, and the raw data is already moved
+out. **Two live clones is how the v16.57/58 three-way fork happened** — that risk is closed by the
+desktop no longer being used, not by its name.
+
+**11. STILL QUEUED — carry list refreshed.** F3 fix (v16.75.2 §11 characterisation dispatch first,
+**FIRST**, artefact to `C:\Guya\Guya_Wamu\scratchpad\`); F2 land mask; F1 point-query distance guard
+(**never before F2**); F4 fan-mode ruler — **spec still owed by Aaron, do not reconstruct**; F5 score
+hygiene; F6 hook-definition card — **still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a
+current official QLD source** (hard rule 4); export filename UTC dating — one export between 00:00
+and 10:00 AEST, read the **offered** filename before renaming (**still open — the 4 Sep export was
+sent by email, which can rename the attachment, so it does not settle this**); NN-guard class audit
+(`_sampleIndexCache` :2148, `_idwCache` :2851, `distA` :2523); `Cap*` spot deletion — **DONE 4 Sep,
+export taken first**; `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS scouting
+dot (v16.75.2 §12). **Removed from the list: the Leaflet pin (§6).** Line numbers unchanged —
+`index.html` 4197 lines, everything at or after 3440 shifted +1 (v16.75 §6).
+
+**12. STANDING OPERATIONAL RULE, UNCHANGED: READ ZONING WITH SHADING OFF.** Bargara is 10–13
+September. F3's fix is not needed before the trip and must not be rushed to meet it.
+
 *v16.75.2 · 4 Sep 2026 — **F3 IS CLOSED. VERIFIED AND CHARACTERISED BY PIXEL MEASUREMENT OF A
 COMPLETE 2×2, NOT BY FIELD IMPRESSION.** No build, no code, no data, no schema change. Build stays
 **2026.08.30a**; repo head is v16.75.1's commit plus this entry's own. The recorded root cause in
@@ -134,7 +267,9 @@ ruler — **spec still owed by Aaron, do not reconstruct**; F5 score hygiene (`l
 `recBandKm` default 0); F6 hook-definition card — **still blocked on verifying CPZ 2/2 and GUZ+HPZ
 3/6 against a current official QLD source** (hard rule 4); export filename UTC dating — one export
 between 00:00 and 10:00 AEST, read the **offered** filename before renaming; **Leaflet SHA-256 pin
-still absent from `CLAUDE.md`** (v16.74 §5) — this bites harder on a fresh clone, where the
+still absent from `CLAUDE.md`** (v16.74 §5) [CLOSED — v16.75.3 §6, commit `b49ff94`; the pin is now
+in `CLAUDE.md` adjacent to validation check 2. Ignore this item on a top-to-bottom pass.] — this
+bites harder on a fresh clone, where the
 validation list instructs a check against a pin the file does not contain; NN-guard class audit
 (`_sampleIndexCache` :2148, `_idwCache` :2851, `distA` :2523, all unchecked); `Cap*` spot deletion
 (7 spots) — **unblocked, export first**; `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces
