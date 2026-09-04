@@ -1,5 +1,213 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.6 · 5 Sep 2026 — **F3 CLOSED. ON-PHONE GATE PASSED, ALL FOUR CHECKS.** No build, no code,
+no data change this entry. Build stays **2026.09.05a**; repo head unchanged at `3cc831d`.*
+
+**1. GATE RESULTS, against v16.75.5 §6's stated expectations:**
+   (1) far zone, no coverage — **PASS**, rendered identically with shading on vs off, as predicted;
+   (2) Innes Park/Barolin Rock, real coverage — **PASS**, fill dimmed to the faint wash, outline
+       stayed fully legible;
+   (3) partial-polygon boundary — **not observed as a problem**, consistent with the disclosed
+       bbox-granularity trade-off (v16.75.5 §3);
+   (4) pan/`moveend` perf watch — **no hitch felt**, consistent with the change-gated restyle
+       costing nothing on pans that don't cross a coverage boundary.
+
+**2. F3 IS NOW FULLY CLOSED — DIAGNOSIS (v16.75.2), CHARACTERISATION (v16.75.2/.3),
+FIX (v16.75.5), VERIFICATION (this entry).** From measurement to shipped, verified fix in five
+roadmap entries, zero re-diagnosis, zero rebuild. Cite this entry, not any earlier one, as F3's
+final state.
+
+**3. STANDING OPERATIONAL RULE RETIRED: "READ ZONING WITH SHADING OFF" NO LONGER APPLIES.**
+Zone fill now reads correctly with shading on. Covers Bargara 10–13 September without a
+workaround.
+
+**4. STILL QUEUED — carry list refreshed, F3 removed.** Hover-bypass fill-opacity bug
+(`index.html:1281` pre-fix line numbers — **re-verify against current file, F3's edits shifted
+lines below :1271**; low priority, still unfixed, still separate from F3); F2 land mask; F1
+point-query distance guard (never before F2); F4 fan-mode ruler — spec still owed by Aaron; F5
+score hygiene; F6 hook-definition card — still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6
+against a current official QLD source (hard rule 4); export filename UTC dating — still open;
+NN-guard class audit (`_sampleIndexCache`, `_idwCache`, `distA` — **line numbers stale since F3,
+re-locate by content**); `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS
+scouting dot (v16.75.2 §12).
+
+**5. NEXT SESSION.** Build **2026.09.05a**, roadmap **v16.75.6**, repo head **`3cc831d`**
+(unchanged). `CLAUDE.md` unchanged. **Next job: F2 land mask characterisation, then F1's guard —
+never F1 first** (standing sequencing, v16.75.1 §13). **Do not re-litigate:** F3's mechanism,
+fix, or gate (§1-§2, closed); the bbox-granularity trade-off (permanent, not a bug); the
+shading-off rule is gone, don't reinstate it without a new measured reason.
+
+*v16.75.5 · 5 Sep 2026 — **F3 FIX SHIPPED. ON-PHONE GATE NOT YET RUN — F3 IS NOT CLOSED.** Build
+**2026.09.05a**, commit `3cc831d` on top of `7b9db91` (roadmap v16.75.3 sync commit). Pushed,
+Pages run completed/success (run `33925599989`), live site confirmed serving `2026.09.05a`.*
+
+**1. THE CHANGE — one gate, two conditions, not a straight swap.** `index.html:1271`, before:
+`const fo=_shadeFade?Math.min(s.fillOp,0.06):s.fillOp;`. After:
+`const fo=(_shadeFade&&f._shFade)?Math.min(s.fillOp,0.06):s.fillOp;`. **Note this differs from
+what was dispatched** (a straight replacement of the global flag) **in a way that's an
+improvement, not a deviation to flag as risk:** `_shadeFade` stays the master switch — shading
+off still short-circuits with zero bbox tests — and `f._shFade`, a new per-feature flag, adds the
+coverage test only when shading is actually on. Clamp value `0.06` and stroke opacity `0.95`
+untouched, as scoped.
+
+**2. MECHANISM.** `buildShade()` now retains `_shadeCov` — a 64×64 byte bitmap over the same
+lat/lng rect as the image overlay (row 0 = north, matching the paint loop's own `y`). Filled
+inside the existing paint loop at negligible marginal cost (one multiply/truncate/add/byte-store
+per pixel, in a loop already doing more per pixel than that) — a cell is set at `AL>=0.05`,
+deliberately above the paint loop's own `0.01` cutoff so barely-visible edge alpha doesn't count
+as coverage. Published only after the overlay swap, so a mid-rebuild throw can't leave stale
+coverage; every overlay-removal path nulls it, the rebuild-threw catch path leaves it alone
+(previous overlay still showing = previous coverage still true). `applyZoneFade()` walks all 180
+zone layers, tests each one's cached `getBounds()` against the bitmap via `zoneCovered()` — O(1)
+reject on bbox-disjoint, early-exit scan otherwise — and restyles **only when a flag actually
+changed**, so a pan with no coverage change costs 180 bbox tests and zero canvas redraws.
+
+**3. GRANULARITY — disclosed before the build, not discovered after.** The test is per-polygon
+**bounding box**, not point-in-polygon: a half-painted zone dims whole, and a concave zone whose
+bbox catches paint outside its own boundary also dims. Accepted trade-off — the goal was "don't
+dim zones nothing is painted on," not exactness, and the bitmap cell size stays well under
+R1=120m so a genuinely painted zone can't be missed by the coarser test.
+
+**4. DIFF SCOPE — `index.html` only, 75 insertions / 8 deletions, 11 hunks.** 3 insertion-only
+(new `_shadeCov`/`zoneCovered()`/`applyZoneFade()` block, +45 lines at old `:2210`; the per-pixel
+cell write, +1 line at old `:2565`; publish call, +5 lines at old `:2595`). 8 mid-file
+replacements (2 build strings; the clamp gate `:1271`, 1→8 lines; `buildShade()`'s head `:2347`,
+1→5 lines, retiring the old global restyle; 3 early-return lines `:2356/:2364/:2379`; the paint
+loop head `:2562`, 1→6 lines for the bitmap alloc).
+
+**5. VALIDATION — all four standard CLAUDE.md checks plus a new harness, all PASS.**
+`node --check` both script blocks; exactly 2 `<script>`/2 `<style>` blocks confirmed (structure
+invariant intact); Leaflet block byte-identical, 147,552 bytes, SHA-256 matches the CLAUDE.md pin
+exactly; `zoneAt()` (`:1332`) and the green-zone drag safeguard (`:1583-1585`) present and
+untouched by any hunk; build string read from the file and bumped (verified no prior `2026.09.*`
+shipped). **New: a coverage-mapping harness** (`scratchpad/f3_covtest.js`) pulled `zoneCovered()`
+**verbatim** from the file, drove 7 cases (painted quadrant, 3 unpainted quadrants, far-away
+reject, whole-rect bbox catch, `_shadeCov===null`) — **7/7 pass**, confirming the fill loop's and
+the test's row orientation actually agree (a real risk for a bitmap indexed independently of the
+paint loop). Encoding via a Node UTF-8 script, no BOM, no round-trip through PowerShell 5.1's
+`Get-Content`/`Set-Content`. `scratchpad/` gitignored throughout, no stray writes.
+
+**6. ON-PHONE GATE — MANDATORY, NOT YET RUN. This is what keeps F3 open.** Four checks, stated
+with their expected result so any surprise is legible as a surprise:
+   (1) a zone far from any imported soundings renders at normal (shading-off) opacity even with
+       shading ON — **expected PASS**, this is the whole point of the fix;
+   (2) a zone with real shade over it still dims as before, stroke unchanged — **expected PASS**;
+   (3) a shaded/unshaded boundary within the SAME polygon shows no visible difference — **NOT a
+       regression to report if seen; this is the disclosed bbox-granularity trade-off from §3**;
+   (4) **watch item, not a pass/fail:** pan repeatedly with shading on, check for a new hitch at
+       `moveend`. Restyle is change-gated so most pans should cost nothing new; a zone crossing
+       the painted footprint's edge costs one coalesced redraw. Given this app's documented
+       history of desktop-fine/phone-slow shading surprises, this is worth watching even though
+       nothing in the design predicts a regression. If a hitch appears, the fix point is the gate
+       in `applyZoneFade()`, not the bitmap itself.
+
+**7. STANDING OPERATIONAL RULE, UNCHANGED UNTIL THE GATE ABOVE PASSES: READ ZONING WITH SHADING
+OFF.** Bargara is 10–13 September — close. Running the on-phone gate soon is worth doing precisely
+so this constraint can be retired before the trip, not to rush the build itself (the build already
+shipped through the normal diagnose-then-implement path, nothing here compresses that).
+
+**8. STILL QUEUED — carry list refreshed.** **F3 on-phone gate (§6, NEXT — do this before
+anything else touches shading or zones)**; hover-bypass fill-opacity bug (`:1281`, low, still
+separate from F3, still unfixed); F2 land mask; F1 point-query distance guard (never before F2);
+F4 fan-mode ruler — spec still owed by Aaron; F5 score hygiene; F6 hook-definition card — still
+blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source (hard rule 4);
+export filename UTC dating — still open; NN-guard class audit (`_sampleIndexCache` :2148,
+`_idwCache` :2851, `distA` :2523 — **note: F3's edits shifted line numbers again, re-verify these
+against the current file before citing them**); `GateRC`/`GateNoosa` frozen; job (b) "Here"
+replaces "Coast-wide"; GPS scouting dot (v16.75.2 §12).
+
+**9. NEXT SESSION.** Build **2026.09.05a**, roadmap **v16.75.5**, repo head **`3cc831d`**.
+`CLAUDE.md` unchanged. **Next job: run the §6 on-phone gate, report all four results explicitly
+(including the watch item), then close F3 with a short confirmation entry** — not a re-diagnosis,
+not a rebuild, just the verification the fix has been waiting on. **Do not re-litigate:** the
+gate's bbox-vs-point-in-polygon trade-off (§3, deliberate); the `_shadeFade && f._shFade`
+two-condition shape (§1, an improvement on the dispatch, not a deviation to worry about); the
+diff scope and validation (§4-§5, measured, not asserted).
+
+*v16.75.4 · 4 Sep 2026 — **F3 ROOT CAUSE FULLY CHARACTERISED, DOWN TO THE LINE. NO FIX WRITTEN.**
+Read-only Claude Code spike (Sonnet), no edits to tracked files, no commit. Build stays
+**2026.08.30a**; repo head unchanged at `b49ff94`. Supersedes v16.75.2's "code branch" framing
+with the exact mechanism.*
+
+**1. THE ANSWER.** Fill and stroke were never "composited differently" — they never share an
+alpha to begin with. `index.html:1271` — `const fo=_shadeFade?Math.min(s.fillOp,0.06):s.fillOp;`
+— clamps fill alpha to a variable gated on the global `_shadeFade` boolean. `index.html:1272`
+emits the style object with `fillOpacity:fo, opacity:0.95` — fill gets the variable, stroke gets
+a hardcoded literal, same call. Leaflet's inlined `_fillStroke` (`:1209-1214`) reads the two
+fields into `globalAlpha` in two independent canvas passes. No shared alpha, group node, or
+parent opacity would make stroke follow fill.
+
+**2. STYLES TABLE (`:1222-1225`) — shading-off `fillOp` per zone: MNP 0.30, CPZ 0.22, HPZ 0.18,
+GUZ 0.14.** Stroke `opacity` is the literal `0.95`, uniform, for all four, always — confirmed by
+a full sweep of every `setStyle`/`resetStyle`/`styleFor`/`zoneLayer` site in app code (5 total):
+none writes `opacity`.
+
+**3. NO GATE, ANYWHERE, EVER CONSULTS SHADE COVERAGE.** `_shadeFade` is written in exactly one
+place (`:2347`, `_shadeFade=shadeOn`) — a direct copy of the global flag. `styleFor(f)` receives
+only the GeoJSON feature; it never sees the overlay's bounds, existence, or per-pixel alpha
+array. A zone 100 km from the nearest sounding dims identically to one under the densest part of
+the overlay. This is the exact mechanism behind the n=611,979 zero-coverage population in
+v16.75.2.
+
+**4. THREE FILL-OPACITY CODE PATHS, NOT ONE.** B1 = the clamp (`:1271`, the cause). B2 = hover
+emphasis (`:1281`) — **reads `STYLES[...].fillOp` raw, bypassing `_shadeFade` and `styleFor`
+entirely**; while shading is ON, hovering a zone jumps fill from 0.06 to `fillOp+0.12` — *above*
+the shading-off baseline (GUZ 0.26, MNP 0.42). Logged as a secondary defect, no fix proposed.
+B3 = hover release (`:1282`, `resetStyle` → re-runs `styleFor` → correctly inherits B1; not a
+defect).
+
+**5. SHADE OVERLAY PHYSICALLY CANNOT COMPOSITE OVER THE ZONE FILL — CONFIRMED FROM
+CONSTRUCTION, NOT JUST PIXELS.** Overlay pane `shadePane`, zIndex **350** (`:1934`); zone canvas
+is Leaflet's default `overlayPane`, zIndex **400** (no `pane` option at `:1277`). 350 < 400 —
+overlay sits strictly beneath the zones regardless of DOM add order. `shadeOp` default 0.75,
+clamped [0.25,1]. ImageData alpha is per-pixel, `Math.round(a*235)`, hard 0 below coverage 0.01
+(`:2564-2565,2585`) — zero-coverage pixels get exactly zero overlay alpha, not a faint one.
+
+**6. RECONCILES ARITHMETICALLY, NO RESIDUE.** `0.06/fillOp` predicts MNP 20.0% / CPZ 27.3% /
+HPZ 33.3% / GUZ 42.9%. v16.75.2's blended 41.7% over a GUZ-dominated 611,979-pixel region backs
+out to an area-weighted mean `fillOp` ≈ 0.144 — ≈93-94% GUZ composition, plausible for that view.
+**Falsifiable check, NOT YET RUN:** re-measure retention segmented by zone type; line 1271
+predicts exactly those four ratios with zero distance-from-sounding dependence. Any zone-
+invariant ratio or distance dependence would falsify this diagnosis.
+
+**7. CLEANEST REPRO — ZERO SHADE PIXELS ANYWHERE, ZONES STILL DIM.** `_shadeFade=shadeOn`
+(`:2347`) sits above every bail-out in `buildShade()` (`:2356,2364,2379`). Switching shading ON
+with <3 soundings: alert fires, function returns at `:2364` having built no overlay at all —
+zones still dim to 0.06. Removes compositing from the explanation entirely; isolates `:1271` as
+sole cause.
+
+**8. SCOPE HELD.** `zoneAt()` and the green-zone drag safeguard were not read or touched. No
+tracked file modified; tree clean at HEAD `b49ff94` throughout. Full report:
+`C:\Guya\Guya_Wamu\scratchpad\f3_characterisation.md`, 340 lines.
+
+**9. THE FIX ITSELF IS STILL UNWRITTEN — NEXT F3 DISPATCH, SEPARATE SESSION (diagnose-before-
+patch).** Per v16.75.2 §6, gating the clamp on actual shade coverage rather than the global flag
+is "the highest-value single edit F3 has, and it costs nothing" — now locatable precisely at
+`index.html:1271`. Also carry the §4 hover-bypass defect into the same or a following fix pass;
+it is cheap and adjacent but is a **different bug** (reads `STYLES` raw instead of `_shadeFade`-
+gated `styleFor`) and must not be silently folded into the F3 commit without saying so.
+
+**10. STILL QUEUED — carry list refreshed.** **F3 fix (§9, NEXT — gate `index.html:1271` on
+coverage, not the global flag; separate on-phone gate before/after per standing discipline)**;
+hover-bypass fill-opacity bug (§4, low, adjacent to F3 but distinct); F2 land mask; F1 point-
+query distance guard (never before F2); F4 fan-mode ruler — spec still owed by Aaron; F5 score
+hygiene; F6 hook-definition card — still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a
+current official QLD source (hard rule 4); export filename UTC dating — still open; NN-guard
+class audit (`_sampleIndexCache` :2148, `_idwCache` :2851, `distA` :2523); `GateRC`/`GateNoosa`
+frozen; job (b) "Here" replaces "Coast-wide"; GPS scouting dot (v16.75.2 §12).
+
+**11. STANDING OPERATIONAL RULE, UNCHANGED: READ ZONING WITH SHADING OFF.** Bargara is 10–13
+September. The mechanism is now fully known but **no fix has shipped** — this rule stays in
+force until a build closes it, not until the diagnosis does.
+
+**12. NEXT SESSION.** Build **2026.08.30a** (unchanged — this entry ships no code), roadmap
+**v16.75.4**, repo head **`b49ff94`** (unchanged). `CLAUDE.md` unchanged. **Next job: F3 fix** —
+gate `index.html:1271`'s clamp on per-polygon shade coverage instead of the global `_shadeFade`
+flag, as a standalone dispatch with its own diagnose-stated-hypothesis, `node --check`, Leaflet-
+hash and on-phone gate. **Do not re-litigate:** the root-cause mechanism (§1-§7, measured and
+characterised, not hypothesised); the hover-bypass bug is real but separate (§4); the overlay
+cannot composite over the fill regardless of pane order (§5).
+
 *v16.75.3 · 4 Sep 2026 — **MACHINE MOVE COMPLETE AND VERIFIED BYTE-FOR-BYTE. CARRY ITEM (iv)
 CLOSED.** No app code, no data, no schema change. Build stays **2026.08.30a**. Head is **`b49ff94`**,
 preceded by `543db29` (data/audit), `c2b262d` (.gitattributes) and `2f930dd` (v16.75.2). Three Pages
