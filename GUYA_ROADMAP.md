@@ -1,5 +1,147 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.2 · 4 Sep 2026 — **F3 IS CLOSED. VERIFIED AND CHARACTERISED BY PIXEL MEASUREMENT OF A
+COMPLETE 2×2, NOT BY FIELD IMPRESSION.** No build, no code, no data, no schema change. Build stays
+**2026.08.30a**; repo head is v16.75.1's commit plus this entry's own. The recorded root cause in
+v16.75.1 §11 is **wrong and is superseded here**. Also carried in: a **retracted mitigation** this
+planning chat proposed and then disproved (§7), **two wasted screenshot batches** and what went
+wrong in each (§10), a **new backlog item** (§12), and the **machine move** (§13).*
+
+**1. THE MEASUREMENT.** Four frames at z14 over Innes Park / Barolin Rock, one view, toggling only
+Marine-park zones and Depth shading (slider fixed at 80%). Cells: **D** zones off / shade off ·
+**A** zones on / shade off · **C** zones off / shade on · **B** zones on / shade on. Analysis by
+PIL/numpy on the raw screenshots — no eyeballing, every figure reproducible from the four files.
+
+| quantity | value |
+|---|---|
+| zone fill, shading OFF (`A−D`) | **21.73 luma** |
+| zone fill, shading ON where shade paints (`B−C`) | **4.43 luma** |
+| net retention where shade paints | **0.144** (n = 309,600) |
+| **retention where shade paints NOTHING** | **0.417** (n = 611,979) |
+| orange stroke core, shading OFF | `[198.7, 136.4, 30.3]` |
+| orange stroke core, shading ON | `[198.2, 136.3, 30.6]` |
+| zone-fill area at this view that is actually shaded | **29.0%** |
+
+**4.43 luma out of 255 is 1.7% of full scale.** The field report "the fill is not visible" is
+correct. "The fill is gone" would not have been.
+
+**2. REGISTRATION — THE ONE FRAME THAT NEARLY COST THE SET.** Frame D was captured after an
+unnoticed pan: **−144 px in y, −18 px in x** relative to the other three. Recovered by
+cross-correlating an inland land patch and translating; after the shift the inland control reads
+**mean |A−D| = 0.000, p99 = 0.0** — exact pixel identity, not approximate. **A pure translation is
+recoverable; a zoom change would not have been.** Standing: a 2×2 is only a 2×2 if all four cells
+share a view, and the cheapest way to prove that is an inland control block that contains neither
+zones nor shading. Report its mean absolute difference before reporting anything else.
+
+**3. THE DOMINANT EFFECT IS A CODE BRANCH, NOT COMPOSITING.** This is the finding. Over **611,979
+pixels that carry zone fill and have ZERO shade painted on them**, the fill still drops to **41.7%**
+of its shading-off strength the moment the shading flag is set. Compositing cannot do that — there
+is nothing there to composite. **Something in the code reduces zone FILL opacity on the global
+shading flag, independent of whether any shade covers the polygon.**
+
+**4. THE BRANCH TARGETS FILL ONLY — THE STROKE IS UNTOUCHED.** Orange stroke cores over unshaded
+water match across the toggle to within **0.5 / 255** (`[198.7,136.4,30.3]` → `[198.2,136.3,30.6]`).
+So this is not a layer-wide opacity change and not a pane or z-order effect: a raster overlay cannot
+sit above a polygon's fill and below its stroke, and an opacity change on the layer would dim both.
+**Fill and stroke are being treated differently by code.** That is a much narrower thing to go
+looking for than "layer-order or opacity".
+
+**5. THE SECOND EFFECT IS REAL BUT SECONDARY.** Where the shade overlay does paint, the
+already-reduced fill is then composited underneath it, taking **0.417 → 0.144 net**. Implied overlay
+alpha rises with sounding density — conflated alpha **0.742** at weak shade (6–15 luma), **0.806**
+(15–30), **0.835** (30–60), **0.946** at dense shade (60+) — consistent with an ImageData whose
+per-pixel alpha tracks data coverage, multiplied by the slider. Backing out the code branch gives an
+overlay term of roughly **1 − 0.144/0.417 ≈ 0.655** at the median.
+
+**6. 71% OF THE DIMMING IS FREE DAMAGE.** Only **29.0%** of the visible zone-fill area at this view
+has any shade over it. The remaining **71%** is dimmed to 42% to protect depth colours that are not
+being painted there. **Gating the reduction on actual shade coverage rather than the global flag is
+a strict improvement with no trade-off against depth readability** — it is the highest-value single
+edit F3 has, and it costs nothing.
+
+**7. [RETRACTED] THE OPACITY SLIDER IS NOT A MITIGATION.** This chat proposed dropping shading
+opacity to 20–25% as a field workaround that would preserve the depth picture, and then disproved
+it. At 25% the overlay term relaxes to roughly 0.795, but **the 41.7% code branch still applies**,
+so predicted retention is ≈ **0.33** — about 7 luma, still not readable. The branch caps the slider.
+An earlier attempt to test this at z11 was worthless for a second reason: the slider change altered
+only **23,885 pixels**, all inside a narrow coastal band at x 1298–1938, because the shaded strip was
+a sliver of that frame. **A mitigation must be tested at a view where the affected area dominates.**
+
+**8. OPERATIONAL RULE, STANDING UNTIL F3 SHIPS: READ ZONING WITH SHADING OFF.** Not "at low
+opacity" — off. This covers the Bargara trip 10–13 September without a build, and it is the reason
+F3 does not need to be rushed into a pre-trip patch. **Do not let the trip date set the build
+cadence**; one variable per build survives contact with a deadline only if the deadline has a
+non-code answer, and here it does.
+
+**9. [SUPERSEDED] v16.75.1 §11's ROOT CAUSE.** "Layer-order or opacity" is wrong on both limbs.
+Occlusion is excluded outright by §1 and §4. "Opacity" is right only in the narrow sense that a
+fill-opacity value is being changed — by code, deliberately, on a flag, not as a compositing
+consequence. §11's symptom description stands; its cause sentence does not. Tagged inline at §11 of
+that entry so a top-to-bottom read cannot pick it up as current.
+
+**10. PROCESS — TWO BATCHES BURNED BEFORE THE SET LANDED, FOR TWO DIFFERENT REASONS.** Worth
+recording because neither was a model or a device fault.
+- **Batch 1 (3 frames) was internally valid but incomplete** — it had zones-on/shade-off,
+  zones-on/shade-on and zones-off/shade-on, and no zones-off/shade-off. Three quarters of a square
+  measures nothing cleanly. The retention figure derived from it (0.42) happened to be nearly right
+  but for the wrong reason, and was reported at the time as suspect. **A ratio whose denominator
+  mixes two variables is not a retention figure even when the number comes out plausible.**
+- **Batch 2 (3 frames) was taken at a different map view** and could not be crossed with batch 1 —
+  8769↔8771 differed over **37.2%** of map pixels by >40. Nobody moved the map deliberately; it moved
+  between sessions and nothing in the protocol checked.
+- **Both failures were specification failures, not execution failures.** The first protocol asked
+  for observations rather than a closed design; the second asked for the missing cell without
+  restating the fixed-view precondition. **When a measurement needs N cells, dispatch all N in one
+  list with the invariant stated at the top, not the cells that are missing from the last attempt.**
+
+**11. NEXT JOB — READ-ONLY CHARACTERISATION SPIKE.** Claude Code, Sonnet, no edits, no commit.
+Diagnose before patch; the fix is not to be written in the same dispatch. Required output, verbatim
+with absolute `file:line`: (a) the zone layer's base fill style; (b) every code path that alters
+zone fill opacity or fill style, and what each is gated on; (c) whether any such gate consults shade
+COVERAGE at the polygon or only the global shading flag; (d) the zone stroke style and whether any
+path touches it; (e) the shade overlay's construction — pane, `zIndex`, add order relative to the
+zone layer, `opacity` option, and whether its ImageData alpha is per-pixel. Artefact path stated
+**absolutely** against the new repo root (v16.75.1 §s1), byte size reported back. **Then F2
+characterisation, THEN F1's guard — never F1 first (v16.75.1 §13).**
+
+**12. NEW BACKLOG ITEM — GPS "YOU ARE HERE" SCOUTING DOT. [unspecced]** Raised this session. A live
+position marker for scouting, so a spot can be marked relative to where the angler is standing.
+Constraints, non-negotiable and to be written into the spec before any build: **check what
+`EMERGENCY — POSITION` already does first** — part of this may exist; the panel also carries
+`WALK TRACKER (GPS · OPT-IN)`, so a live dot **subscribes to that existing `watchPosition`
+consumer** rather than opening a second one; **render the accuracy circle, never a bare dot** —
+phone GNSS on a headland with cliff multipath runs ±10–15 m, worse than the geometry being read
+against; **no "your zone: X" readout may attach to the dot** (hard rules 1–3 — a blue dot beside an
+orange line is precisely the UI that invites a legality call the app must not make); position stays
+in memory, never stored, never exported; marking goes through the existing `addPt`, not a new
+persistence path; explicit on/off with auto-stop for battery. **Sequenced behind F3, F2 and F1.**
+
+**13. MACHINE MOVE.** Code workflows move off `D:\Claude Code` after this session. **Clone fresh
+from `AzmixLabs/Guya_Wamu`; do not copy the working directory across** — a directory copy carries
+gitignored raw data, stale scratchpad artefacts and any uncommitted state. `CLAUDE.md` and
+`.claude/settings.json` are committed and arrive with the clone. Before migrating, confirm
+`git status --porcelain`, `git stash list` and `git log origin/main..HEAD` are all **empty**; work
+stranded on the old machine is invisible from the new one and from every chat. Check `data/raw/` —
+it is gitignored and will not travel, and raw LiDAR is disposable **only** once its processed CSV has
+passed the class-9-adjacency/density check, not merely "imported and rendered". **If the new machine
+is not Windows, `CLAUDE.md`'s PowerShell-only command rules are actively wrong there and need their
+own one-variable build.** Record the new absolute repo and scratchpad paths and use them in every
+dispatch from the next session on.
+
+**14. STILL QUEUED — unchanged unless noted.** **F3 fix (§11 dispatch first, FIRST)**; F2 land mask
+on depth readout and shade paint; F1 point-query distance guard (never before F2); F4 fan-mode
+ruler — **spec still owed by Aaron, do not reconstruct**; F5 score hygiene (`liveWindDir` TTL,
+`recBandKm` default 0); F6 hook-definition card — **still blocked on verifying CPZ 2/2 and GUZ+HPZ
+3/6 against a current official QLD source** (hard rule 4); export filename UTC dating — one export
+between 00:00 and 10:00 AEST, read the **offered** filename before renaming; **Leaflet SHA-256 pin
+still absent from `CLAUDE.md`** (v16.74 §5) — this bites harder on a fresh clone, where the
+validation list instructs a check against a pin the file does not contain; NN-guard class audit
+(`_sampleIndexCache` :2148, `_idwCache` :2851, `distA` :2523, all unchecked); `Cap*` spot deletion
+(7 spots) — **unblocked, export first**; `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces
+"Coast-wide"; GPS scouting dot (§12). **Line numbers: `index.html` is 4197 lines after build
+2026.08.30a and everything at or after 3440 shifted +1 — any dispatch quoting a pre-build number
+past 3439 is stale (v16.75 §6).**
+
 *v16.75.1 · 31 Aug 2026 — **THE PANEL-OPEN GATE IS CLOSED. FIVE LIMBS, FIVE PASSES, BUILD
 2026.08.30a CONFIRMED IN THE FIELD AT BOTH BUILD-STRING SITES.** No build, no code, no data, no
 schema change. Build stays **2026.08.30a**; repo head is `4531b38` plus this entry's own commit.
@@ -100,6 +242,10 @@ visible artefact was observed across the run. Remains accepted and unguarded.
 the first time. **Sequencing changed from the field notes: F3 goes first.**
 
 **11. F3 — DEPTH SHADING OBSCURES THE MARINE-PARK ZONE FILL. [needs verify] PROMOTED TO FIRST.**
+[SUPERSEDED — v16.75.2 §§1–6. VERIFIED by measurement 4 Sep 2026. The cause sentence below
+("Layer-order or opacity") is WRONG: occlusion is excluded, and the dominant effect is a code branch
+that reduces fill opacity to 41.7% on the global shading flag. Symptom description stands; cause
+does not. Do not read the cause as current.]
 Shading OFF: CPZ06 fill renders as a visible wash inside the boundary. Shading ON: the fill is not
 visible and only the orange boundary line survives. Layer-order or opacity. **This is the only item
 on the list that degrades a SAFETY cue, and it does so specifically in the mode used for planning
