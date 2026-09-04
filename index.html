@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.08.30a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.08.30a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1268,7 +1268,14 @@ document.querySelectorAll('#baseseg button').forEach(b=>b.onclick=()=>{document.
 
 var _shadeFade=false;var slopeView=false; /* var (hoisted) - shadeOn is let and in TDZ when zones first style */
 function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
-  const fo=_shadeFade?Math.min(s.fillOp,0.06):s.fillOp;
+  /* F3 (build 2026.09.05a): the clamp is gated on whether shade is actually painted over THIS
+     polygon, not on the global shading flag. _shadeFade stays the master switch (shading off ->
+     nothing is ever clamped); f._shFade is the per-feature coverage flag written by
+     applyZoneFade() from the retained _shadeCov bitmap. Undefined - the initial L.geoJSON styling,
+     before any shade has ever been built - reads false, i.e. normal fill, the safe direction.
+     Stroke opacity (the 0.95 literal on the next line) is deliberately untouched: it is correct
+     and is not part of this fix. */
+  const fo=(_shadeFade&&f._shFade)?Math.min(s.fillOp,0.06):s.fillOp;
   return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:fo,opacity:0.95};}
 function zonePopup(p){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
@@ -2208,6 +2215,51 @@ function ptsBounds(pts){
   _boundsVersion=poolVersion;
   return _boundsCache;}
 let _zoneFaded=null;
+/* F3 (build 2026.09.05a) - PER-POLYGON SHADE COVERAGE.
+   _shadeCov is the only state buildShade() retains for styling purposes: a coarse
+   SHADE_COV_N x SHADE_COV_N bitmap over the SAME lat/lng rect as the image overlay, one byte per
+   cell, set where that cell held a genuinely painted pixel. It is filled inside buildShade()'s
+   existing pass-2b paint loop (one multiply + truncation + byte store per painted pixel) and
+   published only after the overlay swap succeeds; every path that REMOVES the overlay nulls it,
+   while the rebuild-threw catch path deliberately leaves it alone - the previous overlay is still
+   on the map, so the previous coverage is still the truth.
+   Row 0 is the NORTH edge, matching the paint loop's own y (y=0 -> maxLa). zoneCovered() maps
+   latitude the same way; keep the two in step.
+   GRANULARITY, stated so nobody has to discover it on the phone: the test is the zone's BOUNDING
+   BOX against the bitmap, not per-pixel point-in-polygon. A polygon that is half-painted dims
+   whole, and a concave zone whose bbox catches paint lying outside the polygon itself dims too.
+   That is the accepted trade - the goal is 'don't dim zones nothing is painted on', not exactness,
+   and an exact test means a point-in-polygon pass per zone per cell on a phone. Cell size at a
+   typical painted extent is well under R1=120 m, so a genuinely painted zone cannot be missed. */
+var _shadeCov=null;const SHADE_COV_N=64;
+function zoneCovered(b){if(!_shadeCov||!b)return false;const c=_shadeCov;
+  const so=b.getSouth(),no=b.getNorth(),we=b.getWest(),ea=b.getEast();
+  if(no<c.minLa||so>c.maxLa||ea<c.minLo||we>c.maxLo)return false; /* O(1) reject - the common case */
+  const N=c.N,dLa=c.maxLa-c.minLa,dLo=c.maxLo-c.minLo;
+  if(!(dLa>0)||!(dLo>0))return false;
+  let y0=Math.floor((c.maxLa-no)/dLa*N),y1=Math.floor((c.maxLa-so)/dLa*N); /* row 0 = north */
+  let x0=Math.floor((we-c.minLo)/dLo*N),x1=Math.floor((ea-c.minLo)/dLo*N);
+  if(y0<0)y0=0;if(x0<0)x0=0;if(y1>N-1)y1=N-1;if(x1>N-1)x1=N-1;
+  for(let y=y0;y<=y1;y++){const r=y*N;for(let x=x0;x<=x1;x++)if(c.cells[r+x])return true;}
+  return false;}
+/* Writes each zone feature's own _shFade flag, then restyles ONCE - and only if at least one flag
+   (or the global on/off state) actually changed. That gate is what keeps this off the per-pan cost
+   path: coverage only changes when a zone crosses into or out of the painted footprint, so a pan
+   that changes nothing costs 180 bounds tests and no canvas redraw. layer.getBounds() is Leaflet's
+   cached _bounds - a property read, not a geometry scan. _zoneFaded keeps its old job: the last
+   applied global state. */
+function applyZoneFade(){try{
+  if(typeof zoneLayer==='undefined')return;
+  const on=(typeof shadeOn!=='undefined')&&shadeOn&&!!_shadeCov;
+  let changed=(_zoneFaded!==shadeOn);
+  _shadeFade=shadeOn;
+  zoneLayer.eachLayer(function(l){const f=l.feature;if(!f)return;
+    let cov=false;
+    if(on){try{cov=zoneCovered(l.getBounds());}catch(e){cov=false;}}
+    if(!!f._shFade!==cov){f._shFade=cov;changed=true;}});
+  if(changed)zoneLayer.setStyle(styleFor);
+  _zoneFaded=shadeOn;
+}catch(e){}}
 /* v16.49: depthSamples() (below) now caches its own returned array on poolVersion, so pts here is
    the SAME array/objects across calls whenever poolVersion hasn't changed - the v16.48 side
    Float32Array + positional-index-copy (_r0Cache) is redundant with that and has been removed.
@@ -2344,7 +2396,11 @@ function buildShade(){
   const _pf=perfBegin(); /* T1 - null unless the timing overlay is on AND a moveend is pending */
   if(_pf){_pf.idw=_idwCache?'HIT':'MISS';_pf.z=(function(){try{return map.getZoom().toFixed(1);}catch(e){return '?';}})();}
   _idwCache=null; /* data changed - rebuild read index lazily */
-  try{if(_zoneFaded!==shadeOn&&typeof zoneLayer!=='undefined'){_shadeFade=shadeOn;zoneLayer.setStyle(styleFor);_zoneFaded=shadeOn;}}catch(e){}
+  /* F3: the zone-fade restyle used to sit here, gated on the global shadeOn flag alone - which is
+     exactly the defect (every zone in ZONES clamped identically the instant shading came on,
+     however far it sat from the sounding pool). It now runs from applyZoneFade() at the points
+     below where the coverage bitmap is actually known: after the overlay swap, and on each path
+     that removes the overlay. */
   /* CT is timed at this CALL SITE, so it covers buildAutoContours()'s own early-return paths too.
      perfCur is how the nested function reaches this gesture's record; it is set across this one
      call and cleared immediately after. This whole span sits ABOVE the S1 start mark, so CT is
@@ -2353,7 +2409,7 @@ function buildShade(){
   if(typeof buildAutoContours==='function')buildAutoContours();
   if(_pf)_pf.ct=performance.now()-_c0;
   perfCur=null;
-  if(!shadeOn){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
+  if(!shadeOn){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}_shadeCov=null;applyZoneFade();return;}
   /* v16.62: atomic overlay swap - shadeOverlay is no longer torn down up front. Everything from
      here to the swap at the end is wrapped so a throw mid-rebuild leaves the map showing the
      PREVIOUS overlay rather than bare while the next one computes; branches that end with
@@ -2361,7 +2417,7 @@ function buildShade(){
   try{
   const _m0=_pf?performance.now():0; /* S1a start - see the Step B nesting note above buildShade() */
   const pts=depthSamples();
-  if(pts.length<3){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
+  if(pts.length<3){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}_shadeCov=null;applyZoneFade();return;}
   const bb=ptsBounds(pts);
   let minLa=bb.minLa,maxLa=bb.maxLa,minLo=bb.minLo,maxLo=bb.maxLo;
   const padLa=(maxLa-minLa)*0.35+0.0004,padLo=(maxLo-minLo)*0.35+0.0004;
@@ -2376,7 +2432,7 @@ function buildShade(){
       minLo=Math.max(minLo,vW);maxLo=Math.min(maxLo,vE);
       if(minLa>=maxLa||minLo>=maxLo)_degenerate=true;}
   }catch(e){}
-  if(_degenerate){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}return;}
+  if(_degenerate){if(shadeOverlay){map.removeLayer(shadeOverlay);shadeOverlay=null;}_shadeCov=null;applyZoneFade();return;}
   const extM=Math.max((maxLa-minLa)*111320,(maxLo-minLo)*111320*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
   const W=Math.max(280,Math.min(600,Math.round(extM/35))),H=W,cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d'),im=ctx.createImageData(W,H),da=im.data;
@@ -2559,10 +2615,16 @@ function buildShade(){
     if(gs.length>20){gs.sort((a,b)=>a-b);const p90=gs[Math.floor(gs.length*0.9)];
       if(p90>1e-6)VE=Math.max(6,Math.min(60,1.2/p90));}
   }
-  for(let y=0;y<H;y++){const laP=maxLa-(maxLa-minLa)*(y/(H-1));
+  /* F3: coverage bitmap, filled from this loop rather than from a second pass over W*H. COV_A is
+     a slightly higher bar than the 0.01 paint cutoff on purpose - barely-visible edge alpha is not
+     'shade painted over this zone'. covRow is hoisted to the row loop, so the per-pixel cost is one
+     multiply, one truncation, one add and one byte store. */
+  const COV_N=SHADE_COV_N,COV_A=0.05,covCells=new Uint8Array(COV_N*COV_N);
+  for(let y=0;y<H;y++){const laP=maxLa-(maxLa-minLa)*(y/(H-1));const covRow=((y*COV_N/H)|0)*COV_N;
   for(let x=0;x<W;x++){
     const i0=y*W+x,idx=i0*4,a=AL[i0];
     if(a<=0.01){da[idx+3]=0;continue;}
+    if(a>=COV_A)covCells[covRow+((x*COV_N/W)|0)]=1;
     /* topographic-NIR pixels paint the fixed 4-colour flats palette; everything else keeps the
        continuous depth ramp. Above-HAT ground never reaches here - depthSamples()'s okHAT gate
        already removed it from the pool, so there is no second land-suppression rule to keep in sync. */
@@ -2593,6 +2655,11 @@ function buildShade(){
   const _newShade=L.imageOverlay(_url,[[minLa,minLo],[maxLa,maxLo]],{opacity:shadeOp,interactive:false,pane:'shadePane'}).addTo(map);
   if(shadeOverlay)map.removeLayer(shadeOverlay);
   shadeOverlay=_newShade;
+  /* F3: publish coverage for the overlay that is now actually on the map, then let the zone fills
+     follow it. Sits AFTER the swap so a throw earlier in the rebuild cannot leave _shadeCov
+     describing an overlay that was never shown. */
+  _shadeCov={minLa:minLa,minLo:minLo,maxLa:maxLa,maxLo:maxLo,N:COV_N,cells:covCells};
+  applyZoneFade();
   /* T2 - v16.62's add-before-remove swap complete, order untouched. The overlay's own DOM write
      happens in perfCommit(), reached from the 'load' handler (T3) or the flush task - i.e. AFTER
      T3 and outside every timed span. */
