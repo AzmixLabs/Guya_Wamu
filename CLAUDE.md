@@ -48,11 +48,20 @@ before any build.
 - After editing, validate BOTH script blocks with `node --check` (extract each block
   to a temp file and check it). Confirm the inlined Leaflet block is byte-identical
   and that `zoneAt()` + the green-zone drag safeguard are intact.
+  - Leaflet integrity pin: the expected SHA-256 of the inlined Leaflet block, computed
+    over the BODY ONLY, EXCLUDING the `<script>` / `</script>` tags, is
+    `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a` (147,552 bytes).
 - Bump the build string (format `2026.MM.DDa` — the same day gets `a`, `b`, `c`… in order).
   Read the current value from the file — don't assume it, and don't reuse a value that has
   already shipped (a collision with a released build is a discipline breach).
 - Edit in place and commit with a clear message. The repo is the deliverable — there
   is no upload/download step here.
+- Never round-trip a repo file through `Get-Content`/`Set-Content` or `Out-File` under
+  Windows PowerShell 5.1 — its default read is cp1252 and its `-Encoding UTF8` write
+  emits a BOM. `index.html`, `CLAUDE.md` and `GUYA_ROADMAP.md` all carry em-dashes in
+  live content, and `node --check` cannot detect the corruption. Write via
+  `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding $false))`,
+  or use PowerShell 7. This machine standardises on pwsh 7.6.5.
 
 ## Session close (do this automatically — no need to be asked)
 
