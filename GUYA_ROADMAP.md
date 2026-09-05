@@ -1,7 +1,8 @@
 # Guya — Feature Backlog & Roadmap
 
 *v16.75.10 · 5 Sep 2026 — **NO BARE DISTANCE LITERAL LEFT ON ANY READ PATH. BUILD
-`2026.09.05d`, COMMIT `3c36e29`** on top of `715e6e0` (roadmap v16.75.9). Pushed. Closes the item
+`2026.09.05d`, COMMIT `3c36e29`** on top of `715e6e0` (roadmap v16.75.9). Pushed; Pages run
+`33933828183` completed/success, live site confirmed serving `2026.09.05d`. Closes the item
 v16.75.9 §5 logged deliberately one build earlier. **Identity swap — no behaviour change at any
 distance, in any branch.***
 
@@ -71,7 +72,8 @@ Then the F2 query-point land test. **Do not re-litigate:** that this build chang
 (§3, deliberate).
 
 *v16.75.9 · 5 Sep 2026 — **HOVER READOUT BROUGHT INTO LINE. BUILD `2026.09.05c`, COMMIT
-`3de36ca`** on top of `05f9857` (roadmap v16.75.8). Pushed. Closes the item v16.75.8 §10 logged one
+`3de36ca`** on top of `05f9857` (roadmap v16.75.8). Pushed; Pages run `33933487527`
+completed/success, live site confirmed serving `2026.09.05c`. Closes the item v16.75.8 §10 logged one
 build earlier: the desktop hover was still on a bare 150 m after F1 fixed only the tap.*
 
 **1. WHAT WAS ACTUALLY WRONG — WORSE THAN THE ONE NUMBER LOGGED.** v16.75.8 §10 recorded "hover
@@ -142,7 +144,8 @@ query-point land test. **Do not re-litigate:** the values 30 and 120 (v16.75.8 �
 is the fix, not a regression).
 
 *v16.75.8 · 5 Sep 2026 — **F1 SHIPPED AS BUILD `2026.09.05b`. ON-PHONE GATE NOT YET RUN —
-F1 IS NOT CLOSED.** Commit `bed3d37` on top of `a04e189` (roadmap v16.75.7). Pushed. Scope was the
+F1 IS NOT CLOSED.** Commit `bed3d37` on top of `a04e189` (roadmap v16.75.7). Pushed; Pages run
+`33933016948` completed/success, live site confirmed serving `2026.09.05b`. Scope was the
 readout only, as re-defined by v16.75.7 §7: **retune `:2941`'s threshold and fix the "here" label.**
 Not "add a missing guard" — there was never a missing guard.*
 
