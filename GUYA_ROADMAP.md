@@ -1,5 +1,75 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.10 · 5 Sep 2026 — **NO BARE DISTANCE LITERAL LEFT ON ANY READ PATH. BUILD
+`2026.09.05d`, COMMIT `3c36e29`** on top of `715e6e0` (roadmap v16.75.9). Pushed. Closes the item
+v16.75.9 §5 logged deliberately one build earlier. **Identity swap — no behaviour change at any
+distance, in any branch.***
+
+**1. THE CHANGE.** Both sites already held the correct number; what changed is that it now has one
+definition instead of three copies.
+
+| site | was | is |
+|---|---|---|
+| `:1905` slope chain | `r.near<=120` | `r.near<=NEAR_MAX` |
+| `:2990` map-click gate | `r.near<=120` | `r.near<=NEAR_MAX` (+ the comment above it, which spelled the number out in prose) |
+
+**`grep -c 'near<=120\|near>120\|near<=150\|near>150'` now returns 0.** The only read-side literal
+left is **80 m** — `findDeepest()`'s cutoff and the hover's roughness marker — a genuinely
+different threshold, deliberately left alone.
+
+**2. THE FORWARD-REFERENCE QUESTION, VERIFIED RATHER THAN ASSUMED.** The slope-chain reference sits
+**~1,050 lines ABOVE** the `const` it now names, and `node --check` cannot see a TDZ error. It is
+safe because the reference is inside a `map.on('click')` handler body — evaluated on click, long
+after module evaluation, so no TDZ window exists at that point. Checked by harness
+(`scratchpad/f1_scopetest.js`), which enumerates every `NEAR_HERE`/`NEAR_MAX` reference, classifies
+each as before/after the declaration and code/comment, confirms **the only forward code reference is
+`:1907`** and that it is enclosed by the handler at `:1903`, and reproduces the deferred-reference
+pattern to show it resolves. The two other apparent "forward" hits are lines inside the hoisted
+`/* F1 … */` comment block.
+
+**3. RECORDED IN THE CODE, NOT ACTED ON — `NEAR_MAX` AND `R1` STAY SEPARATE.** They are numerically
+equal (both 120) and remain **separate declarations**: one is how far a reading may be reported
+from, the other bounds the painted footprint. They agree today; **unifying them would couple the
+readout to the renderer — a decision, not a tidy-up**, and it is not this build's to make. Noted in
+the same comment: **`R1` itself is declared twice**, in `buildShade()` (`:2439`) and
+`buildAutoContours()` (`:3049`). Logged, not touched.
+
+**4. THE THRESHOLD-PROLIFERATION ITEM IS NOW CLOSED ON THE READ SIDE.** Its arc across four
+entries: v16.75.7 §11b logged **five** distinct thresholds across six consumers of one pool →
+v16.75.8 cut it to four → v16.75.9 to three → this build leaves **two named constants
+(`NEAR_HERE`=30, `NEAR_MAX`=120) and one unnamed 80 m** that is a real, separate threshold. **The
+paint side is untouched and still carries its own `R1`, twice** (§3).
+
+**5. VALIDATION.** Both script blocks `node --check` clean. Leaflet block **byte-identical**,
+147,552 bytes, SHA-256 `db49d009…641a`, matching the `CLAUDE.md` pin. `zoneAt()` and the
+green-zone `dragend` safeguard **absent from the diff entirely**. Both behavioural harnesses still
+pass unregressed — tap **12/12**, hover **9/9** — which is the check that matters for an identity
+swap: the numbers did not move. **Diff: 13 insertions, 6 deletions, 4 hunks.**
+
+**6. NO ON-PHONE GATE OF ITS OWN.** An identity swap has no observable behaviour to gate. It
+inherits F1's outstanding gate and adds nothing to it.
+
+**7. FOUR BUILDS HAVE NOW SHIPPED ON 5 SEP AND NONE HAS BEEN GATED ON THE PHONE.**
+`2026.09.05a` (F3 zone-fill coverage — gated, PASSED, v16.75.6), then **`b` (F1 readout), `c`
+(hover), `d` (literals) — all three ungated.** `b` and `c` both changed user-visible wording; `d`
+did not. **This is the largest ungated stack this project has carried**, and it is stacked on the
+one limb (the readout) that a phone screenshot verifies fastest. **Recommend running F1's gate
+(v16.75.8 §9) before any further code.**
+
+**8. STILL QUEUED.** **F1's on-phone gate (v16.75.8 §9) — unrun, blocking F1's closure, and now
+covering three builds**; F2 query-point land test (the real fix for the land case); `R1` declared
+twice (§3); hover-bypass fill-opacity bug; F4 fan-mode ruler — spec still owed by Aaron; F5 score
+hygiene; F6 hook-definition card — blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current
+official QLD source (hard rule 4); export filename UTC dating; NN-guard class audit (line numbers
+v16.75.7 §10, plus `_idwCache`'s `n===s.length` keying); `WOFS_FREQ_MIN` removal;
+`GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS scouting dot.
+
+**9. NEXT SESSION.** Build **2026.09.05d**, roadmap **v16.75.10**, repo head **`3c36e29`** plus this
+entry's commit. `CLAUDE.md` unchanged. **Next job: run F1's on-phone gate (§7) — not more code.**
+Then the F2 query-point land test. **Do not re-litigate:** that this build changed no behaviour
+(§1, identity swap); the forward reference (§2, verified); keeping `NEAR_MAX` and `R1` separate
+(§3, deliberate).
+
 *v16.75.9 · 5 Sep 2026 — **HOVER READOUT BROUGHT INTO LINE. BUILD `2026.09.05c`, COMMIT
 `3de36ca`** on top of `05f9857` (roadmap v16.75.8). Pushed. Closes the item v16.75.8 §10 logged one
 build earlier: the desktop hover was still on a bare 150 m after F1 fixed only the tap.*
