@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05c</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2936,23 +2936,23 @@ function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
   return {d:num/den,near:near,nearD:nearD,st:nearST};}
 /* Shared depth-read popup. prefixHTML lets the zone layer prepend its classification so a tap
    inside a marine-park zone shows zone type/ID/warning AND the depth in one popup. */
+/* F1 (build 2026.09.05b): both numbers below are named and both come from constants already
+   load-bearing elsewhere in this file - neither is invented here.
+   NEAR_MAX=120 replaces the old bare 150. It is buildShade()'s R1, the hard stop past which the
+   shading paints nothing at all (see distA), and it is already the map-click gate's own figure
+   at the click handler below. At 150 the readout claimed data in a band where the renderer
+   draws none and the click gate would not have opened the popup for a bare map tap - three
+   numbers for one question. Now one.
+   NEAR_HERE=30 is R0_MIN, the tightest per-sample radius buildShade() will use, i.e. the radius
+   inside which that file already treats one sounding as representing the point outright
+   (alpha=1). Inside it, "here" is a fair claim. Outside it, it is not - see head/farNote below.
+   NOTE the deliberate limit of this fix: it is distance-only, because the readout has no
+   land test at the query point (F2, roadmap v16.75.7). A sounding 35 m away across a rock
+   headland and one 35 m away over open water are still indistinguishable here; what changes is
+   that neither is any longer called "here". */
+const NEAR_HERE=30,NEAR_MAX=120;
 function openDepthRead(latlng,prefixHTML){
   const r=idwDepthAt(latlng.lat,latlng.lng);
-  /* F1 (build 2026.09.05b): both numbers below are named and both come from constants already
-     load-bearing elsewhere in this file - neither is invented here.
-     NEAR_MAX=120 replaces the old bare 150. It is buildShade()'s R1, the hard stop past which the
-     shading paints nothing at all (see distA), and it is already the map-click gate's own figure
-     at the click handler below. At 150 the readout claimed data in a band where the renderer
-     draws none and the click gate would not have opened the popup for a bare map tap - three
-     numbers for one question. Now one.
-     NEAR_HERE=30 is R0_MIN, the tightest per-sample radius buildShade() will use, i.e. the radius
-     inside which that file already treats one sounding as representing the point outright
-     (alpha=1). Inside it, "here" is a fair claim. Outside it, it is not - see head/farNote below.
-     NOTE the deliberate limit of this fix: it is distance-only, because the readout has no
-     land test at the query point (F2, roadmap v16.75.7). A sounding 35 m away across a rock
-     headland and one 35 m away over open water are still indistinguishable here; what changes is
-     that neither is any longer called "here". */
-  const NEAR_HERE=30,NEAR_MAX=120;
   if(!r||r.near>NEAR_MAX){
     if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within '+NEAR_MAX+' m here.</div>').openOn(map);
     return;}
@@ -3854,13 +3854,18 @@ renderContours();
     let r=null,inZ=false;
     try{inZ=inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng);
       r=idwDepthAt(e.latlng.lat,e.latlng.lng);}catch(err){r=null;}
-    /* show over zone water (coast) OR any sample - dries or sounding - within 120 m (river/estuary
-       and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint rule */
-    if(!(inZ||(r&&r.near<=120))){el.style.display='none';return;}
-    if(!r||r.near>150){el.textContent='no survey data here';}
+    /* show over zone water (coast) OR any sample - dries or sounding - within NEAR_MAX (river/
+       estuary and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint
+       rule, which stops at the same distance (R1). */
+    if(!(inZ||(r&&r.near<=NEAR_MAX))){el.style.display='none';return;}
+    if(!r||r.near>NEAR_MAX){el.textContent='no survey data here';}
     /* same rule as the tap read: topographic-NIR carries no number, only the band wording */
     else if(r.st==='topographic'){el.textContent=FLATS_LABELS[flatsBand(r.d,e.latlng.lat,e.latlng.lng)];}
-    else{const rough=(r.near>80)?' ~':'';el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d,e.latlng.lat,e.latlng.lng)+rough;}
+    /* same distance rule as the tap read (F1): past NEAR_HERE the tooltip states how far the
+       reading actually came from rather than presenting it as the value under the cursor. The
+       pre-existing '~' roughness marker is unchanged and still trails the line. */
+    else{const rough=(r.near>80)?' ~':'';const far=(r.near>NEAR_HERE)?(' \u00b7 '+Math.round(r.near)+' m away'):'';
+      el.textContent=(r.d<-0.05?('dries ≈ '+Math.abs(r.d).toFixed(1)+' m'):('≈ '+r.d.toFixed(1)+' m'))+waterNowText(r.d,e.latlng.lat,e.latlng.lng)+far+rough;}
     if(e.originalEvent){el.style.left=(e.originalEvent.clientX+14)+'px';el.style.top=(e.originalEvent.clientY+14)+'px';}
     el.style.display='block';});
   map.on('mouseout',function(){el.style.display='none';});
