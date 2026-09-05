@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05e</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05f</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05e</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05f</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2593,6 +2593,28 @@ function buildShade(){
          mA here would be a separate cleanup, not part of this fix. */
       const maskA=Math.max(mA,(near<=R1)?1:0);
       if(maskA<=0){AL[i0]=0;continue;}
+      /* F2 (build 2026.09.05f) - QUERY-POINT LAND TEST, PAINT SIDE. The read side (2026.09.05e,
+         queryOnLand() below) stopped the readout quoting a nearest sample AT a land query point;
+         this is the same question asked of a PIXEL. A land pixel is given EXACTLY the treatment a
+         no-coverage pixel already gets on the two lines above - AL=0, nothing painted, FD/ST left
+         unwritten - so pass 2b reaches it at a<=0.01 and writes alpha 0. No new rendering path.
+         WHY distA>0 GATES THE CALL, and why it is not a second behaviour rule: distA===0 already
+         forces AL=distA*maskA=0, so such a pixel is transparent with or without a land test - the
+         guard changes nothing on screen and only decides who PAYS for the test. That is the whole
+         reason it is there. Measured (scratchpad/f2_paint_timing.js + f2_paint_ceiling.js,
+         calibrated against this roadmap own on-device S3 figures): UNGUARDED the test runs 360,000
+         times and costs 15.7-25.3 ms per rebuild - tens of ms against an S3 budget of 151-291 ms.
+         GUARDED it runs only over the genuinely painted footprint (0.4-15.3% of the grid on real
+         repo data, structural ceiling ~31%) and costs 0.5-2.0 ms. Do not drop the guard to tidy
+         this line up - it is the difference between passing and failing the perf gate.
+         queryOnLand() is reused verbatim rather than calling maskWater() directly: it is pure
+         (lat,lng)->boolean with no read-path state, and its fail-open catch is the right direction
+         on this side too - a throw paints as before instead of silently erasing water.
+         Cosmetic paint gate only. It never touches zoneAt(), zone determination, or legality.
+         KNOWN CONSEQUENCE, intended: F3 coverage cells are only set for pixels that actually
+         paint, so a zone whose only shade was land-overpaint now correctly stops counting as
+         covered and no longer dims. Different gate, same render loop - check it on the phone. */
+      if(distA>0&&queryOnLand(la,lo)){AL[i0]=0;continue;}
       FD[i0]=num/den;AL[i0]=distA*maskA;ST[i0]=(nearST==='topographic')?1:0;}}
   const _m4=_pf?performance.now():0; /* S3 end - the IDW pixel loop, up to 360,000 iterations */
   if(_pf)_pf.s3=_m4-_m3;

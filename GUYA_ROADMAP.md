@@ -1,5 +1,102 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77 · 5 Sep 2026 — **F2 PAINT SIDE SHIPPED AND GATED. `buildShade()` NO LONGER PAINTS
+LAND. Build `2026.09.05f`.** On-phone gate PASSED at all three benchmark locations,
+before/after, with no S3 regression — confirmed by Aaron directly; per-location S3 figures
+not transcribed this session. **F2 IS NOW FULLY CLOSED, both sides.***
+
+**1. WHAT SHIPPED — ONE LINE OF CODE.** `index.html:2617`, inserted between the existing
+`maskA` gate and the `FD`/`AL`/`ST` write in `buildShade()`'s pass-2a pixel loop:
+
+```js
+if(distA>0&&queryOnLand(la,lo)){AL[i0]=0;continue;}
+```
+
+`AL[i0]=0;continue;` is byte-for-byte the treatment `:2579` (`!den`) and `:2595`
+(`maskA<=0`) already give a no-coverage pixel — `FD`/`ST` left unwritten, pass-2b reaches it
+at `a<=0.01` and writes literal alpha 0. **No new rendering path was added.** `queryOnLand()`
+reused verbatim rather than calling `maskWater()` at the paint site: it is a pure
+`(lat,lng)→boolean` with no read-path state (popup, DOM, closure) and its `catch` fails open,
+which is the correct direction here too — a throw paints as before rather than silently
+erasing water. Scope confirmed by brace walk, not assumed: `buildShade`, `maskWater`,
+`queryOnLand` and `depthSamples` all sit at identical depth, so no IIFE hook was needed.
+
+**2. PLACEMENT WAS THE WHOLE BUILD, AND THE NAIVE ONE FAILS. RECORD THIS NUMBER.** Measured
+before touching `buildShade()`, per the brief's stop-and-report condition:
+
+| placement | calls/rebuild | node ms | device est. |
+|---|---|---|---|
+| top of the pixel loop | 360,000 | 8.0–12.8 | **15.7–25.3 ms — FAILS** |
+| painted pixels only (shipped) | 1.4k–55k | 0.05–1.36 | **0.5–2.0 ms — passes** |
+
+**15–25 ms is tens, not a few, against S3 budgets of 151 / 189 / 291 ms.** Had the test gone
+in at the top of the loop this build should have stopped and become an F3-style
+precomputed-bitmap job. It did not, because the existing transparent path is not at the top of
+the loop — it is at the END of the gate chain, and a pixel only needs a land test if it would
+otherwise paint. **v16.76.4 §2's "the obvious fix" was right about the mechanism and wrong
+about where it goes; the difference between the two placements is an order of magnitude.**
+
+**3. `distA>0` IS A COST GUARD, NOT A BEHAVIOUR RULE — DO NOT TIDY IT AWAY.** `distA===0`
+already forces `AL=distA*maskA=0`, so such a pixel is transparent with or without a land test:
+the guard changes nothing on screen and only decides who PAYS. It is load-bearing because
+`maskA=Math.max(mA,…)` lets every pixel inside a zone polygon past `:2595` even where nothing
+is painted; without the guard the test runs across that whole set and the cost collapses back
+toward the failing figure in §2. Harness suite 4 proves the guard cannot leave a land pixel
+painted. Documented in the code comment for the same reason.
+
+**4. METHODOLOGY — HOW THE DEVICE NUMBERS WERE REACHED OFF-PHONE.** A raw Node figure is not
+device-representative (this project's own standing rule), so the S3 loop *shape* was reproduced
+at the same scale (64,306-point pool, 120 m bucket index, 3×3 probe + IDW accumulate, 3.24 M
+probes) and calibrated against v16.68.2's measured on-device S3: **Bargara 1.98×, Redcliffe
+2.23×, Brisbane z10 1.49×**. The painted fraction was BOUNDED, not assumed — a ceiling run
+against the real repo CSVs with `okMASK` dropped and no thinning (strictly more samples than
+the phone carries) peaks at **15.3% of the grid** (BR dense core, 55,233 px, 1.36 ms node).
+Structural ceiling ~31%: `W=max(280,min(600,extM/35))` means the 600² grid exists only at
+extents ≥21 km where a pixel is 35 m, and BR's entire ~139 km² painted footprint (~113,000 px)
+spans 61 km of longitude and cannot fit one 21 km viewport. Break-even against a 3 ms budget is
+~14% of the grid. **Reusable pattern: calibrate the harness against an existing on-device
+segment measurement rather than reporting bare Node milliseconds.**
+
+**5. SCALE OF THE DEFECT THIS CLOSES.** At ceiling density, **43–82% of currently-painted
+pixels at Redcliffe and Brisbane were on land** — 76% at the BR dense core. Independently
+consistent with v16.53's "BR painted footprint is 79.3% certainly-dry (110.5 km²)". The
+paint-side defect was not a fringe case; in the river it was most of the painted footprint.
+
+**6. VALIDATION.** Both blocks `node --check` pass. Leaflet block byte-identical —
+**147,552 bytes**, SHA-256 `db49d009…641a`, exact match to the `CLAUDE.md` pin. `zoneAt()` and
+the green-zone dragend safeguard absent from the diff (the only `zoneAt`/`maskWater` hits are
+two lines of the new comment). Diff scope: **24 insertions, 2 deletions, one file** —
+`index.html:1052` and `:1091` (build string), `:2596–2617` (21-line comment + 1 code line).
+`index.html:2862`, the F2 read-side comment header, keeps its own historical `2026.09.05e` tag
+and was deliberately not bumped. **Harness** (`scratchpad/f2_painttest_land.js`, extending
+F1's 6,005-pair paint-alpha-purity harness): **78,674 cases across 5 suites, all pass** — land
+pixels exactly `+0` alpha by `Object.is` (not `==`), water pixels bit-identical to `2026.09.05e`,
+and the original 6,005 F1 pairs re-run clean. Acceptance case reproduced off-phone at
+Nudibranch Tip (`-24.9002, 152.4692`, `queryOnLand` true): alpha 1.000 / 0.667 / 0.433 / 0.011
+at 30 / 60 / 81 / 119 m → **0.000 at every one**.
+
+**7. ON-PHONE GATE — PASSED.** Acceptance test at Nudibranch Tip with shading ON, before/after,
+plus the standard 10-pan timing protocol at Bargara z11, Redcliffe z11 and Brisbane River z10:
+**land renders unshaded, water unchanged, no S3 regression at any of the three.** Recorded on
+Aaron's direct confirmation — the same standard used for every prior on-device gate in this
+project (see v16.76.2 §2). **Per-location S3 numbers were not transcribed into this entry; if a
+future build needs them as a baseline, re-measure rather than inferring them from §2's
+predictions.**
+
+**8. KNOWN AND INTENDED CONSEQUENCE FOR F3's ZONE FILL.** F3's coverage cells are set only at
+`a>=0.05`, so a zone whose only shade was land-overpaint now correctly stops counting as covered
+and no longer dims. Different gate, same render loop. Called out in the code comment and checked
+at the gate.
+
+**9. NEXT SESSION.** Build **2026.09.05f**, roadmap **v16.77**, repo head is this entry's own
+commit. `CLAUDE.md` unchanged. **F2 is fully closed, both sides — do not reopen it.** Next job
+is open: the standing backlog items untouched by this arc are **`R1` declared twice
+(`buildShade()` and `buildAutoContours()`) still not unified**, **`WOFS_FREQ_MIN`**, and
+**`_idwCache` keying** (reversed and reclassified low-priority correctness at v16.68.3). Do not
+re-litigate: the placement decision (§2/§3 — the guard stays); `queryOnLand()` over `maskWater()`
+at the paint site (§1); the LANDMASK coverage — three baked regions, uncovered north of roughly
+lat −26.34, so this gate is a permanent no-op at Mooloolaba/Noosa.
+
 *v16.76.4 · 5 Sep 2026 — **F2 READ-SIDE ON-PHONE GATE PASSED.** F2's read side (tap+hover)
 is now fully shipped AND gated — v16.76.3 shipped it harness-verified only; this entry
 supersedes its "gate unrun" line. No build, no code, no data change this entry. Build
