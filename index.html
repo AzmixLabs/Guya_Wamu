@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05c</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05d</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05c</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05d</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1902,7 +1902,9 @@ function enterSlope(){if(typeof measuring!=='undefined'&&measuring)exitMeasure()
 function exitSlope(){slopeMode=false;document.body.classList.remove('slopemode');document.getElementById('sl-btn').classList.remove('on');slopeDraw.clearLayers();}
 map.on('click',e=>{if(!slopeMode)return;const p=nearestDepthPoint(e.latlng);
   if(p){slopeChain.push({lat:p.lat,lng:p.lng,depth:parseFloat(p.depth)});redrawChain();return;}
-  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(r&&r.near<=120){slopeChain.push({lat:e.latlng.lat,lng:e.latlng.lng,depth:+r.d.toFixed(1)});redrawChain();}});
+  /* NEAR_MAX, not a bare 120: same threshold as both readouts and the map-click gate. Declared
+     further down the file, which is fine - this body only runs on click. */
+  const r=idwDepthAt(e.latlng.lat,e.latlng.lng);if(r&&r.near<=NEAR_MAX){slopeChain.push({lat:e.latlng.lat,lng:e.latlng.lng,depth:+r.d.toFixed(1)});redrawChain();}});
 function profileSVG(verts){const W=240,H=120,pad=26;let cum=[0];
   for(let i=1;i<verts.length;i++)cum.push(cum[i-1]+map.distance([verts[i-1].lat,verts[i-1].lng],[verts[i].lat,verts[i].lng]));
   const maxX=cum[cum.length-1]||1,maxD=Math.max.apply(null,verts.map(v=>v.depth))||1;
@@ -2985,9 +2987,14 @@ function openDepthRead(latlng,prefixHTML){
 map.on('click',e=>{if(!shadeOn||slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;
   const r=idwDepthAt(e.latlng.lat,e.latlng.lng);
   /* water = inside a legislated zone polygon (coast) OR ANY sample - dries or sounding - within
-     120 m (river/estuary and areas outside the marine-park's zoned extent, e.g. Mooloolaba-Noosa
-     north of Caloundra). Paint/read rule, not legality - mirrors buildShade()'s maskA. */
-  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.near<=120)))return;
+     NEAR_MAX (river/estuary and areas outside the marine-park's zoned extent, e.g. Mooloolaba-
+     Noosa north of Caloundra). Paint/read rule, not legality - mirrors buildShade()'s maskA.
+     NEAR_MAX and buildShade()'s R1 are numerically equal and deliberately still SEPARATE
+     declarations: one is how far a reading may be reported from, the other bounds the painted
+     footprint. They agree today; unifying them would couple the readout to the renderer and is a
+     decision, not a tidy-up. Note R1 itself is declared twice (buildShade and
+     buildAutoContours) - logged, not touched here. */
+  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.near<=NEAR_MAX)))return;
   const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
   const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
   if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
