@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05b</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2938,8 +2938,23 @@ function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
    inside a marine-park zone shows zone type/ID/warning AND the depth in one popup. */
 function openDepthRead(latlng,prefixHTML){
   const r=idwDepthAt(latlng.lat,latlng.lng);
-  if(!r||r.near>150){
-    if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within 150 m here.</div>').openOn(map);
+  /* F1 (build 2026.09.05b): both numbers below are named and both come from constants already
+     load-bearing elsewhere in this file - neither is invented here.
+     NEAR_MAX=120 replaces the old bare 150. It is buildShade()'s R1, the hard stop past which the
+     shading paints nothing at all (see distA), and it is already the map-click gate's own figure
+     at the click handler below. At 150 the readout claimed data in a band where the renderer
+     draws none and the click gate would not have opened the popup for a bare map tap - three
+     numbers for one question. Now one.
+     NEAR_HERE=30 is R0_MIN, the tightest per-sample radius buildShade() will use, i.e. the radius
+     inside which that file already treats one sounding as representing the point outright
+     (alpha=1). Inside it, "here" is a fair claim. Outside it, it is not - see head/farNote below.
+     NOTE the deliberate limit of this fix: it is distance-only, because the readout has no
+     land test at the query point (F2, roadmap v16.75.7). A sounding 35 m away across a rock
+     headland and one 35 m away over open water are still indistinguishable here; what changes is
+     that neither is any longer called "here". */
+  const NEAR_HERE=30,NEAR_MAX=120;
+  if(!r||r.near>NEAR_MAX){
+    if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within '+NEAR_MAX+' m here.</div>').openOn(map);
     return;}
   /* Flats layer: topographic-NIR regions get NO numeric readout, ever - the value is a class-2
      ground-return height, not a depth, and putting a number on it would be exactly the mislabelling
@@ -2948,7 +2963,20 @@ function openDepthRead(latlng,prefixHTML){
   if(r.st==='topographic'){
     if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">Intertidal flats shading here — <b>'+FLATS_LABELS[flatsBand(r.d,latlng.lat,latlng.lng)]+'</b>. Exposure banding from topographic LiDAR; no depth reading available.</div>').openOn(map);
     return;}
-  const body=(r.d<-0.05?('Est. height here<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d,latlng.lat,latlng.lng)+' \u00b7 data '+Math.round(r.near)+' m away</span>'):('Est. depth here<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'+waterNowText(r.d,latlng.lat,latlng.lng)+(r.near>80?' \u00b7 low confidence':'')+'</span>'))+'<button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>';
+  /* F1: the headline is what the reader actually takes away, so it now carries the distance
+     itself rather than asserting "here" and leaving the correction to 9.5 px of fine print - the
+     computation/label disagreement this fix exists to close. The value is still shown, unchanged:
+     nearest-neighbour returns a real stored reading, it does not extrapolate, and suppressing it
+     would throw away good offshore data that was never the defect. */
+  const hereOK=r.near<=NEAR_HERE;
+  const head=hereOK?(r.d<-0.05?'Est. height here':'Est. depth here'):('Nearest reading \u00b7 '+Math.round(r.near)+' m away');
+  const farNote=hereOK?'':' \u00b7 not measured at this point';
+  /* Each branch states the distance ONCE. When hereOK the headline says "here" and the fine print
+     carries the figure, exactly as before this build; when it doesn't, the headline carries the
+     figure and the fine print drops it rather than repeating it two lines later in 9.5 px. */
+  const driesDist=hereOK?(' \u00b7 data '+Math.round(r.near)+' m away'):farNote;
+  const depthLead=hereOK?('nearest data '+Math.round(r.near)+' m away \u2014 rough estimate (LAT)'):'rough estimate (LAT)';
+  const body=(r.d<-0.05?(head+'<br><b style="font-size:15px">dries \u2248 '+Math.abs(r.d).toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">above LAT'+waterNowText(r.d,latlng.lat,latlng.lng)+driesDist+'</span>'):(head+'<br><b style="font-size:15px">\u2248 '+r.d.toFixed(1)+' m</b><br><span style="font-size:9.5px;color:var(--ink-dim)">'+depthLead+waterNowText(r.d,latlng.lat,latlng.lng)+(r.near>80?' \u00b7 low confidence':'')+farNote+'</span>'))+'<button class="dp-btn" id="dp-find" style="margin-top:7px;width:100%">\u2b07 Deepest within 100 m</button>';
   const cfg=prefixHTML?{maxWidth:300,minWidth:240}:{maxWidth:170,className:'depth-pop'};
   L.popup(cfg).setLatLng(latlng).setContent((prefixHTML||'')+'<div class="pop"><div class="kv" style="margin:0">'+body+'</div></div>').openOn(map);
   setTimeout(function(){const fb=document.getElementById('dp-find');if(!fb)return;
