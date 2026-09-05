@@ -1,5 +1,142 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.7 · 5 Sep 2026 — **F2 CHARACTERISED. THE CONTRADICTION RESOLVES AS: BOTH RECORDS
+ARE TRUE, ON DIFFERENT AXES.** Read-only spike, Sonnet dispatch. No build, no code, no data change.
+Build stays **2026.09.05a**; repo head **`7e88991`** — correcting v16.75.6 §5, which recorded
+`3cc831d` because it was written before its own commit landed. `index.html` is byte-identical to
+`3cc831d` (`git diff --stat 3cc831d..HEAD -- index.html` empty), so the audited code state is the
+intended one. Full write-up: `scratchpad/f2_characterisation.md`.*
+
+**1. THE ANSWER — THE MASK IS NOT ABSENT, AND IT IS NOT DEFEATED.** Not by the HAT gate, not by the
+R0/R1 ramp, not by a stale cache key, not by an early short-circuit. It is **present, correctly
+wired, carrying correct data at the exact failing headland, and structurally incapable of gating
+either site**, because **`maskWater()` is a SAMPLE-ADMISSION filter and both defects are
+QUERY-SIDE.** It is only ever asked about a stored sample's own coordinates — never about the point
+the user tapped or the pixel being painted.
+
+**2. DOWN TO THE LINE.** `maskWater()` declared `index.html:2850`; **exactly one call site,
+`:2889`** (inside `okMASK`); `okMASK` itself **exactly one call site, `:2894`** — the `imported[]`
+loop inside `depthSamples()`. Its arguments there are `imported[i][0], imported[i][1]`: **the
+sample's** lat/lng. `idwDepthAt(lat,lng)` (`:2929`) and `buildShade()`'s pixel loop
+(`:2570`-`:2594`) both hold a query coordinate and **neither passes it to `maskWater()`.**
+Whole-file reference count for `maskWater`: **2** — its declaration and that one call.
+
+**3. SO BOTH RECORDS STAND.** v16.52/53 ("wired, additive to the HAT gate, reaching five call sites
+via the shared pool, memoised on `poolVersion`") is **accurate as written — for sample admission.**
+The standing F2 finding ("exists and is not consulted at either site") is **accurate in effect —
+for query gating.** The file has no line doing what F2 assumed was missing, and no line doing what
+a reader of v16.52 would assume was present. Neither entry needs correcting; they were describing
+different axes and nobody had said so.
+
+**4. THE FIVE CALL SITES SHARE THE MASK ONLY BY SHARING THE POOL — THERE IS NO PER-SITE MASK CODE.**
+`buildShade()` `:2419`; tap-to-read `:2940`→`:2929`→`:2919`; `findDeepest()` `:2975`→ same;
+`buildAutoContours()` `:3004`; desktop hover `:3828`→ same. (Sixth consumer: the slope-chain tool,
+`:1905`.) Inside `depthSamples()`: `:2892` own pins and `:2893` own contours are `okHAT` only —
+**never mask-tested at all, by construction, not by configuration**; only `:2894` imported points
+are, and only when not exempt.
+
+**5. `REGION_MASK_EXEMPT` IS A RED HERRING AT THIS HEADLAND.** `:2725` =
+`{woongarra:1, maroochy_noosa:1}`, but v16.55 already recorded there is **no `woongarra`-tagged
+dataset on device** — all Bargara-area data sits in `legacy_unknown` (55,660 pt), which is **not**
+exempt. Bargara imports **are** mask-tested, and they passed. Do not re-open the exemption list as
+a suspect.
+
+**6. SAME ROOT CAUSE, TWO ENFORCEMENT POINTS — ONE MECHANISM, NOT ONE DIFF.** Both the headland
+readout and the headland paint come from **a query gate deciding on distance alone, with no land
+test at the query point.** But that decision is made at two independent lines in two independent
+functions with two thresholds already in place: **`:2941`** (`if(!r||r.near>150)`, the readout's
+entire gate) and **`:2579`/`:2592`** (`distA`/`maskA`, hard stop `R1=120 m`). One *mechanism*
+serves both; one *diff* does not. Stated the F3 way: this is not "the code branch differs" — it is
+`:2941` and `:2592` each independently deciding on `near` alone, while the only land evidence in
+the file sits at `:2889` gating a different quantity entirely.
+
+**7. F1's PREMISE IS WRONG AT HEAD AND MUST BE CORRECTED BEFORE IT IS FIXED.** v16.75.1 §12 records
+"point query has no maximum-distance guard". **It has one.** `openDepthRead()` `:2941` carries a
+**150 m** guard with the copy *"No survey data within 150 m here."*; the desktop hover carries the
+same threshold at `:3832`. The field observation was *"data 35 m away"* — **35 m passes a 150 m
+guard.** F1's fix shape is therefore **retune the existing threshold and fix the "here" label**,
+not "add a missing guard". Adding a guard that already exists would be a no-op against the observed
+symptom. This is the single most load-bearing correction in this entry.
+
+**8. FALSIFIABLE CHECKS — BOTH RUN, BOTH PASS, ZERO RESIDUE.**
+   (a) *Prediction: the paint alpha is a pure function of distance; the zone mask term `mA` can
+   never change a pixel.* Transcribed `:2579`/`:2592`/`:2593`/`:2594` 1:1 and swept **6,005
+   `(near, r0)` pairs** (near 0-300 m at 0.25 m, r0 ∈ {30,45,60,75,90}) at `mA=0` vs `mA=1` —
+   **identical at every distance.** Anything within **120 m** of a pooled sample paints, land or
+   not. The file's own comment at `:2586`-`:2588` argues this from two endpoints; this confirms it
+   across the whole domain. Harness: `scratchpad/f2_painttest.js`.
+   (b) *Prediction: the mask holds CORRECT land data at the headland and is simply never asked.*
+   Extracted `LANDMASK`/`lmBits()`/`maskWater()` verbatim and scanned `maskWater(−24.84089, lo)`
+   across the woongarra box (grid 1113×1187, cells ~30.0 m × ~27.2 m): coastline resolved at
+   **lng 152.4790**, headland side **land**, seaward **water**, plus two correctly-identified
+   inland water bodies. **The mask would have answered correctly had anything asked it.** Harness:
+   `scratchpad/f2_masktest.js`.
+
+**9. WHAT THE FILE CANNOT DECIDE — NEEDS THE PHONE, NOT A GUESS.** Which pooled sample sits 35 m
+from the headland has two candidate origins: **(i)** an own pin or hand-drawn contour, never
+mask-tested (`:2892`/`:2893`), so present regardless of the mask working perfectly; or **(ii)** a
+`legacy_unknown` import that legitimately **passed** the mask — e.g. a genuine sounding 35 m
+offshore in real water. **Case (ii) requires no mask defect whatsoever**, which is exactly why F2
+had to be characterised before F1's guard hid the evidence. Discriminating them needs the
+Imported-depths panel region labels plus whether a pin sits near the rock. **Neither origin changes
+the root-cause answer** — both produce the same query-side failure through the same two lines.
+
+**10. NN-GUARD-CLASS AUDIT ITEMS RE-LOCATED BY CONTENT — ALL THREE DELTAS RECONCILE TO F3'S HUNKS
+WITH ZERO RESIDUE.** `_sampleIndexCache` `:2148`→**`:2155`** (+7, the `:1271` hunk's 1→8 lines);
+`distA` `:2523`→**`:2579`** (+56 = 7+45+4); `_idwCache` `:2851`→**`:2918`** (+67 = 7+45+4+5+1+5).
+No line moved for any reason other than F3's six insertions. Guard status, **observed not fixed**:
+`_sampleIndexCache` is `poolVersion`-keyed and sound; **`_idwCache` is keyed on `n===s.length`
+only (`:2924`), not `poolVersion`** — a pool edit preserving the sample count returns a stale index
+(the file flags this as deferred at `:2920`-`:2923`; **not** the F2 mechanism, since `buildShade()`
+nulls it every rebuild at `:2398`); `distA` has a hard `R1=120 m` stop, so paint *is*
+distance-guarded — the gap is that the guard has no land term.
+
+**11. NEW FINDINGS, LOGGED NOT FIXED.**
+   (a) **`WOFS_FREQ_MIN` (`:2832`) is dead** — exactly one reference in the file, its own
+   declaration. The 0.2 threshold was baked offline by `tools/landmask_build.py`; at runtime the
+   bitmap is binary and `maskWater()` only tests a bit. Its comment *"retune here only"* is **false
+   as written** — retuning changes nothing without a re-bake.
+   (b) **Five different distance thresholds across six consumers of one pool:** `:1905` `≤120`;
+   `:2941` `>150`; `:2962` `≤120`; `:2977` `>80`; `:3831`/`:3832` `≤120`/`>150`. Worth an item in
+   its own right.
+   (c) **Two different things in this file are called "mask".** `shadeMaskFeats()`/`inWaterFast()`/
+   `scanlineMask()` (`:1992`/`:2000`/`:2058`) read `ZONES.features` — "inside a legislated
+   polygon". `maskWater()`/`LANDMASK` is the OSM/DEA land/water mask. **Only one of them knows
+   anything about land**, and the naming collision is how F2's finding and v16.52's record could
+   both be recorded in good faith and appear to contradict.
+
+**12. SEQUENCING CONFIRMED BY CONSTRUCTION, NOT MERELY PLAUSIBLE.** v16.75.1 §13's warning holds:
+F1's fix touches `:2941`; the headland paint is decided at `:2579`/`:2592` with a 120 m stop.
+Tightening `:2941` below 35 m removes the headland *reading* and leaves the headland *paint*
+untouched — the app would paint over the rock while saying "no survey data here" at the same pixel,
+exactly the end state §13 predicted. **Both lines must move together, or be re-expressed once and
+shared.** The natural shared form is a query-point land test: `maskWater()` already exists at
+`:2850`, already holds correct data at the failing headland (§8b), and is currently asked nothing
+at query time. **That is a fix proposal, not a fix — nothing was implemented.**
+
+**13. SCOPE DISCIPLINE HELD.** `zoneAt()`, `ORDER`, the green-zone `dragend` safeguard and the five
+hard rules were not read as part of this and are untouched. Nothing here asserts or bears on
+legality — cosmetic paint/read gating only. **F1 was not fixed.** File state confirmed before and
+after: tree clean, both script blocks `node --check` clean, Leaflet block 147,552 bytes /
+SHA-256 `db49d009…641a` matching the `CLAUDE.md` pin, 2 `<script>` + 2 `<style>` blocks.
+
+**14. STILL QUEUED — F2 characterisation removed, F1 re-scoped by §7.** F1 point-query guard
+(**now: retune `:2941`'s 150 m threshold + fix the "here" label, and move `:2592` with it — not
+"add a missing guard"**); hover-bypass fill-opacity bug (re-locate by content, F3 shifted it — low
+priority); F4 fan-mode ruler — spec still owed by Aaron; F5 score hygiene; F6 hook-definition card
+— still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source (hard
+rule 4); export filename UTC dating; NN-guard class audit (**line numbers refreshed in §10 — use
+those**, plus the `_idwCache` keying item); the five-thresholds item (§11b); `WOFS_FREQ_MIN`
+removal (§11a); `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS scouting
+dot (v16.75.2 §12).
+
+**15. NEXT SESSION.** Build **2026.09.05a**, roadmap **v16.75.7**, repo head **this entry's
+commit**. `CLAUDE.md` unchanged. **Next job: F1 — but read §6, §7 and §12 first; the dispatch that
+produced §12's warning assumed a guard that does not need adding.** Decide up front whether F1
+ships as the two-line pair (`:2941` + `:2592`) or as a shared query-point land test, and gate it
+on-phone at the same headland. **Do not re-litigate:** whether the mask is wired (§1-§3, settled);
+the exemption list as a suspect (§5, cleared); whether the zone mask affects paint (§8a, measured).
+
 *v16.75.6 · 5 Sep 2026 — **F3 CLOSED. ON-PHONE GATE PASSED, ALL FOUR CHECKS.** No build, no code,
 no data change this entry. Build stays **2026.09.05a**; repo head unchanged at `3cc831d`.*
 
