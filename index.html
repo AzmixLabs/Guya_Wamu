@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05d</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.05e</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05d</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.05e</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -2859,6 +2859,23 @@ function maskWater(la,lo){
       const p=row*r.c+col;
       return ((bits[p>>3]>>(p&7))&1)===1;}}
   return true;}
+/* F2 (build 2026.09.05e) - QUERY-POINT LAND TEST, READ SIDE.
+   Until this build maskWater() had exactly one call site: okMASK inside depthSamples(), asked
+   about a stored SAMPLE's own coordinates. Both observed defects were on the other axis - the
+   readout reported a nearest sample's value at a QUERY point without ever asking whether that
+   point was land. Reproduction case (roadmap v16.76.2 s4): a tap on Woongarra Scenic Drive at
+   Nudibranch Tip, 81 m from the nearest dries sample, returned 'dries ~ 1.7 m' on a sealed road.
+   This helper is the query-side counterpart. Same bitmap, same 30 m cells, different question.
+   FAILS OPEN by design: any throw is treated as NOT land, so a fault can never silently suppress
+   a legitimate reading. Suppressing a real depth is the worse error of the two.
+   COVERAGE LIMIT, deliberate and worth knowing before trusting it: maskWater() returns true
+   (water) wherever it has NO DATA - see its own header. So this gate can never wrongly claim
+   'on land', but it is a permanent NO-OP outside the three LANDMASK boxes, i.e. anywhere north
+   of lat -26.34. Bargara/Woongarra, Redcliffe, Brisbane River and Mooloolaba-Noosa are covered;
+   a fourth region would be a data-pipeline job, not a code change here.
+   It gates the NUMBER only. Zone classification still surfaces on every land tap that carries a
+   zone prefix - hard rule 1 is not negotiable and is not touched by this. */
+function queryOnLand(lat,lng){try{return maskWater(lat,lng)===false;}catch(e){return false;}}
 /* v16.44 elevation-aware gate (Option A): a dries sample only counts as paint/read evidence
    where its elevation estimate is above -HAT for the nearest port. Confirmed root cause
    (v16.41): SC/BR intertidal exports carry supratidal ground (above HAT, genuinely dry) inside
@@ -2954,6 +2971,20 @@ function idwDepthAt(lat,lng){const C=idwIndex();if(C.n<3)return null;
    that neither is any longer called "here". */
 const NEAR_HERE=30,NEAR_MAX=120;
 function openDepthRead(latlng,prefixHTML){
+  /* F2: land test FIRST - before idwDepthAt(), so a land tap does no interpolation at all, and
+     before every distance/value branch below, which are then reached only for water points and
+     produce byte-identical wording to the previous build. Unlike the no-data branch just below,
+     this one opens a popup even for a bare map tap (no zone prefix): it only ever fires on land,
+     where the alternative is the wrong number this whole item exists to remove, so silence would
+     be a worse answer than saying so. With a prefix, the zone card renders above the message. */
+  if(queryOnLand(latlng.lat,latlng.lng)){
+    const lmsg='No data here \u2014 this point is on land.';
+    L.popup(prefixHTML?{maxWidth:300,minWidth:240}:{maxWidth:200,className:'depth-pop'}).setLatLng(latlng)
+      .setContent(prefixHTML
+        ?(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">'+lmsg+'</div>')
+        :('<div class="pop"><div class="kv" style="margin:0;color:var(--ink-dim);font-size:11px">'+lmsg+'</div></div>'))
+      .openOn(map);
+    return;}
   const r=idwDepthAt(latlng.lat,latlng.lng);
   if(!r||r.near>NEAR_MAX){
     if(prefixHTML)L.popup({maxWidth:300,minWidth:240}).setLatLng(latlng).setContent(prefixHTML+'<div class="kv" style="margin:.45em 0 0;color:var(--ink-dim);font-size:11px">No survey data within '+NEAR_MAX+' m here.</div>').openOn(map);
@@ -3865,7 +3896,10 @@ renderContours();
        estuary and areas outside the marine-park's zoned extent) - mirrors the depth-shading paint
        rule, which stops at the same distance (R1). */
     if(!(inZ||(r&&r.near<=NEAR_MAX))){el.style.display='none';return;}
-    if(!r||r.near>NEAR_MAX){el.textContent='no survey data here';}
+    /* F2: same land test as the tap read, same helper - first arm, so every branch below is
+       reached only for water points and its wording is unchanged. */
+    if(queryOnLand(e.latlng.lat,e.latlng.lng)){el.textContent='on land \u2014 no data';}
+    else if(!r||r.near>NEAR_MAX){el.textContent='no survey data here';}
     /* same rule as the tap read: topographic-NIR carries no number, only the band wording */
     else if(r.st==='topographic'){el.textContent=FLATS_LABELS[flatsBand(r.d,e.latlng.lat,e.latlng.lng)];}
     /* same distance rule as the tap read (F1): past NEAR_HERE the tooltip states how far the
