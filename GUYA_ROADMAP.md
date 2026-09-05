@@ -1,5 +1,109 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.76.3 · 5 Sep 2026 — **F2 READ SIDE SHIPPED: THE DEPTH READOUT NOW TESTS THE QUERY
+POINT FOR LAND. Build `2026.09.05e`, commit `0d486b0`.** Pushed; Pages run `33941861043`
+completed/success, live site confirmed serving `2026.09.05e`. **THE ON-PHONE GATE WAS NOT RUN —
+pushed at Aaron's explicit instruction ahead of it. This build is HARNESS-VERIFIED ONLY. Do not
+read it as verified on device.** The paint side is untouched and is still open.*
+
+**1. THE DEFECT THIS CLOSES, RESTATED FROM v16.75.7.** `maskWater()` had exactly one call site:
+`okMASK` inside `depthSamples()`, asked about a stored **sample's** own coordinates. Both observed
+defects were on the other axis — the readout reported a nearest sample's value at a **query** point
+without ever asking whether that point was land. v16.76.2 §4 gave it a reproduction case: a tap on
+Woongarra Scenic Drive at Nudibranch Tip, 81 m from the nearest dries sample, returning
+`dries ≈ 1.7 m` **on a sealed road**.
+
+**2. TAP AND HOVER DID NOT SHARE A CODE PATH — TWO EDITS, ONE DEFINITION.** Checked rather than
+assumed, because it decided the shape of the fix: the hover has its **own** `mousemove` handler and
+**never calls `openDepthRead()`** — it calls `idwDepthAt()` and writes `el.textContent` itself. So
+the rule lives in **one shared helper**, `queryOnLand()`, called from both, rather than the hover
+growing a second copy — the same pattern build `2026.09.05c` used for `NEAR_HERE`/`NEAR_MAX`.
+
+```js
+function queryOnLand(lat,lng){try{return maskWater(lat,lng)===false;}catch(e){return false;}}
+```
+
+| site | lines | kind |
+|---|---|---|
+| `queryOnLand()` + comment, immediately after `maskWater()` | `index.html:2862–2878` | insertion only |
+| tap gate, **ahead of `idwDepthAt`** so a land tap does no interpolation at all | `index.html:2974–2987` | insertion only |
+| hover gate, first arm of the existing text chain | `index.html:3899–3902` | 1 → 4 lines |
+
+**Water points reach identical code with identical inputs**, so every water-side case is
+**byte-identical in wording** to `2026.09.05d`. **Fails open**: any throw is treated as *not* land,
+because suppressing a real depth is the worse of the two errors.
+
+**3. TWO DECISIONS TAKEN DELIBERATELY, BOTH APPROVED BEFORE THE CODE WAS WRITTEN.**
+   - **D1 — coverage limit, written into the code comment.** `maskWater()` returns `true` wherever it
+     has **no data**, so the gate **can never wrongly claim "on land"** but is a **permanent no-op
+     north of lat −26.34**, outside the three `LANDMASK` boxes. Bargara/Woongarra, Redcliffe,
+     Brisbane River and Mooloolaba–Noosa are covered. A fourth region is a data-pipeline job, not a
+     code change.
+   - **D2 — a bare map tap on land now opens a popup**, where a bare no-data tap previously opened
+     nothing. The gate only ever fires on land, where the alternative is the wrong number this item
+     exists to remove, so silence would be the worse answer.
+
+**4. HARD RULE 1 PRESERVED AND ASSERTED, NOT ASSUMED.** A zone tap over land still renders the full
+zone card — type, ID, restriction text, "simplified boundary — not authoritative" warning, official
+link — with the land message **below** it. **The gate suppresses the NUMBER, never the
+classification.** Covered by a harness assertion that the zone land response still contains
+`CPZ06` and `not authoritative`, and by a second that it contains no depth value or distance wording.
+
+**5. HARNESSES EXTENDED RATHER THAN LEFT UNTESTED — 21 → 44 ASSERTIONS, ALL PASS.** All three
+extract the live lines from `index.html` rather than restating them.
+
+| harness | before | after |
+|---|---|---|
+| tap — `scratchpad/f1_labeltest.js` | 12/12 | **19/19** |
+| hover — `scratchpad/f1_hovertest.js` | 9/9 | **16/16** |
+| gate — `scratchpad/f2_gatetest.js` (new) | — | **9/9** |
+
+Worth naming: the gate **structurally precedes `idwDepthAt` and every distance/value branch** in
+both paths; the land response contains **no numeric character at all** (regex-asserted, both paths);
+**land wins at 5 m**, so distance never overrides the land verdict; a water point never reaches the
+land branch; fail-open on a throwing `maskWater`; and D1's no-op north of the boxes returns `false`,
+never a false "on land". At the real acceptance coordinates (lat −24.84089) the gate fires at
+152.4770/4780/4789 (road side) and stays silent at 152.4790/4800/4830 (water side).
+
+**6. VALIDATION.** Both script blocks `node --check` clean. Leaflet block **byte-identical**,
+147,552 bytes, SHA-256 `db49d009…641a`, matching the `CLAUDE.md` pin. **`buildShade()` NOT
+TOUCHED** — `git diff | grep -c 'buildShade\|distA\|maskA\|AL[i0]'` = **0**; its cost was not
+estimated as a substitute for measuring it, as dispatched. `zoneAt()`, `ORDER` and the green-zone
+`dragend` safeguard absent from the diff. **The `okMASK` admission line is unmodified** — the only
+`okMASK` in the diff is prose inside the new comment (`grep -c "^[-+].*const okMASK="` = 0), so
+sample admission, `_poolCache` and `poolVersion` are unchanged. **Diff: 37 insertions, 3 deletions,
+5 hunks**, `index.html` only.
+
+**7. THE PAINT SIDE IS UNTOUCHED AND STILL SHADES THE HEADLAND.** `buildShade()` still paints
+anything within 120 m of a pooled sample, land or not. **Expect a land tap to read "on land" over
+shaded pixels** — that is the intended intermediate state, not a regression. F2's paint half is a
+separate dispatch and the last item in this arc.
+
+**8. ON-PHONE GATE — OUTSTANDING, AND THIS ENTRY DOES NOT CLAIM IT.**
+   **8a. Acceptance case.** Tap Woongarra Scenic Drive at Nudibranch Tip, ~81 m from the nearest
+   `dries ≈ 1.7 m` sample, on the sealed road, shading ON. **Before** (`2026.09.05d`):
+   `Nearest reading · 81 m away` / `dries ≈ 1.7 m`. **After** (`2026.09.05e`):
+   `No data here — this point is on land.`, **no numeric value anywhere**. Inside a zone polygon the
+   zone card must still appear above that message.
+   **8b. F1 regression re-check, all six v16.76 §7 checks** — water-side wording must be
+   byte-identical to `2026.09.05d`. Two expected non-regressions, so they are not misread: check 4's
+   **on-road tap now reads the land message** (the intended change), and the **headland is still
+   shaded** (§7). Hover adds a fifth leg: **over land → `on land — no data`**.
+
+**9. STILL QUEUED.** **This build's on-phone gate (§8)**; **F2 paint side — the last item in the
+arc**; hover-bypass fill-opacity bug; `R1` declared twice; `_idwCache` keyed on `n===s.length` not
+`poolVersion`; `WOFS_FREQ_MIN` dead; a fourth `LANDMASK` region for the northern no-op (§3 D1);
+F4 fan-mode ruler — **spec still owed by Aaron**; F5 score hygiene; F6 hook-definition card —
+**still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source (hard
+rule 4)**; export filename UTC dating; NN-guard class audit; `GateRC`/`GateNoosa` frozen; job (b)
+"Here" replaces "Coast-wide"; GPS scouting dot.
+
+**10. NEXT SESSION.** Build **2026.09.05e**, roadmap **v16.76.3**, repo head **`0d486b0`**
+plus this entry's own commit. `CLAUDE.md` unchanged. **Next job: run §8's gate, then F2's paint
+side.** **Do not re-litigate:** D1's coverage limit or D2's popup (§3, both decided before the code
+was written); that tap and hover needed two edits (§2, measured); that the headland is still shaded
+(§7, by design).
+
 *v16.76.2 · 5 Sep 2026 — **F1'S ON-PHONE GATE FULLY PASSED, ALL SIX §7 CHECKS. F1 IS NOW
 FULLY CLOSED.** Also: concrete, reproducible field evidence for F2's land defect, on a
 road, no ambiguity. No build, no code, no data change this entry. Build stays
