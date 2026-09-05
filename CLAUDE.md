@@ -22,7 +22,15 @@ before any build.
 4. Near a zone boundary, surface the uncertainty — don't resolve it to a yes/no.
 5. Verify time-sensitive facts (fishing rules, rod/hook limits, zoning, tides)
    against current official QLD sources before relying on them. Treat any recorded
-   rod/hook limits as unconfirmed until checked.
+   rod/hook limits as unconfirmed until checked — EXCEPT the two verified at roadmap
+   v16.77.1 (5 Sep 2026), which are confirmed for the GREAT SANDY and MORETON BAY
+   marine parks ONLY: conservation park zone = 2 hand-held rods/handlines and 2 hooks
+   in total per person; general use and habitat protection zones = 3 rods/lines and 6
+   hooks/lures per person (the latter from Fisheries legislation, not a marine-park
+   restriction). Both park names are load-bearing — the Great Barrier Reef Coast
+   Marine Park conservation park zone allows 1 rod and 1 hook, so a park-agnostic
+   reading of these figures goes false north of Baffle Creek. Re-verify on any
+   zoning-plan amendment. See roadmap v16.77.1 §1-§4.
 6. Privacy: photos and all personal data stay on-device (localStorage / IndexedDB).
    Location is one-shot (`getCurrentPosition`), in-memory, never stored or
    transmitted; default to a no-GPS path (map centre) where possible. The
