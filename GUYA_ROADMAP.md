@@ -1,5 +1,149 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.1 · 5 Sep 2026 — **F6 SOURCE CHECK DONE. THE CPZ AND GUZ/HPZ ROD-AND-HOOK FIGURES
+ARE VERIFIED CORRECT AGAINST CURRENT OFFICIAL QLD SOURCES (`CLAUDE.md` rule 5).** These figures
+are not a pending spec — they are **already shipping as rules text** at `index.html:1223`
+and `:1224`, rendered into every zone popup, flagged unconfirmed in `CLAUDE.md` until now.
+The recorded hook definition was INCOMPLETE (two items of seven). One official QLD web page
+is MORE PERMISSIVE than the legislation. A latent park-identifier fault applies to the
+SHIPPED text, not just a future card. Planning-chat entry — no build, no code, no data
+change. Build stays `2026.09.05f`.*
+
+**1. BOTH FIGURES CONFIRMED — AND THEY ARE LIVE.** Do not re-verify before the next zoning-
+plan amendment.
+
+- **CPZ (yellow), Great Sandy AND Moreton Bay: 2 hand-held rods/handlines per person, 2
+  hooks IN TOTAL per person.** Moreton Bay is legislated verbatim — *Marine Parks (Moreton
+  Bay) Zoning Plan 2019* s16, definition of "limited line fishing". Great Sandy states the
+  same figure and says explicitly that it matches Moreton Bay. `:1223` is correct as
+  shipped.
+- **GUZ + HPZ: 3 hand-held rods/lines, 6 hooks/lures.** **This is NOT a marine-park rule.**
+  The marine park imposes no additional line-fishing restriction in general use or habitat
+  protection zones; the figure comes from the Fisheries legislation and applies wherever
+  fishing is permitted. `:1224` carries the right number. **Framing to revisit at the F6
+  build:** 3/6 is the baseline everywhere, and CPZ is the tightening — not a zone
+  entitlement the park grants.
+- **`CLAUDE.md`'s "treat recorded rod/hook limits as unconfirmed" can be narrowed — but ONLY
+  for these two figures, and ONLY in GREAT SANDY AND MORETON BAY MARINE PARKS, both named
+  explicitly.** A park-agnostic narrowing would read as blanket confirmation that CPZ means
+  2/2, and goes false the moment a region north of Baffle Creek ships — the exact fault §4
+  exists to prevent. Everything else `CLAUDE.md` covers stays unconfirmed.
+- Sources: DETSI Great Sandy Marine Park FAQ (last reviewed 5 Jun 2026); GSMP provisions
+  table; MBMP Zoning Plan 2019 s16.
+
+**2. HOOK DEFINITION — THE RECORDED TWO-ITEM VERSION WAS INCOMPLETE. SEVEN ITEMS, OFFICIAL:**
+
+1. a single-shanked hook
+2. a single-shanked double or treble hook
+3. an artificial lure with no more than 3 hooks attached to it
+4. an artificial fly
+5. a jig for taking squid
+6. a ganged hook set of not more than 6 hooks
+7. a bait jig — a hook or group of not more than 6 hooks, each between #1 and #12 size or
+   equivalent
+
+**This is F6's actual remaining scope.** The numbers already render; the definition does
+not. **Field consequences, both live for Bargara 10–13 Sep in CPZ06:** a single treble is
+ONE hook, so a two-treble stickbait is one hook under item 3, and a bare treble is one
+hook, not three. A **sabiki is a bait jig** and counts as one hook ONLY at ≤6 hooks within
+the #1–#12 band — outside that band item 7 does not apply, and typical sabiki hooks run
+smaller than #12. **Check the packet; do not assume a sabiki is one hook.**
+
+**3. STANDING DATA FACT — ONE OFFICIAL QLD PAGE CONTRADICTS THE LEGISLATION, IN THE
+PERMISSIVE DIRECTION.** `parks.qld.gov.au` Moreton Bay "About" states two hooks or lures
+**per line** in conservation park zones, which reads as four hooks per person. The zoning
+plan says two in total. **The legislation governs. Source rules text from the zoning plans,
+never from the parks.qld.gov.au summary pages.** Logged so `:1223` is not later
+"corrected" against the parks page by someone who finds it first.
+
+**4. LATENT FAULT, NOW A PRECONDITION ON MULTI-REGION (#15): SHIPPED RULES TEXT IS KEYED ON
+ZONE TYPE ALONE.** `:1223`/`:1224` are correct today only because Great Sandy and Moreton
+Bay agree. In the **Great Barrier Reef Coast Marine Park the CPZ limit is 1 hand-held rod
+and 1 hook per person.** Great Sandy's northern boundary is **Baffle Creek**, roughly 40 km
+north of Bargara. **Any region added north of Baffle Creek requires a PARK identifier
+alongside the zone code FIRST, plus an explicit "no park matched" state — never a default.**
+Retrofitting the park field after more regions ship means auditing every saved spot.
+
+**OPEN QUESTION FOR THE F6 BUILD — DO NOT ASSUME AN ANSWER.** What does the app render for
+a location outside any marine park? `CLAUDE.md`'s domain facts require displaying "general
+fisheries rules + FHAs still apply" — never a silence that implies unrestricted, which would
+also breach rule 1. If `:1223`/`:1224` fire only
+inside a zone, out-of-park water (e.g. the Burnett mouth training wall) gets nothing.
+Characterise before building.
+
+**5. HOFFMANS ROCKS — DETSI ADDRESSES THE SPOT BY NAME.** Line fishing and spearfishing are
+allowed at Hoffmans Rocks in the yellow zone adjacent to Nudibranch Park, **which is south
+of the new marine national park (green) zone boundary**, under the general CPZ rules. The
+yellow zone is defined relative to a green boundary immediately north of it, and that
+boundary is new under the 2024 plan. **`CLAUDE.md` rules 2 and 4 both apply on the day:**
+take the call from `zoneAt()` at the actual platform position, not from the spot pin, and
+near the northern edge surface the uncertainty rather than resolving it. For scale, the
+adjacent Burkitts Reef green zone starts
+approximately 65–130 m seaward of HAT.
+
+Spot-label discrepancy to reconcile: DETSI writes **"Nudibranch Park"**; the Guya spot is
+recorded as "Nudibranch Tip".
+
+Seasonal provisions checked, **NOT applicable 10–13 Sep**: the Woongarra Coast seasonal go
+slow area (Elliott Heads–Burnett Heads, 300 m from shore) runs 15 Oct–30 Apr and is
+vessel-only; Mon Repos foreshore entry restrictions begin 15 Oct.
+
+Burnett mouth training wall: the figure is **3/6 either way** — outside the park, or inside
+a GUZ/HPZ. Card text differs and general Fisheries rules plus any FHA apply regardless.
+**Let `zoneAt()` make that call; do not carry "outside marine park" forward as an
+assumption.**
+
+**6. CARRY LIST — LINE NUMBERS RELOCATED BY CONTENT, 5 Sep, POST-ARC. USE THESE.** The
+read-only sweep queued after the 5 Sep arc is DONE; findings recorded here so the next
+build does not repeat it.
+
+| item | now at | status |
+|---|---|---|
+| `R1` declared twice | `:2441` (`buildShade`) · `:3109` (`buildAutoContours`) | both `120`; latent, not live |
+| `_idwCache` keying | `:2965` (`n===s.length`) · `:2968` write · nulled `:2400` | real, **heavily masked** — `buildShade()` nulls it on its own first line every rebuild, so the length-collision window is narrow |
+| `WOFS_FREQ_MIN` dead | `:2856` | declared, never read — confirmed dead |
+| hover-bypass fill-opacity | `:1278`–`:1279` | F3 moved it and narrowed the gate to `(_shadeFade&&f._shFade)`; defect intact — `fillOpacity:fo` variable, `opacity:0.95` literal |
+| export filename UTC | `:3262` | real. `:3542`/`:3596` already use `Date.now()+10*3600000` for AEST; `:3262` does not. A backup taken before 10:00 AEST is stamped the previous day |
+| NN-guard audit | `_sampleIndexCache` `:2157`/`:2176` — **`poolVersion`-keyed, correct** | reduces to the `_idwCache` item; not a separate job |
+
+**7. SEQUENCING DECISIONS TAKEN THIS ENTRY.**
+
+- **Export UTC dating gets its OWN build**, not a hygiene bundle. It is not a mechanical
+  change: it alters the filename of every future backup, and that export is the durable
+  recovery path for spots, photos and imported depths. Verify with a real exported file on
+  the phone.
+- **`WOFS_FREQ_MIN` removal rides with R1 unification** — `:2856` is in the region R1
+  touches, and a deletion that provably cannot execute adds no variable. Not worth a
+  standalone build.
+- **R1 unification stays its own gated build** — it touches `buildShade()` and
+  `buildAutoContours()`, the one carry item that can produce a visual change. Fold the
+  hover-bypass fix in behind it only if the context is still warm; otherwise separate.
+- **DO NOT rename the `woongarra-backup-` filename prefix.** Zero benefit; it splits
+  existing iCloud backups into two name-sort clusters exactly when the newest one is being
+  hunted under pressure. Stale prefix is cosmetic, sort continuity is operational. If ever
+  renamed, do it in a session where a fresh full export is taken immediately after.
+- **`_idwCache`: leave where v16.68.3 put it.** The NN-guard audit (§6) is complete and
+  found `_sampleIndexCache` sound, so the two are one item, not two.
+- **F5 is specced, not owed by Aaron** — `liveWindDir` never expires, `recBandKm` defaults
+  to 0 (no distance cap). F4 remains the only item awaiting a spec from Aaron; do not
+  reconstruct it.
+- **STANDING FACT — HARD-RULE NUMBERS DIVERGE BETWEEN SURFACES. CITE BY CONTENT.** The
+  project instructions carry FIVE hard rules; `CLAUDE.md` carries SIX, because it splits
+  most-protective-on-overlap out as its own rule 3. Every rule after that split is offset by
+  one: verification of time-sensitive facts is rule 4 in the project instructions and **rule
+  5 in `CLAUDE.md`**. The out-of-park "general fisheries rules + FHAs still apply"
+  requirement is not a numbered rule on either surface — it lives in `CLAUDE.md`'s domain
+  facts. Repo documents cite `CLAUDE.md` numbering; where a requirement has no number, cite
+  its text.
+
+**8. NEXT SESSION.** Build **2026.09.05f**, roadmap **v16.77.1**, repo head is this entry's
+own commit. `CLAUDE.md` unchanged (§1's narrowing is proposed, not applied). **Next job:
+F6 — the hook definition at `:1223`/`:1224`, plus the out-of-park question in §4.** Then
+export UTC dating, then R1 + `WOFS_FREQ_MIN`. **Do not re-litigate:** the two figures (§1),
+the seven-item hook definition (§2), the parks-page/legislation conflict (§3), the
+park-identifier precondition (§4), the sequencing in §7, or the relocated line numbers in
+§6 — the sweep is done, do not re-run it.
+
 *v16.77 · 5 Sep 2026 — **F2 PAINT SIDE SHIPPED AND GATED. `buildShade()` NO LONGER PAINTS
 LAND. Build `2026.09.05f`.** On-phone gate PASSED at all three benchmark locations,
 before/after, with no S3 regression — confirmed by Aaron directly; per-location S3 figures
