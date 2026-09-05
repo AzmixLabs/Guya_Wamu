@@ -1,5 +1,98 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.8 · 5 Sep 2026 — **F1 SHIPPED AS BUILD `2026.09.05b`. ON-PHONE GATE NOT YET RUN —
+F1 IS NOT CLOSED.** Commit `bed3d37` on top of `a04e189` (roadmap v16.75.7). Pushed. Scope was the
+readout only, as re-defined by v16.75.7 §7: **retune `:2941`'s threshold and fix the "here" label.**
+Not "add a missing guard" — there was never a missing guard.*
+
+**1. THE CHANGE — TWO BARE NUMBERS BECOME TWO NAMED CONSTANTS, NEITHER INVENTED HERE.**
+
+| constant | was | is | where the figure comes from |
+|---|---|---|---|
+| `NEAR_MAX` | bare `150` | **120** | `buildShade()`'s `R1` — the hard stop past which the shading paints nothing (`distA`), and already the map-click gate's own figure |
+| `NEAR_HERE` | *did not exist* | **30** | `R0_MIN` — the tightest per-sample radius `buildShade()` uses, i.e. the radius inside which the file already treats one sounding as representing the point outright (alpha=1) |
+
+**At 150 the readout claimed data in a band where the renderer draws none**, and where the
+map-click gate (`≤120`) would not have opened the popup for a bare map tap — three numbers for one
+question. Now one. **Paint extent and read extent agree exactly.**
+
+**2. THE LABEL.** The headline now carries the distance itself — `Nearest reading · 35 m away` —
+instead of asserting "here" and leaving the correction to 9.5 px of fine print. That headline-wins-
+the-reader's-attention disagreement *was* the defect (v16.75.1 §12). **The value is still shown,
+unchanged.** Nearest-neighbour returns a real stored reading; suppressing it would throw away the
+good offshore data (63 m → +0.1 m, 118 m → 3.9 m, monotonic) that was never the defect. Inside
+30 m the wording is **byte-identical to before this build** — close readings did not regress.
+
+**3. A SECOND-PASS REFINEMENT THE HARNESS CAUGHT, NOT THE READING.** First cut left the distance
+printed **twice** — headline and fine print — which in a 170 px popup costs a wrapped line. Each
+branch now states it exactly once: when `hereOK` the headline says "here" and the fine print carries
+the figure (unchanged); when it doesn't, the headline carries the figure and the fine print drops it
+for `· not measured at this point`. Worth recording that the *first* version passed `node --check`
+and all twelve assertions — it was legible output, not a failing test, that exposed it.
+
+**4. WHAT THE READER NOW SEES, BY DISTANCE** (from the harness, which extracts the live lines):
+
+| nearest sample | headline | fine print |
+|---|---|---|
+| ≤ 30 m | `Est. height here` / `Est. depth here` | `… · data N m away` (unchanged) |
+| 31–120 m | `Nearest reading · N m away` | `… · not measured at this point` (+ `low confidence` past 80 m) |
+| > 120 m | *nothing* | `No survey data within 120 m here.` |
+
+**5. THIS DOES NOT HIDE F2's EVIDENCE — THE STATED SEQUENCING RISK IS NOT TRIPPED.** v16.75.1 §13
+warned that an F1 guard would suppress the headland reading regardless of whether a land mask is
+consulted, making F2 harder to detect. **It doesn't, because the reading is not suppressed** — at
+35 m the headland still returns `dries ≈ 1.7 m`, now labelled honestly. The discriminating
+walk-inland test (v16.75.1 §12's four-outcome table) **remains fully available**: both numbers are
+still on screen at every tap. Sequencing held, and the risk it guarded against did not materialise.
+
+**6. DELIBERATE LIMIT, WRITTEN INTO THE CODE COMMENT SO IT CANNOT BE MISREAD LATER.** This fix is
+**distance-only.** The readout still has no land test at the query point (F2, v16.75.7 §1-§6). A
+sounding 35 m away across a rock headland and one 35 m away over open water remain
+indistinguishable — **what changed is that neither is called "here".** The query-point land test
+(`maskWater()` at `:2850`, which already holds correct data at this exact headland — v16.75.7 §8b)
+is still unbuilt and still the real fix for the land case.
+
+**7. THE PAINT SIDE IS UNTOUCHED AND STILL PAINTS THE HEADLAND.** `:2579`/`:2592` were out of scope
+this build — one variable per build. Shading still covers anything within 120 m of a pooled sample,
+rock or not. **Expect the headland to still be shaded on-phone; that is not an F1 regression**, it is
+F2's other half, unfixed by design.
+
+**8. VALIDATION.** Both script blocks `node --check` clean. Leaflet block **byte-identical**,
+147,552 bytes, SHA-256 `db49d009…641a`, matching the `CLAUDE.md` pin. `zoneAt()` and the
+green-zone `dragend` safeguard **absent from the diff entirely** (`git diff | grep -c` = 0).
+Harness `scratchpad/f1_labeltest.js` extracts the live constant, guard and label lines from
+`index.html` and drives both branches across 0–180 m: **12/12 assertions pass**, both tier
+boundaries (30/31, 120/121) exercised. **Diff: 33 insertions, 5 deletions, 4 hunks** — two build
+strings and two mid-file hunks in `openDepthRead()`. The two `build 2026.09.05a` strings inside
+F3's comments at `:1271`/`:2218` were **deliberately not bumped**: they record when F3 shipped.
+
+**9. ON-PHONE GATE — MANDATORY, NOT YET RUN. F1 STAYS OPEN UNTIL IT IS.** At Nudibranch Tip /
+Innes Park, shading ON:
+   (1) tap the headland — headline must read `Nearest reading · N m away`, **never** "Est. height
+   here"; the value must still be shown; fine print must carry `not measured at this point`;
+   (2) tap directly on a known pin/sounding — must still read `Est. height here`/`Est. depth here`
+   with the old wording, i.e. close readings did not regress;
+   (3) tap well offshore of any data — must read `No survey data within 120 m here.` (was 150);
+   (4) **record both numbers at every tap walking inland** — v16.75.1 §12's four-outcome table is
+   still live and this build deliberately preserved the evidence for it;
+   (5) confirm the headland is **still shaded** — expected, see §7.
+
+**10. STILL QUEUED.** F2 query-point land test (**the real fix for the land case** — `:2941` read
+side and `:2592` paint side, or one shared test); hover threshold `:3832` still **150 m**, now
+inconsistent with the tap's 120 — **new, logged this build**, small; hover-bypass fill-opacity bug;
+F4 fan-mode ruler — spec still owed by Aaron; F5 score hygiene; F6 hook-definition card — blocked
+on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source (hard rule 4); export
+filename UTC dating; NN-guard class audit (line numbers in v16.75.7 §10, plus `_idwCache`'s
+`n===s.length` keying); five-thresholds item (v16.75.7 §11b — **now four**: 80/120/120/150);
+`WOFS_FREQ_MIN` removal; `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS
+scouting dot.
+
+**11. NEXT SESSION.** Build **2026.09.05b**, roadmap **v16.75.8**, repo head **`bed3d37`** plus this
+entry's commit. `CLAUDE.md` unchanged. **Next job: run §9's on-phone gate before anything else — F1
+is shipped, not closed.** Then the F2 query-point land test. **Do not re-litigate:** the choice of
+30 and 120 (§1, both sourced from existing constants); showing the value rather than suppressing it
+(§2); that the paint still covers the headland (§7, by design).
+
 *v16.75.7 · 5 Sep 2026 — **F2 CHARACTERISED. THE CONTRADICTION RESOLVES AS: BOTH RECORDS
 ARE TRUE, ON DIFFERENT AXES.** Read-only spike, Sonnet dispatch. No build, no code, no data change.
 Build stays **2026.09.05a**; repo head **`7e88991`** — correcting v16.75.6 §5, which recorded
