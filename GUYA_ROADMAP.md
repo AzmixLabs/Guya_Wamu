@@ -1,5 +1,44 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.76.1 · 5 Sep 2026 — **F1 ON-PHONE GATE PARTIALLY RUN. THREE OF SIX §7 CHECKS PASS (1,
+2, 3), PLUS CHECK 5 CONFIRMED INCIDENTALLY. CHECKS 4 AND 6 STILL OUTSTANDING — F1 STAYS
+CODE-CLOSED, NOT FULLY CLOSED BY THIS ENTRY.** No build, no code, no data change this
+entry. Build stays **2026.09.05d**; repo head unchanged at **3e115ed**.*
+
+**1. RESULTS AGAINST v16.76 §7's VERBATIM SPEC, Nudibranch Tip / Innes Park, shading ON —
+BY SCREENSHOT, NOT FIELD IMPRESSION.**
+   - **Check 1 (headland tap) — PASS.** Headline read `Nearest reading · 58 m away`; value
+     still shown (`dries ≈ 1.7 m`, above LAT, exposed now); fine print carried `not
+     measured at this point`. Exact match to spec.
+   - **Check 2 (known sounding, Innes Park CPZ06) — PASS.** Nearest data 17 m away — inside
+     the 30 m `NEAR_HERE` band — headline read `Est. depth here ≈ 4.1 m`, old "here"
+     wording preserved. Fine print's `nearest data 17 m away — rough estimate (LAT) · now`
+     is the pre-existing disclosure, not a new element — consistent with §4's "byte-
+     identical inside 30 m" claim, not a regression.
+   - **Check 3 (offshore, Hervey Bay GUZ07) — PASS.** Read `No survey data within 120 m
+     here.`, exact match, correctly updated from the pre-arc 150 m wording.
+   - **Check 5 (headland still shaded) — CONFIRMED, incidentally, in the check-1
+     screenshot.** The coastal fringe at Nudibranch Tip is visibly shaded despite being
+     land. Expected per §5 — F1 never touched the paint side; this is F2's open item, not
+     a regression.
+
+**2. NOT YET RUN.** Check 4 (the walk-inland table recording both distance and value at
+successive taps, per v16.75.1 §12's four-outcome test) and the desktop/hover limb (check
+6: sounding / 40–60 m / in-zone-far-from-data / out-of-zone-far-from-data). **The gate is
+not closed until these are in — do not read this entry as F1 reaching full closure.**
+
+**3. ZONE-CARD SPOT CHECK, UNSOUGHT, RELEVANT TO HARD RULES 1–2.** Both CPZ06 (Innes Park,
+"Conservation Park (yellow)") and GUZ07 (Hervey Bay, "General Use (light blue)") cards,
+observed during this pass, state zone type + ID + restriction text, carry the "simplified
+boundary — not authoritative, confirm before fishing" warning, and link to the official
+source. No legality assertion in either. Recorded as a live confirmation the hard-rule
+wording survives in shipped UI, not because anything changed.
+
+**4. NEXT SESSION.** Build **2026.09.05d** (unchanged), roadmap **v16.76.1**, repo head
+**3e115ed** plus this entry's own commit. `CLAUDE.md` unchanged. **Next job: finish
+§7's gate — checks 4 and 6 — before any further code.** Do not re-litigate checks 1/2/3/5,
+settled here by screenshot evidence.
+
 *v16.76 · 5 Sep 2026 — **THE F1 ARC IS CLOSED AS SHIPPED WORK. NO FURTHER F1 CODE IS
 PLANNED.** Build **`2026.09.05d`**, repo head **`4c17bbe`** plus this entry's commit. Four builds
 and seven roadmap entries in one day. **THE ON-PHONE GATE IS STILL NOT RUN — F1 IS CLOSED ON CODE,
