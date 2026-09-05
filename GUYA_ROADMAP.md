@@ -1,5 +1,107 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.76 · 5 Sep 2026 — **THE F1 ARC IS CLOSED AS SHIPPED WORK. NO FURTHER F1 CODE IS
+PLANNED.** Build **`2026.09.05d`**, repo head **`4c17bbe`** plus this entry's commit. Four builds
+and seven roadmap entries in one day. **THE ON-PHONE GATE IS STILL NOT RUN — F1 IS CLOSED ON CODE,
+NOT ON VERIFICATION**, and this entry does not claim otherwise. Same posture as v16.75, which also
+shipped code with its gate outstanding and said so in its own header.*
+
+**1. WHY THIS IS A VERSION BUMP AND NOT ANOTHER `.x`.** The 5 Sep run closed one defect (F3),
+characterised a second to the line (F2), and shipped a third across three builds (F1) — and the
+middle one **rewrote what the third defect actually was** before a line of it was written. That is
+an arc, not an increment.
+
+**2. THE ARC, IN ORDER.**
+
+| # | entry | what happened | state |
+|---|---|---|---|
+| F3 | v16.75.2 → .6 | zone fill dimmed on the global shading flag; fixed with a per-polygon coverage bitmap (`2026.09.05a`, `3cc831d`) | **CLOSED — on-phone gate PASSED, all four checks** |
+| F2 | v16.75.7 | characterisation spike, read-only | **CHARACTERISED — not fixed, deliberately** |
+| F1 | v16.75.8 → .10 | shipped across three builds (`b`, `c`, `d`) | **CODE CLOSED — gate unrun** |
+
+**3. F2 IS THE REASON F1 SHIPPED AS SOMETHING DIFFERENT FROM WHAT WAS LOGGED.** The standing F1
+finding (v16.75.1 §12) said the point query had **no maximum-distance guard**. It had one — a bare
+150 m at `openDepthRead()`. The field observation was *"data 35 m away"*, and **35 passes 150**, so
+the logged fix would have been a no-op against the observed symptom. F2's spike caught that before
+any code was written. **This is the single most valuable thing the day produced**, and it came from
+a read-only session that was explicitly forbidden to fix anything.
+
+F2 also resolved the standing contradiction: `maskWater()` is a **sample-admission** filter (one
+call site, on a stored sample's own coordinates), while both observed defects are **query-side**.
+v16.52/53's "wired at five call sites" and F2's "not consulted at either site" were **both true, on
+different axes.** Neither record needed correcting.
+
+**4. WHAT F1 ACTUALLY SHIPPED, ACROSS THREE BUILDS.**
+
+| build | commit | change |
+|---|---|---|
+| `2026.09.05b` | `bed3d37` | `NEAR_MAX` 150→120 (= `R1`, so read extent and paint extent agree); `NEAR_HERE`=30 (= `R0_MIN`); headline carries the distance instead of asserting "here"; value still shown |
+| `2026.09.05c` | `3de36ca` | hover joins the tap — constants hoisted to module scope, one definition; hover's own bare 150 **and** its second bare 120 retired; in-zone 120–150 m band stops showing a number |
+| `2026.09.05d` | `3c36e29` | map-click gate and slope chain name `NEAR_MAX`; identity swap, no behaviour change |
+
+Net: **two named constants replaced five bare literals across four call sites**, and no bare
+distance literal remains on any read path. Readings inside 30 m are worded **byte-identically to
+before the arc** — the fix is entirely about what is claimed beyond 30 m.
+
+**5. WHAT F1 DID NOT FIX, STATED SO NOBODY LATER READS "CLOSED" AS "SOLVED".** F1 is **distance-only**.
+The readout still has **no land test at the query point**. A sounding 35 m away across a rock
+headland and one 35 m away over open water remain indistinguishable — what changed is that neither
+is called "here". **The paint side is untouched and still shades the headland out to 120 m.** The
+real fix for the land case is F2's query-point land test, still unbuilt: `maskWater()` exists,
+already holds correct data at the failing headland (v16.75.7 §8b, coastline resolved at lng
+152.4790), and is asked nothing at query time.
+
+**6. THE ARC DID NOT TRIP ITS OWN SEQUENCING WARNING.** v16.75.1 §13 warned an F1 guard would
+suppress the headland reading and make F2 harder to detect. **It didn't** — the reading is
+relabelled, not suppressed, so the four-outcome walk-inland test (v16.75.1 §12) remains fully
+available with both numbers on screen. Sequencing F2 before F1 was correct and the risk it guarded
+against did not materialise.
+
+**7. THE ONE OUTSTANDING LIMB — THIS IS WHAT "NOT ON VERIFICATION" MEANS.** F1's on-phone gate
+(v16.75.8 §9) is **unrun and now covers three builds**, two of which changed user-visible wording.
+Verbatim, at Nudibranch Tip / Innes Park with shading ON:
+   (1) tap the headland — headline must read `Nearest reading · N m away`, **never** "Est. height
+   here"; the value must still be shown; fine print must carry `not measured at this point`;
+   (2) tap directly on a known pin/sounding — must still read `Est. height here`/`Est. depth here`
+   with the old wording;
+   (3) tap well offshore of any data — `No survey data within 120 m here.` (was 150);
+   (4) **record both numbers at every tap walking inland** — §12's table is still live;
+   (5) confirm the headland is **still shaded** — expected, §5.
+   Desktop limb (hover, `2026.09.05c`): hover over a sounding → wording unchanged; 40–60 m off →
+   gains `· N m away`; inside a zone far from data → `no survey data here`; outside a zone far from
+   data → tooltip hidden.
+**When that gate passes, amend this entry to full closure. Until then F1 is code-complete only.**
+
+**8. VALIDATION ACROSS ALL FOUR BUILDS.** Every build: both script blocks `node --check` clean;
+inlined Leaflet block **byte-identical at 147,552 bytes**, SHA-256 `db49d009…641a`, matching the
+`CLAUDE.md` pin on every one; `zoneAt()` and the green-zone `dragend` safeguard absent from every
+diff; two `<script>` + two `<style>` blocks throughout. Four Pages runs, all completed/success, all
+four build strings confirmed live. Behavioural harnesses, all extracting the live lines from
+`index.html` rather than restating them: tap **12/12**, hover **9/9**, paint-alpha purity **6,005
+pairs**, mask coastline decode, scope/TDZ enumeration. All still pass at head.
+
+**9. HOUSEKEEPING FROM THE ARC, LOGGED NOT FIXED.** `WOFS_FREQ_MIN` (`:2832`) is dead — one
+reference, its own declaration, and its "retune here only" comment is false without a re-bake.
+`R1` is declared **twice** (`buildShade()` `:2439`, `buildAutoContours()` `:3049`). `_idwCache` is
+keyed on `n===s.length`, not `poolVersion`. `NEAR_MAX` and `R1` are numerically equal and
+**deliberately separate** — unifying them couples the readout to the renderer, a decision rather
+than a tidy-up. Two unrelated things in the file are still called "mask".
+
+**10. STILL QUEUED.** **F1's on-phone gate (§7) — blocking F1's full closure**; F2 query-point land
+test (**the real fix for the land case**, read side and paint side, or one shared test);
+hover-bypass fill-opacity bug; `R1` declared twice; `_idwCache` keying; `WOFS_FREQ_MIN` removal;
+F4 fan-mode ruler — **spec still owed by Aaron, do not reconstruct**; F5 score hygiene; F6
+hook-definition card — **still blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current
+official QLD source (hard rule 4)**; export filename UTC dating; NN-guard class audit (line numbers
+v16.75.7 §10); `GateRC`/`GateNoosa` frozen; job (b) "Here" replaces "Coast-wide"; GPS scouting dot.
+
+**11. NEXT SESSION.** Build **2026.09.05d**, roadmap **v16.76**, repo head **`4c17bbe`** plus this
+entry's commit. `CLAUDE.md` unchanged. **Next job: run §7's gate. Not more code** — four builds have
+shipped since the last phone check and three of them are unverified. Then F2's query-point land
+test. **Do not re-litigate:** F3 (closed and gated); F2's answer (§3, settled by measurement); the
+values 30 and 120 (v16.75.8 §1, both sourced from existing constants); that F1 is distance-only
+(§5, by design); that `NEAR_MAX` and `R1` stay separate (§9).
+
 *v16.75.10 · 5 Sep 2026 — **NO BARE DISTANCE LITERAL LEFT ON ANY READ PATH. BUILD
 `2026.09.05d`, COMMIT `3c36e29`** on top of `715e6e0` (roadmap v16.75.9). Pushed; Pages run
 `33933828183` completed/success, live site confirmed serving `2026.09.05d`. Closes the item
