@@ -1,5 +1,76 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.75.9 · 5 Sep 2026 — **HOVER READOUT BROUGHT INTO LINE. BUILD `2026.09.05c`, COMMIT
+`3de36ca`** on top of `05f9857` (roadmap v16.75.8). Pushed. Closes the item v16.75.8 §10 logged one
+build earlier: the desktop hover was still on a bare 150 m after F1 fixed only the tap.*
+
+**1. WHAT WAS ACTUALLY WRONG — WORSE THAN THE ONE NUMBER LOGGED.** v16.75.8 §10 recorded "hover
+threshold `:3832` still 150 m". Re-reading it to fix that turned up a **second** bare literal in the
+same function: the hover's *visibility* gate held its own `120`, separate from its *text* gate's
+`150`. **Two literals for the same question inside one handler, one of them already disagreeing
+with the tap it was written to mirror** (the comment above it says "mirrors the depth-shading paint
+rule"). The logged item was the smaller half.
+
+**2. THE FIX — ONE DEFINITION, NOT A SECOND COPY.** `NEAR_HERE=30` and `NEAR_MAX=120` are **hoisted
+out of `openDepthRead()` to module scope**, so the two readouts share one definition rather than
+the hover growing its own pair. Both hover gates now name the constants. The hover's reading gains
+the same distance rule as the tap: past `NEAR_HERE` the tooltip states how far the reading actually
+came from instead of presenting it as the value under the cursor. The pre-existing `~` roughness
+marker (>80 m) is untouched and still trails the line. A stale comment citing a bare 120 was
+corrected to name the constant.
+
+**3. BEHAVIOUR CHANGE, PRECISELY — ONE BAND MOVES.**
+
+| context | 0–30 m | 31–120 m | 120–150 m | >150 m |
+|---|---|---|---|---|
+| inside a zone polygon | unchanged | value **+ `· N m away`** *(new)* | **`no survey data here`** *(was: a number)* | unchanged |
+| outside a zone polygon | unchanged | value **+ `· N m away`** *(new)* | tooltip hidden (unchanged) | tooltip hidden (unchanged) |
+
+**The 120–150 m band inside a zone is the actual defect closed**: the renderer paints nothing past
+120 m, so the hover was putting a number over unpainted water. **Inside 30 m the tooltip is
+byte-identical to before this build.**
+
+**4. VALIDATION.** Both script blocks `node --check` clean. Leaflet block **byte-identical**,
+147,552 bytes, SHA-256 `db49d009…641a`, matching the `CLAUDE.md` pin. `zoneAt()` and the
+green-zone `dragend` safeguard **absent from the diff entirely**. **No bare 150 threshold remains
+on any readout path** (`grep -c 'near>150\|near<=150'` = 0). Two harnesses extract the live lines
+from `index.html` and drive them: the tap's **12/12 still pass unregressed after the hoist**, and
+the hover's **9/9 pass** across both `inZ` states and both tier boundaries
+(`scratchpad/f1_labeltest.js`, `f1_hovertest.js`). **Diff: 27 insertions, 22 deletions, 6 hunks** —
+two build strings, the constant block moving up 15 lines (an insertion hunk and a deletion hunk of
+the same block, dedented, comment amended), and two hunks in the hover.
+
+**5. THE FOUR-THRESHOLDS ITEM IS NOW A THREE-THRESHOLDS ITEM.** v16.75.7 §11b logged five distinct
+distance thresholds across six consumers of one pool; v16.75.8 cut it to four. Remaining: **80 m**
+(`findDeepest()`, and the hover's roughness marker), **120 m** (`NEAR_MAX` — tap gate, hover gates,
+map-click gate, slope chain, and `R1` itself), **30 m** (`NEAR_HERE`). The map-click gate and the
+slope chain still carry their own bare `120` literals rather than naming `NEAR_MAX` — **left
+deliberately, not overlooked**: they are different functions and this build was scoped to the
+hover. Logged for the sweep.
+
+**6. ON-PHONE GATE — DESKTOP-ONLY LIMB, SO IT IS A DESKTOP CHECK.** The hover-readout does not exist
+on the phone (`mousemove`). Verify at a desktop browser with shading ON: (1) hover directly over a
+sounding — tooltip wording unchanged from before; (2) hover 40–60 m off — tooltip gains
+`· N m away`; (3) hover inside a zone polygon well away from data — `no survey data here` rather
+than a number; (4) hover outside any zone well away from data — tooltip hidden. **F1's own phone
+gate (v16.75.8 §9) is still unrun and still governs — this entry does not close it.**
+
+**7. STILL QUEUED.** **F1's on-phone gate (v16.75.8 §9) — unrun, blocking F1's closure**; F2
+query-point land test (the real fix for the land case — read side and paint side, or one shared
+test); bare `120` literals at the map-click gate and slope chain (§5); hover-bypass fill-opacity
+bug; F4 fan-mode ruler — spec still owed by Aaron; F5 score hygiene; F6 hook-definition card —
+blocked on verifying CPZ 2/2 and GUZ+HPZ 3/6 against a current official QLD source (hard rule 4);
+export filename UTC dating; NN-guard class audit (line numbers v16.75.7 §10, plus `_idwCache`'s
+`n===s.length` keying); `WOFS_FREQ_MIN` removal; `GateRC`/`GateNoosa` frozen; job (b) "Here"
+replaces "Coast-wide"; GPS scouting dot.
+
+**8. NEXT SESSION.** Build **2026.09.05c**, roadmap **v16.75.9**, repo head **`3de36ca`** plus this
+entry's commit. `CLAUDE.md` unchanged. **Next job: run F1's on-phone gate (v16.75.8 §9) — three
+builds have now shipped on 5 Sep and none of the three has been gated on the phone.** Then the F2
+query-point land test. **Do not re-litigate:** the values 30 and 120 (v16.75.8 §1); the hoist
+(§2 — one definition is the point); that the 120–150 m in-zone band now reads "no data" (§3, that
+is the fix, not a regression).
+
 *v16.75.8 · 5 Sep 2026 — **F1 SHIPPED AS BUILD `2026.09.05b`. ON-PHONE GATE NOT YET RUN —
 F1 IS NOT CLOSED.** Commit `bed3d37` on top of `a04e189` (roadmap v16.75.7). Pushed. Scope was the
 readout only, as re-defined by v16.75.7 §7: **retune `:2941`'s threshold and fix the "here" label.**
