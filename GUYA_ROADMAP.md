@@ -1,5 +1,38 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.76.4 · 5 Sep 2026 — **F2 READ-SIDE ON-PHONE GATE PASSED.** F2's read side (tap+hover)
+is now fully shipped AND gated — v16.76.3 shipped it harness-verified only; this entry
+supersedes its "gate unrun" line. No build, no code, no data change this entry. Build
+stays **2026.09.05e**; repo head unchanged at **0d486b0**.*
+
+**1. GATE RESULTS.** Acceptance case (Woongarra Scenic Drive, ~81 m from nearest sounding)
+and a second point further along the same road — both read `No data here — this point is
+on land.`, zero digits in either response. F1's six checks re-run clean on genuine water
+points, wording byte-identical to before this build: Innes Park 10 m → `Est. depth here ≈
+5.0 m`; Hervey Bay 20 m → `Est. depth here ≈ 10.4 m`; Hervey Bay offshore → `No survey
+data within 120 m here.` Headland remains shaded — expected, paint side untouched (§2).
+
+**2. WHAT'S LEFT — THE PAINT SIDE.** `buildShade()` still colours land pixels out to R1
+(120 m) with no land test — the same defect the read side just fixed. Not built here,
+deliberately — a perf-sensitive per-pixel change gets its own measurement first. New fact
+from the read-side diagnosis, worth carrying forward: `maskWater()` is O(1) per point
+after a one-time per-region bitmap decode — a bbox test plus one bit read, no live
+geometry, no network — cheap relative to what `buildShade()` already does per pixel
+(nearest-neighbour search, IDW, R0/R1 ramps). That lowers the expected cost of the obvious
+fix: skip painting (leave transparent) any pixel where the query point is land, the same
+treatment already given to no-coverage pixels. Still needs to be MEASURED, not assumed —
+a quick before/after pan-timing check is the right size of spike, not a full F3-style
+bitmap-precompute investigation, unless measurement says otherwise.
+
+**3. NEXT SESSION.** Build **2026.09.05e** (unchanged), roadmap **v16.76.4**, repo head
+**0d486b0** plus this entry's own commit. `CLAUDE.md` unchanged. **Next job: F2's
+paint-side land test** — extend `buildShade()`'s per-pixel loop with the same
+`queryOnLand()` gate, measure the added per-pan cost before any further optimisation,
+on-phone gate before/after. Do not re-litigate: the read-side fix (v16.76.3 shipped, this
+entry gated); the LANDMASK coverage — **three baked regions** (`woongarra`, `seq_coast`
+— a single box covering both Redcliffe/Moreton and Sunshine Coast/Maroochy/Noosa —
+and `brisbane_river`), not four; uncovered north of roughly lat −26.34.
+
 *v16.76.3 · 5 Sep 2026 — **F2 READ SIDE SHIPPED: THE DEPTH READOUT NOW TESTS THE QUERY
 POINT FOR LAND. Build `2026.09.05e`, commit `0d486b0`.** Pushed; Pages run `33941861043`
 completed/success, live site confirmed serving `2026.09.05e`. **THE ON-PHONE GATE WAS NOT RUN —
