@@ -1,5 +1,53 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.76.2 · 5 Sep 2026 — **F1'S ON-PHONE GATE FULLY PASSED, ALL SIX §7 CHECKS. F1 IS NOW
+FULLY CLOSED.** Also: concrete, reproducible field evidence for F2's land defect, on a
+road, no ambiguity. No build, no code, no data change this entry. Build stays
+**2026.09.05d**; repo head unchanged at **63a68bf**.*
+
+**1. CHECK 4 CLOSES — WALK-INLAND SERIES, SIX TAPS, Nudibranch Tip.**
+
+| tap | data away | reading |
+|---|---|---|
+| 1 | 119 m | dries ≈ 1.5 m |
+| 2 | 90 m | dries ≈ 0.2 m |
+| 3 | <30 m ("here") | dries ≈ 0.8 m |
+| 4 | 29 m | depth ≈ 2.4 m |
+| 5 | 26 m | depth ≈ 7.2 m |
+| 6 | **81 m, ON WOONGARRA SCENIC DRIVE — the road itself** | dries ≈ 1.7 m |
+
+All five water-side readings reconcile exactly against tide +1.7 m (e.g. tap 1: 1.7 − 1.5
+= 0.2 m over it now). **Tap 6 is the finding.** Same 1.7 m value as an earlier 58 m-away
+tap this session — consistent with one nearest intertidal sample being returned regardless
+of the query point's land status, correctly labelled with a climbing, truthful distance.
+Doesn't map cleanly onto any of v16.75.1 §12's four original rows (those predate F1's
+working guard) — the value pins, but distance correctly climbs rather than being
+suppressed. **That is F1 behaving exactly as designed. The value being meaningless on a
+road is squarely F2's unbuilt scope, not a check-4 failure or a regression.**
+
+**2. CHECK 6 (DESKTOP HOVER) — PASS**, per Aaron's direct confirmation running the §7
+desktop limb (sounding / 40–60 m / in-zone-far-from-data / out-of-zone-far-from-data). No
+screenshot on file for this leg — recorded on Aaron's word, the same standard used for
+every prior on-device gate in this project.
+
+**3. F1 IS NOW FULLY CLOSED.** Diagnosis (v16.75.4) → characterisation (v16.75.7, which
+rewrote what the defect actually was) → fix across three builds (v16.75.8–.10) → gate,
+partial (v16.76.1) → gate, complete (this entry). Cite this entry, not v16.76 or v16.76.1,
+as F1's final state.
+
+**4. F2 NOW HAS A CONCRETE REPRODUCTION CASE, NOT JUST A CHARACTERISED MECHANISM.**
+Nudibranch Tip, Woongarra Scenic Drive, 81 m from the nearest `dries ≈ 1.7 m` sample,
+tapped on the road itself: returns a plausible-looking reading with no land test
+performed. **Use this exact tap as F2's on-phone acceptance test** — before: reads a
+number on the road; after: should read "no data — on land" or equivalent, gated by
+`maskWater()` at the query point, not just at sample admission.
+
+**5. NEXT SESSION.** Build **2026.09.05d** (unchanged), roadmap **v16.76.2**, repo head
+**63a68bf** plus this entry's own commit. `CLAUDE.md` unchanged. **Next job: F2's
+query-point land test — the last item blocking this arc's full close-out.** Do not
+re-litigate: F1 (closed, §3); the arithmetic on the five water-side taps (§1, reconciled
+with zero residue).
+
 *v16.76.1 · 5 Sep 2026 — **F1 ON-PHONE GATE PARTIALLY RUN. THREE OF SIX §7 CHECKS PASS (1,
 2, 3), PLUS CHECK 5 CONFIRMED INCIDENTALLY. CHECKS 4 AND 6 STILL OUTSTANDING — F1 STAYS
 CODE-CLOSED, NOT FULLY CLOSED BY THIS ENTRY.** No build, no code, no data change this
