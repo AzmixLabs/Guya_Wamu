@@ -1,5 +1,182 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.2 · 6 Sep 2026 — **F6a SHIPPED. THE HOOK DEFINITION IS LIVE ON ALL THREE FISHABLE
+ZONE CARDS.** Build `2026.09.06a`, commit `920facd`, deployed (Pages run #175, sha-bound,
+success). Three `STYLES` rules strings rewritten; MNP untouched. GUZ gained rod/hook
+figures it never carried. A CPZ card OVERFLOW defect was found at the on-phone gate and is
+deliberately NOT fixed before the 10-13 Sep Bargara trip. The CPZ06 zid collision across
+parks is now CONFIRMED LIVE on a zone Aaron will stand in. The F6 characterisation spike
+(read-only) is complete and its findings are recorded here in full.*
+
+**1. WHAT SHIPPED — `index.html:1223/1224/1225`, three whole-line replacements.**
+CPZ now frames the marine park as TIGHTENING the general limit: 2 hand-held rods or
+handlines per person, 2 hooks IN TOTAL per person, "not 2 per line". That last clause
+directly closes the misreading the parks.qld.gov.au page invites (v16.77.1 §3). HPZ and
+GUZ now attribute 3 rods / 6 hooks to General Fisheries rules rather than implying a
+marine-park allowance. All three carry a byte-identical hook definition: ONE hook = a
+single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged
+set of up to 6; a bait jig of up to 6 hooks (#1-#12).
+MNP `:1222` was deliberately NOT touched — a hook count is meaningless in a no-take zone.
+The card carries SEVEN of the seven official items. Nothing was dropped. Earlier drafts
+trimmed to four; Aaron reverted to the full list on the ground that other people may use
+the app and cannot supply the missing items from memory. Do not "simplify" it back.
+
+**2. GATE EVIDENCE — the round-trip hash is the reusable part.**
+Input file `scratchpad\f6a_lines.txt` gated at sha256
+`9430ecca18107ec80e16afd61894bf04292c94c3202cda15e822df765f215025`, 1376 bytes, 3 lines,
+computed OUTSIDE the writing environment. After the edit, the three lines were extracted
+back out of `index.html` and hashed again: identical. That single check rules out
+truncation, escape substitution, BOM, CRLF and cp1252 mangling simultaneously.
+Supporting figures, all verified: block 752 -> 1375 bytes (+623); file 2,365,778 ->
+2,366,401 (+623); `git diff --numstat` 5/5 with hunks at `@@ -1052`, `@@ -1091`,
+`@@ -1223,3`; em-dash U+2014 100 -> 101 (+1); LF 4359 unchanged, 0 CR, no BOM; Leaflet
+body-only digest `db49d009...5641a` / 147,552 bytes unchanged; `zoneAt()` `:1332` and the
+green-zone drag safeguard `:1585` both quoted intact.
+`:2596` was correctly left alone — it records which build shipped F2's paint side and is
+not the current build string.
+
+**3. DEFECT FOUND AT THE ON-PHONE GATE — CPZ CARD OVERFLOWS. NOT FIXED. NOT A BLOCKER.**
+On device, the CPZ popup (longest string, 463 bytes) clips its `<h2>` zone name at the top
+edge and shows a scrollbar. HPZ (453) and GUZ (457) render whole. Nothing is permanently
+hidden — the card scrolls — and the clipped element carries NO regulatory content: `zid`,
+park, rules text, warning and official-source link are all visible.
+Deliberately deferred past Bargara. The fix is CSS on `.pop` (max-height plus a sticky
+`h2`), which is a rendering change and its own single-variable build with its own on-phone
+gate. Trading a verified-correct card for an ungated one three days before a trip is the
+wrong trade. Do not bundle this with F6b.
+
+**4. CPZ06 COLLISION CONFIRMED LIVE — ON THE ZONE AARON WILL FISH.**
+Device screenshots show `CPZ06 · MORETON BAY MP` (Hays Inlet-Bramble Bay). The Bargara
+spot is `CPZ06 · GREAT SANDY MP` (Nudibranch). Same zone code, two parks, two polygons,
+and the two parks do not share limits. This upgrades the GUZ01 collision (Kolan / Bulcock
+Beach, v14) from a data note to a confirmed field hazard.
+Note HOW it renders correctly today: "Moreton Bay MP" comes from the polygon's `plan`
+property; "Great Sandy MP" comes from the HARDCODED FALLBACK at `:1280`, because none of
+the 104 Great Sandy features carry `plan` at all. Correct by coincidence of the current
+two-park dataset.
+STANDING FIELD RULE: never record a zone code without its park. `CPZ06` alone is ambiguous.
+
+**5. F6 CHARACTERISATION SPIKE — COMPLETE, READ-ONLY. Full evidence in
+`scratchpad\f6_q1..q5.txt` (16155 / 11253 / 20005 / 12170 / 12769 bytes).**
+The spike was run to answer one question: what does the app render for a location in NO
+marine park? The answer is THREE different things, which is why F6 could never have been
+one change.
+(a) `zonePopup:1280-1282` is the ONLY surface that ever renders rules text, and it is
+    polygon-driven — bound inside `onEachFeature`, never called with `zoneAt()`'s return.
+    Out-of-park water gets no rules text from any path. Unchanged by F6a.
+(b) `spotPopup:1503` is `if(z){...}` with NO else. A spot outside all zoning renders no
+    zoning statement at all, and the generic warn at `:1516` says "Verify the zone
+    officially" — which implies one exists. This is the surface Aaron taps at a saved spot.
+(c) `depthPopup:1359` renders "Outside the mapped zones." — a claim about DATA where the
+    hard rules require a claim about LAW.
+(d) `zoneTag:3638` already ships the CORRECT wording — "outside marine-park zoning —
+    general fisheries rules + FHAs still apply, confirm via Qld Fishing 2.0" — but only in
+    the best-bite panel, the surface least likely to be open when deciding where to cast.
+The app already knows the right words and does not say them where it matters.
+
+**6. NO COVERAGE ENVELOPE — AND AN 89 km MEASURED HOLE INSIDE THE BOUNDING BOX.**
+`zoneAt():1332` is a bare linear scan of all 178 features with no bbox pre-filter and no
+in-range guard. A point in the Sunshine Coast gap, a point 20 m outside an HPZ boundary,
+and a point in Sydney all return `null` and are indistinguishable downstream.
+MEASURED from the embedded literals: 178 features (176 Polygon + 2 MultiPolygon), 454
+rings, 33,958 vertices; bbox lng 151.92645..153.61157, lat -27.93326..-24.49832; counts
+MNP 65 / HPZ 43 / CPZ 38 / GUZ 32. The set is TWO DISJOINT CLUSTERS separable exactly by
+`plan`: Moreton Bay (n=74, northernmost -26.80224) and Great Sandy (n=104, no `plan`,
+southernmost -26.00329). Between them: 0.79895 deg ~ 89 km of Sunshine Coast — Caloundra,
+Mooloolaba, Maroochydore, Noosa — with NO zone polygon. That is a TRUE no-marine-park
+band, not missing data, and nothing in the UI says so.
+The pattern to fix it already exists in this codebase: `maskWater():2874-2883` does an
+in-box test with a documented fail-open outside the boxes. It is applied to the land mask
+and never to zoning. `zoneAt()`'s no-data default is neither stated nor distinguished from
+a real no-zone answer.
+Provenance of the Great Sandy subset was checked and is CLEAN — v16.3's live ArcGIS fetch
+confirmed 104 features with zid/name matching the shipped set exactly. The comment block
+at `:1216-1218` names only Moreton Bay 2019/2008 and the legend at `:1188` says "2024
+plan"; both are MISLABELLED, but the DATA is current. Documentation defect only.
+
+**7. FHA DATA EXISTS, IS COMPLETE, AND IS SWITCHED OFF.**
+`index.html:1304` holds 35 FHA features (18 Polygon + 17 MultiPolygon, 69 rings, 9,830
+vertices, 26 distinct plan IDs), bbox lng 151.82370..153.47955, lat -28.13502..-24.38749.
+`:1308` has NO `.addTo(map)`; the toggle at `:1112` is unchecked. There is no `fhaAt()` —
+`pip()` is called only from `zoneAt():1332` and `inWaterFast():2005`, both against ZONES.
+So `zoneTag:3638`'s promise that "FHAs still apply" is a GENERAL LEGAL STATEMENT, true
+regardless, NOT a claim the app performed a lookup. Reusing that wording elsewhere is
+therefore honest. Note the FHA extent SPANS the 89 km zoning gap — Maroochy (FHA-008) and
+Noosa River (FHA-051) both sit inside it. In exactly the band where zoning is null, the
+app holds the alternative regulatory layer, off and unqueried.
+
+**8. MULTI-USER REFRAMING — THIS REORDERS THE BACKLOG.**
+Aaron confirmed the app may be used by people other than himself. That is not a cosmetic
+change of audience; it removes the compensating knowledge every out-of-park defect above
+was tolerable against.
+- F6b (out-of-park state) moves UP. A stranger tapping a saved spot outside the parks gets
+  silence, or a statement about data that reads as "nothing applies here".
+- F6c (the `:1280` defaults) stops being latent. `p.plan||'Great Sandy MP'` supplies park
+  identity for 104 of 178 features (58%) from a hardcoded string in a template literal;
+  `||STYLES.GUZ` renders the MOST PERMISSIVE card on an unrecognised `zt`. It is
+  unreachable today only because the four STYLES keys match the four `zt` values in the
+  data. It goes live on the first polygon set carrying an unknown code.
+- The 89 km gap needs saying out loud in the UI, not only in comments.
+BEST DESIGN, recorded so it is not re-derived: zone-derived regulatory text is currently
+computed inline at each render site — 17 paths, three behaviours, one silent. The correct
+fix is ONE RESOLVER taking `zoneAt()`'s result and returning park, zone, rules and the
+out-of-park statement, with every surface rendering from it. Paired with BACKFILLING
+`plan` and `src` onto the 104 Great Sandy features so park identity is DATA, not a
+default. That pair is the multi-region #15 precondition already described at v16.77.1 §4.
+It is a data-processing job on a 1.1 MB literal with whole-file blast radius — validated
+and diffed like depth data, not a text edit.
+
+**9. DISPATCH FIXES 4-10 — EARNED THIS SESSION, ALL GATE DEFECTS ON THE PLANNING SIDE.**
+4. A FILE'S EXISTENCE MUST BE PROVED BY A COMMAND OTHER THAN THE ONE THAT WROTE IT. A
+   spike reported writing a 49,402-byte report, +808 lines, that did not exist anywhere on
+   disk. "Report back the byte size" let the writer report on itself. Every scratchpad-
+   producing dispatch now ends with three separate reads at an ABSOLUTE path — `Get-Item`,
+   `(Get-Content).Count`, `-Tail 3` — pasted raw.
+5. DISPATCHES SPECIFY ABSOLUTE OUTPUT PATHS. `scratchpad\x.txt` resolves differently
+   depending on which tool handles it. Same class as the D:\ / C:\ clone-path drift.
+6. A TOOL FALLING BACK TO A DIFFERENT TOOL MID-TASK IS A GATE EVENT. The lost report
+   followed a heredoc ENAMETOOLONG failure and a silent substitution to another writer.
+   Dispatches now say: if the intended write method fails, STOP and report.
+7. CAP THE QUOTED BLOCK, NEVER THE FILE. A 20 KB file cap forced evidence to be trimmed
+   AFTER it was gathered. Bound each quote; let the file be as long as the findings are.
+8. A MEASUREMENT STATED WITHOUT THE COMMAND THAT PRODUCED IT IS A CLAIM. A report
+   annotated `:1282` as "[SLICED] at 707 chars" for a 351-byte line — a fabricated number
+   produced under cap pressure. Self-caught. Byte and line figures must carry their command.
+9. AUTHORISE MEASUREMENT SCRIPTS EXPLICITLY. Q4's extents were measured by throwaway node
+   scripts against the embedded GeoJSON — the right call, but "read-only" did not
+   authorise it. State: scratchpad scripts permitted, repo untouched.
+10. ESCAPING IS NOT AN ENCODING DEFENCE IN THIS TOOLCHAIN — ONLY AN EXTERNALLY COMPUTED
+   HASH IS. A pure-ASCII generator script with `\u2014` escapes was written to disk with
+   the escapes SILENTLY EXPANDED into literal em-dash bytes. The substitution happened on
+   the tool side, not on disk or in the paste. The output still gated clean because both
+   routes produce identical UTF-8. The ASCII trick was cosmetic; the hash was load-bearing.
+
+**10. CORRECTIONS TO v16.77.1 — apply and do not re-litigate.**
+- §8 said "`CLAUDE.md` unchanged (§1's narrowing is proposed, not applied)". STALE. The
+  rule-5 narrowing IS in the repo — verified at `dc7cb76`, `Baffle Creek` count = 1.
+- `scratchpad\v16771_report.txt` closes with a note saying three hard-rule cross-references
+  still need fixing. STALE — v2 already fixed them (block lines :2, :66, :76, plus the §7
+  numbering-divergence bullet). No follow-up delta. The file itself is real and on disk
+  (5,267 bytes, 5 Sep), so nothing rests on a phantom.
+- v16.77.1 §2 recorded the hook definition as seven items. Confirmed correct and now
+  SHIPPING in full on all three fishable cards (§1).
+
+**11. NEXT — sequencing.**
+Nothing further before Bargara (10-13 Sep). On return, in order:
+(a) CPZ card overflow — CSS on `.pop`, single variable, on-phone gate (§3).
+(b) F6b out-of-park state — `spotPopup:1503` else arm and `depthPopup:1359` rewording.
+    Per §8 this is now purpose-written per surface, NOT a verbatim reuse of `:3638`'s
+    9.5px dim-tag string. Costs no new source checking; all facts are verified at
+    v16.77.1 §1.
+(c) Export UTC dating (own build, verify a real exported file on-phone) — `:3262` still
+    stamps an export before 10:00 AEST with the previous day.
+(d) R1 unification + WOFS_FREQ_MIN.
+(e) F6c / resolver / `plan` backfill — sequenced into multi-region #15, not before.
+STILL OWED BY AARON, do not reconstruct: F4 fan-mode ruler spec, GPS scouting dot spec.
+`scratchpad`: `v16771_delta_v2.txt`, `v16771_report.txt`, `f6a_lines.txt`,
+`f6a_extract.txt` and the `f6a_*.js` helpers can be cleared once this entry is committed.
+Keep `f6_q1..q5.txt` until F6b ships.
+
 *v16.77.1 · 5 Sep 2026 — **F6 SOURCE CHECK DONE. THE CPZ AND GUZ/HPZ ROD-AND-HOOK FIGURES
 ARE VERIFIED CORRECT AGAINST CURRENT OFFICIAL QLD SOURCES (`CLAUDE.md` rule 5).** These figures
 are not a pending spec — they are **already shipping as rules text** at `index.html:1223`
