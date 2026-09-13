@@ -1,5 +1,165 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.3 · 14 Sep 2026 — **CPZ OVERFLOW: READ-ONLY SPIKE COMPLETE. THE DIAGNOSIS AND THE
+PRESCRIBED FIX AT v16.77.2 §3 WERE BOTH WRONG, AND THE SCOPE WAS UNDERSTATED.** No code
+change, nothing shipped, `index.html` untouched since `920facd`. A max-height scroll
+container already exists and is NOT on `.pop`. There is no `.pop{}` rule at all, so the
+recorded "CSS on `.pop`, single variable" fix would have landed on ten popup emitters and
+nested a second scroller inside the first. The defect is not CPZ-specific. The root cause
+remains unmeasured. Sequencing is reordered on merit: F6b now precedes the overflow fix.
+Evidence: `scratchpad\cpz_overflow_spike.txt`.*
+
+**0. STATE AT THIS ENTRY — NO BUILDS BETWEEN 6 AND 14 SEP.**
+The spike ran 6 Sep; this entry is written 14 Sep, after the Bargara trip. Verified 14 Sep:
+repo `HEAD` is `118dbef`, the same commit as the 6 Sep session close, and
+`GUYA_ROADMAP.md` hashes `1483644f2356f0ab00589cace43791bab99e6f79919eea1aeae7df4d396002d8`
+on BOTH the repo and project-knowledge surfaces — byte-identical, no fork. `index.html` is
+unchanged since `920facd`, build `2026.09.06a`. Nothing in the eight-day gap needs recovering.
+
+**1. THE SCROLL CONTAINER EXISTS, AND IT IS `.leaflet-popup-content`.**
+`index.html:503-514`, in the FIRST `<style>` block:
+`max-height: 62vh; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+overscroll-behavior: contain;`
+The app CSS re-declares `.leaflet-popup-content` at `:780` but sets only margin,
+font-family, font-size and line-height, so the cap survives the cascade intact.
+The DOM chain is `.leaflet-popup-content` > `div.pop` > `h2`, with `h2` the first child and
+`.pop` an unstyled block box. A scrolled container therefore clips the `h2` FIRST, which is
+exactly the reported symptom. The competing hypothesis — popup taller than the map viewport,
+autoPan unable to fit it — is RULED OUT by that same 62vh cap. Do not re-raise it.
+
+**2. LEAFLET'S OWN SCROLL PATH IS DEAD CODE HERE.**
+`maxHeight` is unset at all thirteen popup call sites, so `_updateLayout` always takes the
+class-REMOVE branch and `.leaflet-popup-scrolled` (`:565-567`) is never applied. Whatever
+scrolling happens is pure CSS. Nothing in the app block writes `scrollTop` or calls
+`scrollIntoView` anywhere.
+
+**3. "CSS ON `.pop`" WAS NEVER SINGLE-VARIABLE.**
+There is no bare `.pop{...}` rule in the app CSS — only descendant rules (`:781-791`,
+`:833-838`, `:889`). Creating one reaches all TEN `class="pop"` emitters at once: zone card
+`:1280`, FHA `:1305`, depth point `:1355`, spot card `:1502` (by far the tallest and the most
+used), transect `:1917`, land-tap `:3007`, depth readout `:3036`, deepest-nearby `:3077`,
+walk `:3340`, contour `:3804`. It would also nest a second scroll container inside the one at
+§1 — the standard route to double scrollbars and trapped touch gestures on iOS.
+`zoneTag():3638` is NOT in that set; it renders into `.bb-line` in the side panel, whose
+scroller is `.panel-body` (`:708`). A `.pop` change cannot reach it and vice versa.
+The narrowest available lever is the `className` option on the zone card's `bindPopup` at
+`:1286`, currently unset — it lands on the popup container and can scope a rule to the zone
+card alone. Not yet verified as the right fix.
+
+**4. THE DEFECT IS NOT CPZ-SPECIFIC. GUZ IS ONE CHARACTER BEHIND.**
+Rules-string lengths, before F6a (`118dbef~2`) and now:
+MNP `:1222` 122 -> 122 (untouched); CPZ `:1223` 142 -> 330 (+188, 2.32x);
+HPZ `:1224` 120 -> 318 (+198, 2.65x); GUZ `:1225` 94 -> 329 (+235, 3.50x).
+CPZ, HPZ and GUZ render an identical five-block structure with no no-take banner. Whatever
+overflows CPZ overflows GUZ within one character and HPZ within about half a line. GUZ is
+the zone covering most open water on the home run, so it will be hit at least as often.
+Calling this "the CPZ overflow" records where it was first seen, not where it lives.
+RENAME IT: fishable-zone card overflow.
+
+**5. THE TALL CASE IS TWO `.pop` SIBLINGS IN ONE POPUP.**
+With depth shading ON — the normal working state — a tap inside a zone polygon does not open
+the bound popup. It is intercepted at `:1293-1294`, which passes `zonePopup()` as a prefix to
+`openDepthRead()`; `:3036` then concatenates that prefix with its own `.pop`, so the content
+node holds the whole zone card followed by the depth readout. Same at `:3012`, `:3019` and
+for the FHA layer at `:1314`. Any height budget must be computed for zone card + depth block,
+not the zone card alone.
+
+**6. `:509-513` IS A LOCAL, UNPINNED MODIFICATION TO THE LEAFLET STYLE BLOCK.**
+Stock Leaflet 1.9.4's `.leaflet-popup-content` carries margin, line-height, two font-size
+declarations and min-height, and nothing else. The max-height, both overflow properties,
+`-webkit-overflow-scrolling` and `overscroll-behavior` are additions; `overscroll-behavior`
+appears nowhere in stock leaflet.css. `git log -S` puts all of them in `110d775`
+("Add files via upload", 7 Jun 2026), not the initial commit and not a traced edit.
+CLAUDE.md's "the FIRST `<style>` block is Leaflet's, leave it" invariant is therefore ALREADY
+broken at this exact rule, and has been for three months. The integrity pin covers the inlined
+Leaflet `<script>` body only (`db49d009...5641a`, 147,552 bytes) — it does NOT cover the style
+block, so the modification is invisible to the standard build check.
+STANDING ITEM, not part of the overflow fix: either extend the pin to the style block or amend
+CLAUDE.md to record `:509-513` as app-modified. Whichever fix ships for the overflow must state
+explicitly whether it edits this non-stock rule or overrides it from the app block at `:780`.
+
+**7. HEIGHT ARITHMETIC — THE ESTIMATE AND THE OBSERVATION DISAGREE, WHICH IS INFORMATIVE.**
+A scrollbar can only appear if content genuinely exceeds 62vh, so the observed configuration
+did exceed it. Estimate for the CPZ card alone, content width 270px (maxWidth 300 minus the
+15+15 margin at `:780`), line-height 1.5:
+`h2` 14.5x1.5+2 = 24; `.zid` 10x1.5+9 = 24; `.ztype` 12x1.5+8 = 26; `.rules` 330 chars at
+~43/line = 8 lines x 18.75 + 9 = 159; `.warn` 2 lines x 16.5 + 8 padding + 1 border = 42;
+`.links a` 11x1.5 = 17. TOTAL ~292px.
+Portrait at a 745px viewport: 62vh = 462px. The card fits with ~170px spare, and even the
+compound case of §5 (+35-70px of `.kv`) lands near 330-362px, still inside.
+Landscape at ~390px: 62vh = 242px. The card overflows by ~50px.
+So LANDSCAPE is the only modelled configuration that reproduces the symptom. Second candidate:
+"Sora" failing to load and a fallback font wrapping `.rules` to 11+ lines (+56px), which
+narrows the portrait margin without closing it. These are ESTIMATES from CSS metrics, not
+device measurements — treat the arithmetic as a hypothesis generator, not as evidence.
+Landscape clipping has bitten this app before (v16.70 §9b, the scale box).
+
+**8. WHAT SOURCE CANNOT SETTLE, AND THE CHEAPEST WAY TO SETTLE IT.**
+Nothing in either script block sets `scrollTop` above 0. Remaining mechanisms are all
+browser-level: iOS scrolling the card's focusable `<a>` into view on open; a touch-drag read
+as a scroll because `-webkit-overflow-scrolling:touch` is set; or `overscroll-behavior:contain`
+retaining a position across open/close. All three still require the content to overflow first.
+THE NEXT STEP IS NOT A BUILD. Two questions, now answerable from four days of Bargara field
+use rather than from instrumentation: (a) portrait or landscape when the `h2` clipped, and did
+it recur across the trip or was 6 Sep a one-off? (b) was depth shading on, i.e. was a depth
+readout block under the zone card in the same popup? If the answer is landscape, the diagnosis
+collapses to one orientation-aware number at `:509` and no sticky `h2` is needed. Field
+evidence is OWED BY AARON and is not to be reconstructed.
+
+**9. SEQUENCING NOW STANDS ON MERIT — THE BARGARA DEADLINE IS CLOSED, NOT CARRIED.**
+v16.77.2 §3 deferred the overflow on the trade "verified-correct card versus ungated one,
+three days out". That call was correct and is now HISTORY; it is not a standing reason and
+must not be read as one. On merit, with no deadline in play:
+F6b outranks the overflow fix. F6b closes a LIVE HARD-RULE VIOLATION — `spotPopup:1503` is
+silent in the out-of-park case and `depthPopup:1359` says "Outside the mapped zones.", a claim
+about DATA where hard rule 2 requires a claim about LAW, and silence reads as "unregulated".
+Its facts are all verified at v16.77.1 §1, so it needs no new source checking, and it is two
+purpose-written strings. The overflow hides a zone name while `zid`, park, rules, warning and
+official-source link all render, its root cause is unmeasured, and its narrowest lever is a JS
+change plus a CSS rule — two variables, one gate. F6b is the smaller, better-evidenced and
+more consequential change. It goes first.
+
+**10. DISPATCH FIX 11 — APPLIED TO PRACTICE (was UNAPPLIED at v16.77.2 close).**
+A roadmap fork is no longer undetectable from inside a chat. A planning chat can hash the
+project-knowledge copy directly; one PowerShell line hashes the repo copy:
+`(Get-FileHash C:\Guya\Guya_Wamu\GUYA_ROADMAP.md -Algorithm SHA256).Hash.ToLower()`.
+The dual-surface hash comparison now belongs in SESSION CLOSE alongside the
+`git ls-tree` ROADMAP check. Exercised twice: 6 Sep on the PK copy, and 14 Sep across both
+surfaces, confirming them byte-identical at `118dbef` (§0).
+
+**11. SCRATCHPAD STATE — CLEANUP STILL UNVERIFIED EIGHT DAYS ON, TREAT AS NOT RUN.**
+The 6 Sep spike dispatch carried an authorised Step 2 cleanup. `cpz_overflow_spike.txt`
+contains no directory listing, no deletion log and no confirmation that `f6_q1..q5.txt`
+survive, and nothing since has proved otherwise. Until a command does, assume the deletions
+did NOT run. Before anything else touches that directory, confirm `f6_q1.txt` through
+`f6_q5.txt` are all present — they are the F6b evidence base and are kept until F6b ships.
+PROCESS LESSON, earned here: a two-step dispatch whose second step is a deletion reported
+nothing back for that step, and the gap went unnoticed for eight days. Do not bundle a
+deletion or any side-effectful step behind a diagnostic step in one dispatch. Separate
+dispatches, each with its own output file.
+Still authorised for deletion, unchanged: `v16771_delta_v2.txt`, `v16771_report.txt`,
+`f6a_lines.txt`, `f6a_extract.txt`, `v16772_delta.md`, `v16772_extract.md` and the
+`f6a_*.js` / `v16772_*.js` helpers. `cpz_overflow_spike.txt` is KEPT — it is this entry's
+evidence base.
+
+**12. NEXT — reordered.**
+(a) F6b out-of-park state. Read-only extraction of `spotPopup:1503` and `depthPopup:1359`
+    first, so the else arm is written against real structure. Then a gated build: strings
+    purpose-written per surface, NOT a verbatim reuse of `:3638`, which was written for a
+    9.5px dim tag. No new source checking; facts verified at v16.77.1 §1. Own on-phone gate.
+(b) Fishable-zone card overflow (§4). Starts with the two field questions in §8, then a
+    scoped fix decided against §3 and §6. Own on-phone gate.
+(c) Export UTC dating — `:3262` stamps an export before 10:00 AEST with the previous day.
+    Own build, verify a real exported file on-phone. Any export taken around the Bargara
+    trip is usable evidence if its filename date can be checked against the real day.
+(d) R1 unification + `WOFS_FREQ_MIN`.
+(e) F6c resolver + `plan` backfill, sequenced into multi-region #15, not before.
+STANDING, from §6: Leaflet style-block pin or a CLAUDE.md amendment recording `:509-513` as
+app-modified.
+OWED BY AARON, do not reconstruct: the §8 field evidence; the Bargara zone-render and
+`Nudibranch Park` / `Nudibranch Tip` label reconciliations; F4 fan-mode ruler spec; GPS
+scouting dot spec.
+
 *v16.77.2 · 6 Sep 2026 — **F6a SHIPPED. THE HOOK DEFINITION IS LIVE ON ALL THREE FISHABLE
 ZONE CARDS.** Build `2026.09.06a`, commit `920facd`, deployed (Pages run #175, sha-bound,
 success). Three `STYLES` rules strings rewritten; MNP untouched. GUZ gained rod/hook
