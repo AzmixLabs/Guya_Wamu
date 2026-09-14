@@ -1,5 +1,142 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.6 · 14 Sep 2026 — **A1 SHIPPED: THE OUT-OF-PARK STRING IS NOW ONE CONSTANT, NOT TWO
+LITERALS. THE LAND MASK IS INVESTIGATED AND DISCHARGED — `:3054` NO LONGER DEPENDS ON IT.**
+Build `2026.09.14b`, commit `00471b3`, Pages run 34832652313 SUCCESS. `index.html`
+2,366,740 -> 2,366,676 B (−64, predicted −64), 4,359 lines unchanged. Three read-only spikes
+closed the v16.77.5 §6 blocker. Evidence: `scratchpad\f2895_spike.txt`,
+`f2895b_spike.txt`, `f2895c_spike.txt`, `a1_build.txt`.*
+
+**1. A1 — WHAT SHIPPED.** `OUTPARK_TXT` appended to the END of `:1227` (precedent `:788`,
+`:880`: append, never insert, so every `:NNNN` reference in this roadmap stays valid).
+`:1359` and `:1505` now reference it; the 114-char literal appears once. Rendered output
+byte-identical on both surfaces — 141 B each, round-trip hashes matched across
+expected/input/extract. Leaflet body 147,552 B intact, `zoneAt()` and the green-zone drag
+safeguard intact, `:509-513` and `:1504` untouched, non-ASCII 686, em-dashes 101, zero CR,
+no BOM. A THIRD, DIFFERENTLY WORDED out-of-park string remains at `:3638` inside the IIFE
+and did NOT join the constant — that is a wording decision for Aaron, not a refactor.
+
+**2. THE v16.77.5 §6 BLOCKER IS DISCHARGED, AND `:3054` IS REDESIGNED TO NOT NEED IT.**
+Three logical states were to be gated on `queryOnLand`. They are not. The build passes the
+zone prefix on EVERY branch including land. Rationale: the mask fails in BOTH directions,
+and suppressing the line on land reintroduces rule-1 silence exactly where the mask is
+weakest (the Brisbane River, stored as broken 1-7-cell water runs). Under-calling land
+yields a zone card over a road — noise, not a legality error, since the card asserts zone
+type/ID/warning/source and never permission. Under-calling water yields the card plus "this
+point is on land", which is coherent. NEITHER DIRECTION PRODUCES SILENCE. `:3054` therefore
+consults the land mask for nothing, and §6 reduces to two stale comments.
+
+**3. THE FIX IS ONE SITE, NOT FIVE.** v16.77.5 §4 listed five variants needing separate
+attachment. `openDepthRead` already threads `prefixHTML` through all four branches:
+`:3002` land, `:3012` no-data and `:3019` topographic OPEN ONLY IF THE PREFIX IS TRUTHY, and
+`:3036` depth. So passing a prefix at `:3054` makes variant (v) SILENCE disappear by
+construction, and `:3035` already switches `maxWidth` 170 -> 300/240 on prefix truthiness.
+v16.77.5 §5(a)'s "maxWidth 170 must rise" IS ALREADY IMPLEMENTED. No CSS, no `.depth-pop`
+rule, no width work. The 114-char-wraps-to-5-lines analysis is moot.
+
+**4. §5(b)'s MEMO INSTRUCTION IS WRONG AND NO MEMO BELONGS IN A2.** `zoneOf`'s cache at
+`:1579` is caller-local, per render, KEYED BY SPOT ID — a tap has no spot id, so the pattern
+does not transfer. `:3054` calls `zoneAt()` once per tap: worst case 33,958 vertex visits
+~= 340k float ops, sub-millisecond at human tap rate. The real hotspot is `renderDepths`
+(`:1363`), one call PER DEPTH POINT — at the 25,000-point cap, 25,000 x 33,958 ~= 849M vertex
+visits per render. That is a separate item and must not be folded into A2. If indexing is
+ever needed, `shadeMaskFeats()` caches per-feature bboxes and lines up BY INDEX with
+`ZONES.features` (properties are dropped but recoverable via the index) — that is the route,
+not a spot-id cache.
+
+**5. A2 CLOSES §7(a) BY CONSTRUCTION.** Q3-b is confirmed: zones layer OFF + shading ON
+reaches `:3054` with no classification, because `:3050` uses ZONES geometry regardless of
+layer visibility. A geometry-sourced zoning line covers that route too. GATE CASE: zones
+layer off, shading on, tap inside CPZ06 -> zone card must render. Q1-a (spot-drop tap opening
+a read behind the spot sheet, §7b) will surface during gating as a card rather than a bare
+read — PRE-EXISTING, not a regression.
+
+**6. LAND MASK — WHAT IS NOW KNOWN.** Three regions at `:2823-:2827`: `woongarra`
+(−24.98..−24.66, 152.30..152.60, 1187x1113), `seq_coast` (−27.35..−26.34, 153.02..153.22,
+3748x742), `brisbane_river` (−27.66..−27.27, 152.72..153.34, 1447x2301). 7,431,694 cells,
+928,963 bitmap bytes = exactly ceil(r*c/8) per region, 67,997 raw RLE bytes from 90,668
+base64 chars. NOT DEGENERATE (59.0% / 57.0% / 22.0% water). RLE runs sum exactly to r*c in
+every region — nothing defaults. No orientation or polarity bug: row/column/bit-flip decodes
+never beat the app's own. Coastline transition is a single hard cell step, no intertidal
+fringe. Cells are ~30.01 m N-S and ~27.2 m E-W at Woongarra — the grid is regular in DEGREES,
+which is correct design, not a defect. `maskWater` FAILS OPEN: outside every box it returns
+water at `:2883`, and a throw counts as not-land. UNCOVERED: north of −24.66, the whole
+−24.98..−26.34 band, south of −27.66, and anything outside each box's longitude span — which
+includes Noosa north of −26.34 and all of the Gold Coast. `maskWater` ignores
+`REGION_MASK_EXEMPT` (`:2749`), so the woongarra bitmap is live for tap land tests even
+though woongarra samples are exempt on the paint side; that errs conservative.
+
+**7. GEOREFERENCE — NO SCALE ERROR, OFFSET WITHIN THE REFERENCE'S OWN ERROR.** A
+cos-latitude scale hypothesis (0.9074) was RAISED IN ERROR and is REJECTED: it predicts mask
+edges 1.2-5.4 km WEST, observed is 0-402 m EAST, per-row ratios 1.000-1.011. Against the
+zone polygons as reference, the mask's L->W edge sits a small consistent distance seaward:
+woongarra mean +35 m / median +34 m (n 5, sd 20); brisbane_river bay shore median +42.5 m
+(n 10); seq_coast median +23 m (n 3). That is 1-2 cells, at the quantisation floor of both
+sides, and NOT attributable to the mask — the reference is itself labelled "Simplified
+boundary — not authoritative" (`:1282`) with 41-746 m chords. CONCLUSION: F2's coastal land
+test is sound to within a cell or two on the open coast. The river reach has NO independent
+reference in `index.html` and remains unverified; Q4 was correctly SKIPPED rather than
+measuring the mask against itself.
+
+**8. TWO STALE COMMENTS, ONE ERA.** `:2891-:2896` ("no-op anywhere north of −26.34") and
+`:2854` ("maroochy_noosa is intentionally NOT covered by a box") both date from when
+`seq_coast` was the only box — −26.34 IS `seq_coast`'s north edge, and `seq_coast` in fact
+contains Mooloolaba and Noosa proper. `woongarra` was added north of it and neither comment
+was updated. Land-mask comments are unreliable AS A CLASS: design against the bounds table,
+never the prose. Fix both in the next build that touches the file — comments only, zero
+blast radius.
+
+**9. DISPATCH FIX 15 — A BUILD-STRING BUMP CANNOT HAVE PURE-ASCII INPUT.** The A1 dispatch
+demanded both. The build-string line carries two `·`, so a whole-line replacement necessarily
+carries them. Claude Code resolved it correctly and verified the non-ASCII count unchanged,
+but the contradiction should have been caught by "red-team the prompt before dispatch".
+STANDING: a pure-ASCII input constraint is available only for builds that do NOT bump the
+build string, which in practice means almost none.
+
+**10. METHOD — COORDINATES MUST COME FROM DATA, NEVER FROM A CHAT'S MEMORY.** The f2895b
+brief supplied invented coordinates; the two Innes Park points landed ~4 km inland of the
+mask coast and ~6 km from the app's own LABELS entry, wasting a run and contaminating the
+result set. The 5-of-8 "matches" are equally worthless — points invented into large uniform
+patches agree by accident. STANDING: any spike needing reference points derives them from
+in-file data (ZONES, LABELS, FHA) and the dispatch says so explicitly. f2895c did this
+correctly and its result stands.
+
+**11. SEQUENCING — THREE SPIKES WHERE TWO WERE WARRANTED.** f2895 and f2895b were necessary:
+§6 was a recorded blocker. f2895c was commissioned AFTER the conclusion that the design does
+not depend on the mask, and ran ahead of the highest-severity open defect touching the hard
+rules. Recorded so the spike count is explicable. Its null result is still worth having, but
+it should have been queued behind A2.
+
+**12. OPEN, FROM THIS SESSION.** (i) `woongarra` rows −24.66..~−24.725 (241 of 1187, ~7.2 km)
+are uniformly water across all 1,113 columns — real-world UNVERIFIED, checkable in-file
+against LABELS or zone polygons. (ii) Two unexplained `brisbane_river` bay-shore outliers,
+−27.57875 (+1,829 m) and −27.41625 (+402 m) — most likely the scan crossing a bay or river
+mouth, not mask error; one line to settle, not a spike. (iii) v16.77.4 §11 records three
+build-string consumers; A1 bumped two. Confirm at the phone gate.
+
+**13. SCRATCHPAD.** ADD TO KEEP: `f2895_spike.txt`, `f2895b_spike.txt`, `f2895c_spike.txt`,
+`a1_build.txt`. KEEP is now: `cpz_overflow_spike.txt`, `f6b_spike.txt`, `f6b_report.txt`,
+`buildstr_1091.txt`, `f3054_spike.txt`, `f2895_spike.txt`, `f2895b_spike.txt`,
+`f2895c_spike.txt`, `a1_build.txt`. `index_pre_a1.html` is disposable once A1's phone gate
+passes. The v16.77.4 §13 deletion list is still unexecuted.
+
+**14. NEXT.**
+(a) A2 — `:3054` zoning line. ONE site, prefix-delivered, no land guard, no memo. Own phone
+    gate covering all five variants in-zone and out-of-park, plus zones-layer-off.
+(b) Panel occlusion — `autoPanPaddingTopLeft` (v16.77.4 §6).
+(c) Coordinate parser (v16.77.4 §9).
+(d) Add-point prefill from `openDepthRead` (v16.77.4 §10).
+(e) Tide sum rounding (v16.77.5 §8).
+(f) Export UTC dating — `:3262`.
+(g) R1 unification + `WOFS_FREQ_MIN`.
+(h) F6c resolver + `plan` backfill, into multi-region #15.
+NEW: `zoneAt()` cost in `renderDepths` (§4) — its own item, not part of A2.
+NEW: `:3638` wording — join `OUTPARK_TXT` or stay divergent. Aaron's call.
+STANDING: Leaflet style-block pin for `:509-513` (v16.77.3 §6); build-string single source,
+three consumers (v16.77.4 §11).
+OWED BY AARON, do not reconstruct: `Nudibranch Park` (DETSI) vs `Nudibranch Tip` (saved spot)
+reconciliation; F4 fan-mode ruler spec; GPS scouting dot spec.
+
 *v16.77.5 · 14 Sep 2026 — **THE CANVAS-STACKING HYPOTHESIS IS CLOSED AS NOT REPRODUCIBLE, AND
 `:3054` IS NOW THE BEST-EVIDENCED OPEN DEFECT IN THE APP.** No code change; `index.html`
 unchanged at `2026.09.14a` / `da44c5a`. A read-only spike on `:3054` raised a possible RULE 1
