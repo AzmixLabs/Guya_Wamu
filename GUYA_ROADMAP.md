@@ -1,5 +1,152 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.5 · 14 Sep 2026 — **THE CANVAS-STACKING HYPOTHESIS IS CLOSED AS NOT REPRODUCIBLE, AND
+`:3054` IS NOW THE BEST-EVIDENCED OPEN DEFECT IN THE APP.** No code change; `index.html`
+unchanged at `2026.09.14a` / `da44c5a`. A read-only spike on `:3054` raised a possible RULE 1
+exposure — zone taps swallowed by a later-created canvas — which a controlled on-device A/B
+has now failed to reproduce. In the same sessions, seven separate map taps across a
+zone-rich stretch of the Woongarra coast were EVERY ONE silent on applicable law. Three
+distinct render states of the bare read were catalogued. Evidence:
+`scratchpad\f3054_spike.txt` plus the gate screenshots.*
+
+**1. THE HYPOTHESIS, AND WHY IT HAD TO BE TESTED BEFORE ANYTHING WAS BUILT.**
+The F3054 spike (Q1-Q7, `scratchpad\f3054_spike.txt`, 35,057 B / 443 lines, HEAD `849d242`)
+raised, unprompted, a defect larger than the one it was sent for. Each Leaflet canvas
+renderer creates its own full-screen `<canvas>`; a DOM click reaches the TOPMOST element
+only, and when the topmost canvas finds no feature at the point it fires the MAP click rather
+than passing the event down. The depth-point, walk, contour, auto-contour and FHA canvases
+are all created AFTER the zone canvas. If that ordering holds at runtime, a tap inside a CPZ
+never reaches `:1294` and falls through to `:3054` — a depth read with no zone type, no ID,
+no warning. That is a rule 1 exposure, not a rule 2 one, and it would have outranked `:3054`.
+It is not in any prior roadmap entry.
+
+**2. TESTED ON DEVICE. NOT REPRODUCIBLE. CLOSED.**
+Controlled A/B, build `2026.09.14a`, home-screen app, Innes Park / Coral Cove stretch:
+the SAME tap point twice — confirmed identical by the reading itself (6.8 m, 36 m away,
+tide +0.8, "not measured at this point") — once with Fish Habitat Areas OFF and once ON,
+nothing else changed. IDENTICAL RESULT BOTH TIMES: a bare depth read, no zone card either
+way. If the FHA canvas were swallowing zone taps, switching it off would have restored a zone
+card. It did not.
+SCOPE OF THE RESULT, stated honestly: it establishes that FHA layer state does not change the
+outcome at that point. It does NOT establish where the zone boundary runs there — that is
+`zoneAt()`'s call and Aaron's to confirm — and it does NOT test depth-point, walk or contour
+canvases, which were not present. Given FHA showed nothing, this is recorded as UNSUPPORTED
+and closed rather than pursued further. Reopen only on new evidence.
+CORROBORATING, from the same sessions: with shading ON and zero depth points and zero slope
+lines, taps inside CPZ06 produced the FULL Innes Park card, and a tap inside the Kolan River
+FHA produced the full FHA card with the depth prefix appended. The compound-popup path at
+v16.77.4 §5 works as designed. Depth shading alone does not swallow zone taps.
+
+**3. `:3054` — SEVEN FIELD TAPS, SEVEN SILENCES.**
+Across two sessions, seven map taps on the Woongarra coast between Elliott Heads and Coral
+Cove, shading on, returned depth, tide and a "Deepest within 100 m" button and NOTHING about
+zoning or applicable law. Some of those taps were inside zone polygons and some outside; the
+card treats both identically. That is the defect rendered seven times, and it is far stronger
+evidence than the single Burnett reading recorded at v16.77.4 §5.
+
+**4. THE BARE READ HAS FIVE VARIANTS, NOT ONE. THE FIX MUST ATTACH TO ALL OF THEM.**
+Confirmed on device:
+  (i)   INTERPOLATED — "Est. depth here · ~X m · nearest data N m away — rough estimate (LAT)
+        · now ~Y m water (tide +Z)".
+  (ii)  NEAREST-READING — "Nearest reading · N m away · ~X m · rough estimate (LAT) · now ~Y m
+        water · NOT MEASURED AT THIS POINT". A distinct state, not a variant of (i).
+  (iii) INTERTIDAL — "Est. HEIGHT here · dries ≈ X m · above LAT · exposed now". Note this
+        renders "height" and "dries", NOT depth — the topographic/intertidal labelling
+        discipline (v16.17-v16.18, DATA FACTS) is holding correctly on this surface. Do not
+        disturb it.
+From the spike's Q4, two more:
+  (iv)  LAND MESSAGE (via `queryOnLand` at `:3002`), maxWidth 200.
+  (v)   SILENCE — no data, or topographic-only data: nothing renders at all.
+A zoning line attached only to (i) would leave four surfaces silent.
+
+**5. BUILD CONSTRAINTS FOR `:3054`, FROM THE SPIKE.**
+(a) WIDTH. The bare depth card is `maxWidth` 170 — content width 140px, roughly 23 chars a
+    line at 12px Sora, so the 114-char v16.77.4 string wraps to ~5 lines on a card whose
+    current content is 332-401 B. DO NOT shorten the safety wording to fit. Raise `maxWidth`
+    to match the other popups when a zoning line is present, and keep the ONE SHARED STRING
+    (v16.77.4 §2b). `.depth-pop` has no CSS rule anywhere — check before assuming one exists.
+(b) COST. `zoneAt()` is NOT cached and has no bounding-box pre-check. A miss scans all 178
+    features and 33,958 vertices; only an MNP match exits early. `:3054` would call it on
+    every qualifying map tap. `zoneOf` already memoises at `:1579` — reuse that pattern
+    rather than inventing one. Not timed; measure before assuming it is cheap or dear.
+(c) THREE LOGICAL STATES, not two: inside a zone, outside the park, on land. A LAND TAP MUST
+    NOT ASSERT FISHERIES RULES.
+(d) `:3054` is reached for BOTH land and water taps — the gate at `:3050` does not test for
+    land. Land vs water is decided later, inside `openDepthRead`, by `queryOnLand` at `:3002`.
+(e) One tap cannot open both a polygon popup and a bare read: both polygon handlers call
+    `L.DomEvent.stop(e)` and Leaflet's popup click stops the event too.
+
+**6. BLOCKER ON THE LAND BRANCH — CONTRADICTORY LAND-MASK COMMENT AT `:2895`.**
+The comment states the land check does nothing north of −26.34, while ALSO listing Bargara
+(~−24.8) as covered. Both cannot be true. Which is correct determines whether a land tap at
+Bargara gets the land message (iv) or a depth card over a dry paddock. RESOLVE THIS BEFORE
+WRITING THE LAND BRANCH — the spike did not read the region boundaries and did not settle it.
+
+**7. TWO SPIKE FINDINGS STILL UNTESTED — carry forward, do not assume.**
+(a) ZONES LAYER OFF + SHADING ON = BARE READ INSIDE A ZONE. Confirmed FROM CODE, not on
+    device. The gate at `:3050` uses the zone SHAPES regardless of whether the layer is
+    visible, so hiding zones yields a depth read with no zone card inside a zone. Same
+    exposure as §1, different route; lower severity only because it takes a deliberate user
+    action to reach.
+(b) DROPPING A SPOT MAY ALSO OPEN A DEPTH READ. PLAUSIBLE, not tested. The spot-drop click
+    handler runs before `:3040` and clears the "placing" state first, so with shading on the
+    drop tap may open a depth-read popup behind the spot sheet.
+
+**8. TIDE ROUNDING (v16.77.4 §8) — INTERMITTENT, DIAGNOSIS CONFIRMED.**
+Five further samples: 3.4+0.8=4.2 ✓, 4.9+0.8=5.7 ✓, 3.3+0.8=4.1 ✓, 2.1+0.8=2.9 ✓,
+6.8+0.8=7.6 ✓. Against the one bad sample (10.4+2.3 displayed as 12.6). So the fault
+surfaces only when both components round up independently, exactly as diagnosed. Low
+priority stands; the diagnosis is now well supported rather than inferred from one case.
+
+**9. LANDSCAPE BOTTOM CLIP (v16.77.4 §7) — RECONFIRMED ON A SECOND ZONE.**
+Seen on CPZ06 Innes Park as well as CPZ14 Four Mile Reef. In both, the element below the fold
+is the "Official maps & app" link. Unchanged in severity; unchanged in fix.
+
+**10. METHOD LESSON — AN A/B MUST HOLD LOCATION CONSTANT.**
+The first attempt at §2 was five taps at five different places with the toggle flipped between
+them; the differing depth readings (3.4 / 4.9 / 3.3 / 2.1 m) prove the tap points differed, so
+none of the five could distinguish the hypothesis from "the taps fell outside the zone". The
+test only became decisive when the SAME point was tapped twice, verified identical by the
+reading itself rather than by memory of where the finger landed.
+STANDING: for any on-device A/B, change ONE variable and prove the other conditions were held
+by something visible in the output — not by intent. This is the on-glass counterpart of ONE
+VARIABLE PER BUILD.
+SECOND: prefer a BEHAVIOURAL test to a console probe. The spike proposed
+`document.querySelectorAll('.leaflet-overlay-pane > canvas').length`, which is unavailable in
+a home-screen app with no console. Toggling a layer and watching the app's own behaviour
+change needed no console and produced a stronger result.
+
+**11. DISPATCH FIX 14 — BYTE OFFSETS INTO UTF-8 NEED CHARACTER-AWARE BOUNDARIES.**
+The v16.77.4 apply aborted on its first attempt: a byte-slice safety check split `·` (U+00B7,
+two bytes in UTF-8) mid-character. Self-caught, nothing written, no repo impact, fixed by
+comparing raw bytes and rerun clean. Recorded because it is the encoding trap wearing
+different clothes — cheap to note, expensive to rediscover.
+
+**12. SCRATCHPAD.**
+ADD TO KEEP: `f3054_spike.txt` — evidence base for this entry.
+KEEP list is now: `cpz_overflow_spike.txt`, `f6b_spike.txt`, `f6b_report.txt`,
+`buildstr_1091.txt`, `f3054_spike.txt`.
+The v16.77.4 §13 deletion list is unchanged and still unexecuted; add `v16774_delta.md` and
+`v16774_apply.txt` once this entry is committed.
+
+**13. NEXT — unchanged in order from v16.77.4 §14, with §1 removed from contention.**
+(a) `:3054` zoning line on the bare read. Resolve §6 FIRST, then build against §4 and §5.
+    Own on-phone gate, covering all five variants.
+(b) Panel occlusion — `autoPanPaddingTopLeft` (v16.77.4 §6).
+(c) Coordinate parser — accept both quote characters, normalise on input, fix the
+    self-referential error message (v16.77.4 §9).
+(d) Add-point prefill from `openDepthRead` (v16.77.4 §10).
+(e) Tide sum rounding (§8).
+(f) Export UTC dating — `:3262`.
+(g) R1 unification + `WOFS_FREQ_MIN`.
+(h) F6c resolver + `plan` backfill, into multi-region #15, not before.
+STANDING: Leaflet style-block pin or CLAUDE.md amendment for `:509-513` (v16.77.3 §6);
+build-string single source, three consumers (v16.77.4 §11).
+OPEN, UNTESTED: §7a zones-layer-off route; §7b spot-drop route.
+OWED BY AARON, do not reconstruct: the `Nudibranch Park` (DETSI) vs `Nudibranch Tip` (saved
+spot) label reconciliation — the app rendered "Nudibranch Tip" again at this gate; F4
+fan-mode ruler spec; GPS scouting dot spec.
+
 *v16.77.4 · 14 Sep 2026 — **F6b SHIPPED AND FULLY GATED. THE OUT-OF-PARK STATE NOW SPEAKS ON
 BOTH POPUP SURFACES.** Build `2026.09.14a`, commit `da44c5a`, deployed (Pages run #178,
 sha-bound, success), live site serving. On-phone gate PASSED on both new surfaces, both
