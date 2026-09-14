@@ -785,7 +785,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .pop .rules{color:#c4d4dc;margin:0 0 9px}
   .pop .kv{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#c4d4dc;margin:0 0 8px;line-height:1.6}
   .pop .kv b{color:var(--depth)}
-  .pop .notake{background:rgba(231,76,60,.14);border:1px solid rgba(231,76,60,.45);border-radius:8px;padding:8px 10px;color:#ff9b8c;font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.45}
+  .pop .notake{background:rgba(231,76,60,.14);border:1px solid rgba(231,76,60,.45);border-radius:8px;padding:8px 10px;color:#ff9b8c;font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.45}.pop .outpark{color:var(--ink);font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.5}
   .pop .warn{font-size:11px;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:8px;line-height:1.5}
   .pop .warn a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
   .pop .del{margin-top:9px;width:100%;border:1px solid rgba(231,76,60,.4);background:rgba(231,76,60,.1);color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;min-height:34px;border-radius:8px;cursor:pointer}
@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.06a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.14a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.06a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.14a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1356,7 +1356,7 @@ function depthPopup(p,z){let h=`<div class="pop"><h2>${p.label||'Depth point'}</
   h+=`<div class="kv">Depth <b>${(p.depth!==''&&p.depth!=null)?p.depth+' m':'—'}</b><br>${toDDM(p.lat,true)}  ${toDDM(p.lng,false)}</div>`;
   if(z){const s=STYLES[z.zt]||{};h+=`<div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${z.name} (${z.zid})</div>`;
     if(z.notake)h+=`<div class="notake">⛔ Inside a NO-TAKE green zone. Confirm before fishing.</div>`;}
-  else h+=`<div class="kv">Outside the mapped zones.</div>`;
+  else h+=`<div class="outpark">Outside the marine park boundary. General Queensland fisheries rules still apply, and a Fish Habitat Area may too.</div>`;
   h+=`<div class="warn">Your own Navionics reading. Verify zone &amp; rules officially before fishing.</div><button class="del" data-id="${p.id}">Delete point</button></div>`;return h;}
 function renderDepths(){depthLayer.clearLayers();const list=document.getElementById('dp-list');list.innerHTML='';
   const LIMIT=120;let shown=0;
@@ -1502,7 +1502,7 @@ function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const ws=wi
 function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   if(z){const st=STYLES[z.zt]||{};h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
     if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';}
-  h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
+  else h+='<div class="outpark">Outside the marine park boundary. General Queensland fisheries rules still apply, and a Fish Habitat Area may too.</div>';h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
   const kv=[];if(s.species)kv.push('Target: '+s.species);if(s.structure)kv.push('Structure: '+s.structure);
   if(s.tide)kv.push('Best tide: '+s.tide);if(s.depth!==''&&s.depth!=null)kv.push('Depth: '+s.depth+' m');
   if(kv.length)h+='<div class="kv">'+kv.join('<br>')+'</div>';
