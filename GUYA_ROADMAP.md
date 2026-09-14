@@ -1,5 +1,196 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.4 · 14 Sep 2026 — **F6b SHIPPED AND FULLY GATED. THE OUT-OF-PARK STATE NOW SPEAKS ON
+BOTH POPUP SURFACES.** Build `2026.09.14a`, commit `da44c5a`, deployed (Pages run #178,
+sha-bound, success), live site serving. On-phone gate PASSED on both new surfaces, both
+orientations, all regression branches. The gate also settled the popup-overflow question and
+turned up five separate defects that the single "CPZ card overflows" note had fused together.
+ITEM (b) AT v16.77.3 §12 IS CLOSED AS NOT REPRODUCIBLE — do not build it.*
+
+**1. WHAT SHIPPED.**
+Three whole-line replacements, input gated at sha256 `59eb6c8b...6259a` (819 B, 3 lines, pure
+ASCII — the first Guya build with no non-ASCII in its input, which removed the encoding-trap
+class entirely). Round-trip proof byte-identical across expected / input / extract.
+`:788` 195 -> 288 B, app CSS: `.pop .notake` unchanged, `.pop .outpark` appended to the SAME
+  LINE so the line count and every `:NNNN` reference in this roadmap stay valid. Precedent:
+  `:880` already carries two rules on one line.
+`:1359` 60 -> 154 B, depthPopup else arm, replacing "Outside the mapped zones."
+`:1505` 222 -> 374 B, spotPopup: the missing else arm prefixed to the existing
+  `sp-rate-row` statement. `:1504` was deliberately NOT touched — it carries a literal
+  U+26D4 — and was verified byte-identical after the write.
+index.html 2,366,401 -> 2,366,740 B (+339, as predicted), 4,359 lines unchanged, "outpark"
+exactly 3x, em-dashes unchanged at 101, zero CR, no BOM. Leaflet body digest
+`db49d009...5641a` / 147,552 B intact; `zoneAt()` and the green-zone drag safeguard quoted
+intact; `:509-513` untouched.
+
+**2. THE STRING, AND THE FOUR DECISIONS BEHIND IT.**
+Shipped text, identical on both surfaces (114 chars):
+  "Outside the marine park boundary. General Queensland fisheries rules still apply, and a
+   Fish Habitat Area may too."
+(a) CONTAINER — a new `.pop .outpark`, not an existing class. `.notake` inverts the meaning
+    (no-take alert). `.kv` is 11px mono and frames a legal statement as a data value, which
+    IS the defect "Outside the mapped zones." had. `.rules` collides with user notes at
+    `:1509` on spotPopup. `.ztype` is the semantic peer but is `display:inline-flex`, and
+    with `overflow-x:hidden` at `:511` a long string in a max-content flex box risks
+    HORIZONTAL CLIPPING — clipping is not scrolling, and it would hide safety text. A
+    dedicated class carries zero blast radius since nothing else can match it.
+(b) ONE SHARED STRING, not two. The "purpose-write per surface" rule was driven by zoneTag's
+    9.5px tag sizing, not by a requirement that the two popups differ from each other. They
+    share popup CSS and near-identical context; two divergent literals would recreate in
+    miniature the multi-site-edit hazard that killed reuse of `:3638`.
+(c) NO "verify officially" CLAUSE. Both cards already carry one in `.warn` (`:1360`,
+    `:1516`). Duplicating it would have cost a 4th wrapped line for nothing.
+(d) "a Fish Habitat Area MAY too" — a deliberate deviation from hard rule 2's and `:3638`'s
+    "FHAs still apply". An FHA applies only where declared, so "still apply" everywhere
+    outside a marine park is over-broad. The unconditional weight sits on general fisheries
+    rules; the FHA clause is correctly hedged. Aaron reviewed and accepted this wording.
+
+**3. ON-PHONE GATE — PASSED, AND MORE THOROUGH THAN THE BUILD REQUIRED.**
+Spot surface: Burnett mouth training wall and BAIT Elliott mouth yabby banks (inner). Renders
+whole, 3 lines, `--ink` at 600 weight, directly under the `h2` where `.ztype` sits in-park.
+No horizontal clipping. `sp-rate-row` survives below it.
+Depth surface: a saved depth point at 24°52.000'S 152°21.000'E. String renders with the
+`.warn` footer and Delete button intact below.
+REGRESSIONS ALL CLEAN: MNP05 Burkitts Reef still fires the red no-take banner — the branch
+most at risk from the new `else`. CPZ06 Innes Park renders `.ztype` with swatch. CPZ14 Four
+Mile Reef renders the full five-block card including the official-source link.
+Both orientations tested on every surface. Header build string `2026.09.14A` confirmed.
+
+**4. THE OVERFLOW DEFECT WAS THREE THINGS, AND THE RECORDED ONE DOES NOT EXIST.**
+Decisive evidence, portrait with the panel COLLAPSED: CPZ14 Four Mile Reef renders COMPLETE —
+h2, `CPZ14 · GREAT SANDY MP`, swatch, the full 330-char rules string, warning and
+"Official maps & app" link. No clip, no scrollbar. It does not reach 62vh in portrait at all.
+Landscape, same card, both panel states: clips at the BOTTOM with the `h2` intact and a
+scrollbar present — a scroll container behaving exactly as designed, `scrollTop` at 0.
+NEITHER ORIENTATION REPRODUCES THE 6 SEP SYMPTOM (`h2` clipped at the TOP). That symptom was
+PANEL OCCLUSION: Leaflet's `autoPan` fits a popup to the MAP CONTAINER and has no knowledge
+of the app's panel overlay, so with the panel expanded in portrait it pans a card's top third
+underneath it. Visually identical to a top clip, and a tall card shows a scrollbar at the same
+time from the unrelated 62vh cap. The two were conflated.
+The 463/453/457-byte CPZ-vs-HPZ-vs-GUZ distinction at v16.77.2 §3 was coincidence of tap
+position. A 2% length difference cannot flip a render; where the popup pans relative to the
+panel can.
+v16.77.3 §7's ARITHMETIC IS NOW VALIDATED ON DEVICE in both directions — portrait ~292px
+against a 462px budget (fits, confirmed); landscape ~292px against 242px (overflows ~50px,
+confirmed). It graduates from hypothesis generator to measurement.
+ITEM (b) — "CSS on `.pop`, max-height plus a sticky `h2`" — IS CLOSED AS NOT REPRODUCIBLE.
+Do not build it. Its three real components are §5, §6 and §7 below.
+
+**5. DEFECT — `:3054` BARE-MAP-TAP SILENCE. HIGHEST SEVERITY OPEN ITEM.**
+Recorded as scope-for-decision at v16.77.3; now FIELD-EVIDENCED. A depth read on the lower
+Burnett, outside the marine park, renders depth, tide and a "Deepest within 100 m" button and
+NOTHING about zoning or applicable law. Tap inside a polygon: rules. Tap outside: nothing.
+That pattern teaches an angler that outside means unregulated — precisely the inference hard
+rule 2 exists to prevent, on the surface anglers touch first. Worse in reach than the
+`spotPopup` silence F6b just closed, which only appeared on a mark the user had already made.
+SEQUENCED NEXT. It is the only open defect touching the hard rules.
+
+**6. DEFECT — PANEL OCCLUSION IN PORTRAIT.**
+Per §4. Fix is `autoPanPaddingTopLeft` sized to the panel, a `bindPopup` options change, NOT
+CSS on `.pop`. Matters specifically with the panel expanded, which is the normal field state.
+Note the consequence for test method: portrait popup testing has been structurally blind
+whenever the panel was open, which is part of why the 6 Sep observation resisted diagnosis.
+
+**7. DEFECT — LANDSCAPE BOTTOM CLIP. LOW SEVERITY.**
+Content is reachable by scroll; nothing is permanently hidden. The casualty is the
+official-source link that hard rule 1 calls for — below the fold is not hidden, but it is not
+ideal. A landscape-aware max-height at `:509` would fix it. Acceptable to leave.
+
+**8. DEFECT — TIDE SUM ROUNDS THE PARTS, NOT THE TOTAL.**
+Observed: "10.4 m ... now ~12.6 m water (tide +2.3)". 10.4 + 2.3 = 12.7, displayed 12.6.
+A second reading reconciles cleanly (7.0 + 2.2 = 9.2), so this is not systematic error — the
+components are each rounded before summing (~10.35 + ~2.28 = 12.63 -> 12.6, while each rounds
+up alone). Cosmetic, but it makes the card look wrong to anyone checking the arithmetic, on a
+card whose credibility is the point. Round the sum, not the parts.
+
+**9. DEFECT — COORDINATE PARSER REJECTS iOS SMART QUOTES. CONFIRMED BY TEST.**
+The add-point form rejected a typed coordinate while echoing an example string that was
+character-for-character what had been typed. Pasting a straight-quote version parsed and
+saved. Cause: iOS substitutes U+0027 `'` with U+2019 `'` as you type; the parser matches only
+the straight quote. Same character-substitution failure class as the toolchain encoding trap,
+on the input side. Fix: accept both, and normalise on input. The error message should also not
+suggest a string identical to the one it rejected.
+
+**10. IMPROVEMENT — PREFILL THE ADD-POINT FORM. GPS DECLINED, WITH REASONING.**
+The add-point form has a PREFILL problem, not a location problem. `openDepthRead` already
+holds the tapped `latlng`; an "Add depth point here" button on that card removes typing
+entirely — no new permission, no privacy surface, no smart-quote exposure, and it routes
+around §9 rather than depending on its fix.
+GPS for this form is DECLINED under hard rule 5 (default to a no-GPS path where possible).
+The one case that genuinely wants one-shot `getCurrentPosition` is the zone call at the actual
+platform position, per the Bargara field procedure. That is a SEPARATE feature — do not
+bundle it with the add-point form.
+
+**11. BUILD STRING HAS NO SINGLE SOURCE — TWO INDEPENDENT LITERALS, ONE DERIVED READER.**
+`:1052` (panel header) and `:1091` (inside the "Fishing spots & catches" block). Both were
+bumped this build. A read-only investigation at HEAD `da44c5a` settled where `:1091` lives
+and CONFIRMS that decision rather than undermining it:
+- `:1091` is a bare `<div>` with no class and no id, only an inline style. Parent chain:
+  `div.blk` "Fishing spots &amp; catches" (`:1086`) -> `div.panel-body` (`:1055`) ->
+  `div.panel#panel` (`:1050`).
+- It is OPEN BY DEFAULT — that section is listed in `KEEP_OPEN` (`:4096`) — so on a default
+  load nothing has to be opened, only scrolled to within the panel.
+- BUT visibility is per-user STATE, not fixed. A user who collapses that section has the
+  choice persisted to localStorage and keeps `:1091` hidden until they reopen it. The panel
+  itself also self-collapses at phone width during placing and measuring. That is why
+  `:1091` never appeared in any gate screenshot.
+- `:1052` sits in the panel header and stays visible even when the panel is collapsed.
+- THIRD SURFACE: `perfBuildStr()` (`:2317`) derives its value from the `:1052` copy and
+  displays it, but only while the timing diagnostic is switched on. NOTHING reads `:1091`.
+`:1091` is therefore genuinely user-facing, and the "header and footer must not disagree"
+rationale stands as a real reason, not a defensive one.
+The underlying defect is unchanged: two independent hard-coded literals, no shared constant.
+Already on record — v16.77.2 §2 documents F6a as numstat 5/5 with hunks at `@@ -1052`,
+`@@ -1091`, `@@ -1223,3` — and the F6b dispatch still said "the build string" singular. A
+future build that bumps one and misses the other leaves the app self-contradictory and
+NOTHING IN THE VERIFICATION SEQUENCE WOULD CATCH IT.
+FIX: one constant, with `:1052`, `:1091` and `perfBuildStr()` all rendering from it — three
+consumers, not two.
+
+**12. DISPATCH FIXES 12 AND 13 — both earned this session.**
+12. FILE-GATED DISPATCHES NEED A STEP ZERO. Save the input to its absolute path, hash it
+    LOCALLY, and confirm the match BEFORE invoking Claude Code. The F6b delta dispatch
+    assumed a file that had never been saved; Claude Code stopped correctly at the gate and
+    declined to reconstruct the body from the spike notes — which was right, since a
+    reconstruction makes the writer and the verifier the same party and voids the round-trip
+    proof. Cost one round trip. The step-zero block is now part of the reusable template.
+13. `node --check` PROVES PARSE, NOT BINDING. The F6b `:1505` edit put an `else` ahead of an
+    existing statement; a mis-bound else parses clean and would silently swallow the rating
+    row, invisible to every check the dispatch specified. Claude Code added an unrequested
+    behavioural test — extract the function, run it against stubs, assert each branch — and
+    it earned its place. STANDING: any edit that changes control flow gets a behavioural
+    extraction test, not just a parse check.
+
+**13. SCRATCHPAD — CLEANUP STILL NOT RUN, AND `f6_q1..q5` ARE NOW RELEASED.**
+The 6 Sep authorised cleanup has still never executed; the F6b spike confirmed 66 entries
+with all five `f6_q*.txt` present and nothing deleted. F6b HAS NOW SHIPPED, so the condition
+holding `f6_q1.txt`-`f6_q5.txt` is discharged and they join the deletion list. Also
+authorised: `v16771_delta_v2.txt`, `v16771_report.txt`, `f6a_lines.txt`, `f6a_extract.txt`,
+`v16772_delta.md`, `v16772_extract.md`, `v16773_delta.md`, `f6b_lines.txt` and the
+`f6a_*.js` / `v16772_*.js` helpers.
+KEEP: `cpz_overflow_spike.txt`, `f6b_spike.txt`, `f6b_report.txt`, `buildstr_1091.txt` —
+evidence base for v16.77.3 and this entry.
+HYGIENE, self-flagged by Claude Code: extracting the script blocks reused `scratchpad\chk0.js`
+and `chk1.js`, which pre-existed from 5 Sep; they were overwritten and then removed. Untracked
+and regenerable, but they were not the dispatch's to touch — the session temp dir was the
+right place.
+
+**14. NEXT.**
+(a) `:3054` out-of-park state on bare map tap (§5). Hard-rule item, sequenced first.
+(b) Panel occlusion — `autoPanPaddingTopLeft` (§6). Own build, own gate.
+(c) Coordinate parser — accept both quote characters, normalise on input, fix the
+    self-referential error message (§9).
+(d) Add-point prefill from `openDepthRead` (§10).
+(e) Tide sum rounding (§8).
+(f) Export UTC dating — `:3262` stamps an export before 10:00 AEST with the previous day.
+(g) R1 unification + `WOFS_FREQ_MIN`.
+(h) F6c resolver + `plan` backfill, into multi-region #15, not before.
+STANDING: Leaflet style-block pin or a CLAUDE.md amendment recording `:509-513` as
+app-modified (v16.77.3 §6). Build-string single source (§11).
+OWED BY AARON, do not reconstruct: the `Nudibranch Park` (DETSI) vs `Nudibranch Tip` (saved
+spot) label reconciliation, still open — the app rendered "Nudibranch Tip" at the gate;
+F4 fan-mode ruler spec; GPS scouting dot spec.
+
 *v16.77.3 · 14 Sep 2026 — **CPZ OVERFLOW: READ-ONLY SPIKE COMPLETE. THE DIAGNOSIS AND THE
 PRESCRIBED FIX AT v16.77.2 §3 WERE BOTH WRONG, AND THE SCOPE WAS UNDERSTATED.** No code
 change, nothing shipped, `index.html` untouched since `920facd`. A max-height scroll
