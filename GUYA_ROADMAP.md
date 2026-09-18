@@ -1,5 +1,135 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.7 · 18 Sep 2026 — **Q3-a IS REOPENED AND CONFIRMED ON A DEVICE: THE ZONE LAYER
+RECEIVES NO TAPS AT ALL. v16.77.5's CLOSURE OF CANVAS-STACKING IS SUPERSEDED.** No code
+change; `index.html` unchanged at 2,366,676 B / 4,359 lines, build `2026.09.14b`, commit
+`00471b3`. First clean dual-surface hash in the project's history. Evidence: on-phone
+screenshots only — no dispatch ran, no scratchpad file.*
+
+**1. DUAL-SURFACE HASH — FIRST CLEAN RESULT.** PK and repo both
+`e747e7545e1ec7a54d80a1a2c4d2ba289ec8ec5f388e2dc9abb6620b5e895c1d`, both 875,388 B.
+Working tree clean, `main` level with `origin/main`, roadmap last touched by `5548da2`.
+v16.77.6's UNAPPLIED flag CLEARS — no fork, no re-upload needed. Reconciliation worth
+keeping: 875,388 minus 865,363 = 10,025 B, which is exactly lines 3-139 (the whole
+v16.77.6 entry plus its trailing blank), with v16.77.5's header intact at line 140 —
+insertions-only at the top, as the dispatch template requires. METHOD: run
+`git status --porcelain` BEFORE hashing (a dirty tree means you are hashing an
+uncommitted file and the comparison is meaningless), and capture byte length alongside
+the hash. If hashes ever differ, size discriminates: same size = real fork; +11,030 B =
+one CR per line, a CRLF artefact, content identical.
+
+**2. A1 ON-PHONE GATE — FIVE OF SIX, TWO SOFT. A1 IS PARTIAL, NOT CONFIRMED.**
+- `:1052` PASS — header reads `BUILD 2026.09.14B`.
+- `:1091` PASS — reads `build 2026.09.14b`. FIRST TIME THIS SURFACE HAS EVER BEEN
+  EVIDENCED (v16.77.4 §11 recorded that it never appeared in a gate screenshot).
+- The case difference is a CSS transform on the header, not two literals disagreeing.
+  Both underlying strings are `2026.09.14b`.
+- `:1505` out-of-park PASS — GateNoosa, then two throwaway spots at the §7 coordinate.
+  Full out-of-park text including the FHA caveat.
+- `:1359` NOT COVERED — no depth-point marker was tapped. `spotPopup` and `depthPopup`
+  are distinguishable on sight: `:1505` has rating stars, `Catches:`, Log catch / Edit /
+  Delete and the "Drag the pin to reposition" line; `:1359` has a depth figure and
+  neither stars nor Log catch. A1 therefore stands as PARTIAL.
+- `perfBuildStr()` DEFERRED — `#perf-toggle` was not found in TOOLS (ruler only), MAP
+  LAYERS, or any section opened. LIVE POSSIBILITY: it may not exist in this build, which
+  would make v16.77.4 §11's "three consumers" and its FIX line stale. One grep settles it.
+- In-park polygon card FAIL — NOT attributable to A1. See §3.
+
+**3. Q3-a REOPENED AND CONFIRMED. THE SPIKE'S STATED MECHANISM IS DISPROVED.**
+The test that settles it: zones ON, FHA off, depth shading OFF, tap a polygon interior.
+Result: nothing rendered, on every zone type tried.
+WHY CONCLUSIVE. With the prefix truthy every branch of `openDepthRead` renders — `:3006`
+land, `:3012` no-data-within-120 m, `:3019` flats, `:3036` depth — and `:1286` binds its
+own popup on the same layer independently. Two separate paths to a card, NEITHER
+requiring depth data or `shadeOn`. Silence means `:1294` never fired, i.e. the layer
+never received the tap.
+WHY IT DISPROVES THE SPIKE'S MECHANISM. Shading was OFF, so no depth canvas existed.
+"The depth-point canvas is created after the zone canvas" therefore cannot be the cause.
+Whatever intercepts is created at init regardless of layer visibility.
+WHAT IT DOES NOT NAME: which layer. For A3 to settle by measurement, not guess.
+SCOPE OF THE SUPERSESSION: v16.77.5 §3-§7's spike conclusions (five render variants, the
+width and cost constraints, `:3050`'s gate behaviour) ALL STAND. Only its canvas-stacking
+closure is reversed.
+STANDING RULE EARNED HERE: a tap's reported "N m away" figure proves `:3050` passed, NOT
+which disjunct passed it. `:3050` is `inWaterFast(ZONES) || (r && r.near<=NEAR_MAX)`, so
+an out-of-park tap near data is indistinguishable from an intercepted in-park tap. Three
+earlier silences (19 m, 34 m, 106 m to data) were read as Q3-a evidence in-chat and then
+corrected; they were evidence of nothing. Only the shading-off interior tap discriminates.
+
+**4. THE SPOT PATH IS HEALTHY — THE DEFECT IS THE BARE-TAP PATH ONLY.** Elliott Hds N
+Headland renders `Elliott Heads (CPZ07)` with the orange chip and the full card, zones
+on, shading on. `zoneOf(spot)` against the same ZONES geometry works. So ZONES data,
+`pip()` and the `ORDER` ranking are all sound; the fault is hit-testing on bare map taps.
+A3 is scoped accordingly — NOT a zone-data or geometry investigation.
+UNVERIFIED: whether the spot card carries hard rule 1's warning text and official-source
+link, or only zone type + ID via the chip. If only the latter, that gap exists on the
+spot surface too. It is the reference A2's prefix should match — check before A2's gate.
+
+**5. A2 — JUSTIFICATION REWRITTEN, SCOPE UNCHANGED. ONE SITE, `:3054`.**
+Three states, and A2 addresses one and a half of them:
+(a) OUT OF PARK, shading on — only `:3054` can ever say it. No polygon exists there, so
+    no z-order fix reaches it and A3 will NEVER fix this. Live defect evidenced:
+    GateNoosa depth read, 106 m to data, no out-of-park statement.
+(b) IN PARK, shading on — A2 fixes it via `:3054`. If A3 later restores the zone canvas
+    to the top, `:1294` takes over and A2's in-park branch goes quiet. Harmless
+    redundancy, and the safer ordering: the one-line change lands while pane surgery is
+    still being diagnosed.
+(c) IN PARK, SHADING OFF — neither A2 nor anything else helps until A3. `#shade-toggle`
+    is unchecked by default (`:1153`), so this is the DEFAULT-STATE gap. A2 must NOT be
+    recorded as "zone classification restored".
+`zoneAt()`'s RETURN IS CONFIRMED, don't re-derive — `:1332` tail: `best=f.properties`. It
+returns the live properties object off the feature, so `zonePopup(zoneAt(...))` receives
+exactly what `:1294` hands it. A2 inherits F6c identically and creates nothing new. DO
+NOT MUTATE the return: it is a reference into `ZONES.features[].properties`.
+NEW SIDE EFFECT, not previously recorded: A2 makes the prefix always truthy at `:3054`,
+which was the ONLY call site passing `''`. `className:'depth-pop'` at `:3004` and `:3035`
+therefore becomes dead code and every bare read becomes a 300/240 popup. `.depth-pop` has
+no CSS rule anywhere (spike: grep no hits); whether any JS selects on it is UNCHECKED —
+one grep in A2's read-only phase.
+A2's GATE MUST BE BUILT ON THE TAP PATH, not the polygon path. The old control — "an
+in-park card still renders normally" — is itself the broken thing.
+
+**6. A3 — NEW ITEM. READ-ONLY SPIKE, NOT A PATCH.** Establish from the file: every
+`L.canvas()` / renderer creation site and its order; which panes exist and each layer's
+pane assignment; whether renderers are created eagerly at init or lazily on layer add;
+the zone layer's own pane and z-index. Candidates, unranked: walk / contour /
+auto-contour / FHA renderers instantiated eagerly, Streets (online), Place & creek names
+(offline), or the zone layer's pane assignment itself. CHEAP DEVICE TEST FIRST: MAP
+LAYERS -> Streets off, Place & creek names off, shading off, tap a polygon. Both were on
+for the confirming test. If a card appears, A3 is a pane fix against two named layers
+rather than an open five-renderer investigation. Diagnose before patch.
+
+**7. THROWAWAY OUT-OF-PARK TEST COORDINATE — DERIVATION, FOR REUSE.** Any latitude
+strictly between Moreton Bay's northernmost feature (-26.80224) and Great Sandy's
+southernmost (-26.00329) cannot fall inside any zone polygon at ANY longitude — the 89 km
+gap (v16.77.2 §6) contains zero polygons. `-26.70, 153.20` = `26°42.000'S 153°12.000'E`
+in the app's Navionics DDM field; margins are 11.4 km from the southern edge and 77.6 km
+from the northern, so it satisfies hard rule 3 comfortably. FHA coverage DOES span the
+gap (Maroochy FHA-008), so the out-of-park text's FHA caveat is doing real work at this
+coordinate — keep the FHA layer OFF when testing so its own popup does not answer
+instead. Latitude derived from in-file extents per §10; the longitude is a convenience
+only and does no work.
+
+**8. CARRY-FORWARD.**
+(a) Add-point prefill from `openDepthRead` (v16.77.4 §10).
+(b) Tide sum rounding (v16.77.5 §8).
+(c) Export UTC dating — `:3262`.
+(d) R1 unification + `WOFS_FREQ_MIN`.
+(e) F6c resolver + `plan` backfill, into multi-region #15.
+(f) `zoneAt()` cost in `renderDepths` (v16.77.6 §4).
+(g) `:3638` wording — join `OUTPARK_TXT` or stay divergent. Aaron's call.
+NEW: A3 — zone-layer tap interception (§3, §6). Blocks in-park classification entirely
+with shading off, which is the default state.
+NEW: `:1359` out-of-park gate uncovered — A1 is PARTIAL (§2).
+NEW: `#perf-toggle` / `perfBuildStr()` existence unverified; v16.77.4 §11 may be stale
+(§2).
+NEW: `.depth-pop` class goes dead under A2 (§5).
+NEW: whether the spot card carries warning + official-source link (§4).
+STANDING: Leaflet style-block pin for `:509-513` (v16.77.3 §6); build-string single
+source, three consumers (v16.77.4 §11, pending §2's existence check).
+OWED BY AARON, do not reconstruct: `Nudibranch Park` (DETSI) vs `Nudibranch Tip` (saved
+spot) reconciliation; F4 fan-mode ruler spec; GPS scouting dot spec.
+
 *v16.77.6 · 14 Sep 2026 — **A1 SHIPPED: THE OUT-OF-PARK STRING IS NOW ONE CONSTANT, NOT TWO
 LITERALS. THE LAND MASK IS INVESTIGATED AND DISCHARGED — `:3054` NO LONGER DEPENDS ON IT.**
 Build `2026.09.14b`, commit `00471b3`, Pages run 34832652313 SUCCESS. `index.html`
