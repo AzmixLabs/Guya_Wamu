@@ -1,5 +1,149 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.8 · 18 Sep 2026 — **A2 SHIPPED AND GATED: EVERY BARE MAP READ NOW CARRIES A ZONING
+LINE. BUILD `2026.09.18a`, COMMIT `81fd1b5`. ZONE-LAYER TAPS WORK AGAIN IN A FRESH SESSION —
+A3's INTERCEPTOR IS SESSION STATE, NOT INIT STATE.** `index.html` 2,366,969 B (+293), SHA256
+`157552EB…D5EC` (pre-A2 `16D1B7E2…1FF0`), 4,359 LF bytes, no trailing newline. Pages run
+35312534188 success. v16.77.7 confirmed identical on both surfaces at `d0bbee2`
+(884,624 B, `aa323d11…c988`). Records: `scratchpad\a2_p1_spike.txt` (stopped at P3),
+`a2_p1b_spike.txt` (PASS), `a2_p2_build.txt` (PASS). Evidence: on-phone screenshots.
+
+**1. WHAT SHIPPED.** `:3054` now resolves the tap's own zone:
+`const z=zoneAt(e.latlng.lat,e.latlng.lng);openDepthRead(e.latlng,z?zonePopup(z):'<div
+class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp;
+rules officially before fishing.</div></div>');});` plus a trailing A2 comment (325 B, pure
+ASCII). In park: the full zone card, contract-identical to `:1294`'s argument shape.
+Out of park: `OUTPARK_TXT` inside its own `.pop`, because the rule is `.pop .outpark`
+(descendant-scoped) and openDepthRead places the prefix BEFORE its own `.pop`. The verify
+line reuses `:1360`'s sentence verbatim; it was added because none of the four bare-read
+branches carries `.warn`, "verif" or "official" text (P1b (h)), so `OUTPARK_TXT` alone would
+have been the only out-of-park statement with no verify clause — v16.77.4 §2(c)'s premise.
+Build bump `:1052` + `:1091` as a length-neutral literal swap. Diff 3/3, `:1052`/`:1091`/
+`:3054` only. Edited as bytes (ReadAllBytes, splice, WriteAllBytes); pre- and post-edit line
+hashes pinned from the planning chat; `:3054` three-way round trip (expected = input = extract);
+`zoneAt` `:1332` hash unchanged; Leaflet pin and `node --check` on both blocks PASS. P2's A8
+gate: `zonePopup` writes nothing through `p`, so passing `zoneAt`'s live object is safe.
+
+**2. BUILD STRING = SHIP DATE, NOT THE LAST BUILD'S DATE.** The handoff specified
+`2026.09.14c`. The convention (this file ~:9567; F6a shipped as `2026.09.06a`) is the actual
+ship date plus a letter. Shipped `2026.09.18a`; P2 preflight gated on the local date and a
+`git log -S` collision check.
+
+**3. A2 ON-PHONE GATE — PASS ON EVERY A2-ATTRIBUTABLE CASE.**
+- G2 PASS: zones layer OFF (no zone fill or outline in frame), shading ON, CPZ06 Innes Park,
+  33 m to data — full zone card. With the layer off only `:3054` can produce a zone card.
+- G3 PASS: MNP10 Four Mile Reef and MNP09 Deception Bay — red no-take banner.
+- G4 PASS: MNP10 — zone card + "No survey data within 120 m here." Formerly silent.
+- Out-of-park + land PASS: bare land tap, Woongarra Scenic Dr, z17 — `OUTPARK_TXT` styled as
+  on the spot card, dashed rule, verify line, "No data here — this point is on land."
+- Zone card + land PASS: an adjacent land tap inside CPZ06's simplified polygon.
+- NOT OBSERVED: out-of-park + depth branch (the GateNoosa capture is the spot card `:1505`,
+  not a bare read); `:3019` topographic flats. Same prefix concatenation as G2 — accepted,
+  not evidenced.
+- A1 residuals on 18a: `:1052` and `:1091` PASS (`:1091` in portrait); perf panel PASS
+  (`STEP B · 2026.09.18a`). `:1359` still NOT evidenced — A1 stays partial on that surface.
+
+**4. P1/P1b FACTS — DURABLE.**
+- `index.html` has NO trailing newline: 4,359 LF bytes, `Get-Content` count 4,360, final byte
+  0x3E. Every "4,359 lines" in this file is an LF count. The recorded non-ASCII "686" is BYTES
+  >= 0x80; the character count is 254. Counts never gate file identity — SHA256 + length do.
+- Claude Code's console pipe transcodes non-ASCII on READ as well as write (U+2014 arrived as
+  "-", U+00B7 as "?"). Quotes need `<U+XXXX>` escaping; counts and hashes in-process.
+- `zoneAt(lat,lng)` `:1332` returns the containing feature's properties BY REFERENCE, or
+  `null`. `zonePopup(p)` `:1280` is a hoisted top-level function returning one CLOSED `.pop`
+  (closes at the end of `:1282`) with its own `.warn` and official link (`p.src`, falling back
+  to the Great Sandy URL — F6c). `OUTPARK_TXT` is a top-level const on `:1227`.
+- `:3050` reads `inWaterFast(shadeMaskFeats(),…)`, not `ZONES` — index-aligned (v16.77.6 §4),
+  so the semantics hold; the shorthand is corrected. `:3052-3053`: a tap within 12 m of a
+  saved pin returns silently by design — gate taps must stay clear of pins.
+- `.depth-pop` is set at `:3004`/`:3035` with no CSS rule and no selector — dead. Leave it.
+- `#perf-toggle` is at `:1161` inside "Depth points (your soundings)", collapsed by default —
+  why A1's check never found it. `perfBuildStr()` has no literal: it regex-scrapes the `:1052`
+  header text, so a change to that line's wording shape silently breaks it.
+- The spot card (`spotPopup`, `:1502+`) shows a zone chip (name + ID + swatch) and a verify
+  line — NO rules text, NO official-source link. Resolves v16.77.7 §4: the most-used surface
+  falls short of hard rule 1's link requirement. NEW item.
+- The zone layer draws on its own canvas: `:1284 zoneRenderer=L.canvas({padding:0.5})`.
+
+**5. CORRECTION — THE POLYGON PATH DOES NOT USE `zoneAt`'s RANKING.** P2's closing summary
+said the bare-tap card uses "the same source the polygon path uses". False, and contradicted
+by P1b (a): `:1286` (`bindPopup`) and `:1293-1294` build their cards from the tapped
+feature's `f.properties` — Leaflet's topmost hit — not from MNP > CPZ > HPZ > GUZ. With
+layer taps working again (§6), in-zone taps with zones ON go to the polygon path and A2's
+path goes quiet. v16.77.7 §5(b)'s "harmless redundancy" holds only if no ZONES features
+overlap. A3 scope: route both polygon paths through `zoneAt`, or prove zero overlaps (rule 2).
+
+**6. A3 — THE LAYER TAKES TAPS IN A FRESH SESSION.** Supersedes v16.77.7 §3's "created at
+init regardless of layer visibility".
+- 14b, shading ON, Elliott Heads (CPZ07/GUZ07 area): bare read, no zone card. The point sat
+  ~180 m inside the nearest drawn line — likely, not provably, interior.
+- 14b cheap test (Streets, Place & creek names, FHA and shading off; zones on): no card
+  anywhere. Streets and Place & creek names are eliminated.
+- 18a, after deleting a stray depth point (saved as 26°42.000'N 153°9.600'E — northern
+  hemisphere) and a force-close/reopen: shading-OFF polygon taps give the plain zone card
+  (Innes Park CPZ06; GUZ02 Moreton Bay-Offshore). A2 cannot cause this — its code runs only
+  with shading on.
+- HYPOTHESIS, UNPROVEN: Leaflet canvas stacking. Each `L.canvas()` is its own <canvas>; the
+  topmost takes every tap in its extent and on a miss forwards to the map, never to canvases
+  below; a renderer stays for the session once created. Any canvas layer shown earlier in a
+  session could sit above `zoneRenderer` until relaunch. Consistent with v16.77.5 §2 (cards
+  worked with zero depth points and zero slope lines).
+- The depth-point mechanism test (add point -> shading-off polygon tap, predicted no card;
+  delete -> still none; relaunch -> card) is NOT attributable from the captures: every one
+  shows a card, but none shows a depth point present during a shading-off tap. Aaron to
+  report step (b). If (b) gave a card, the depth-point variant is falsified.
+- NEXT DEVICE TEST (free): fresh launch; confirm a shading-off polygon card; toggle ONE canvas
+  layer on then off (FHA, or Show depth points with >= 1 point); tap the same polygon. No card
+  = that layer's canvas persists and intercepts. One layer per relaunch.
+
+**7. DEFECTS OBSERVED DURING THE GATE — NONE CAUSED BY A2.**
+(a) The readout chip ("≈ 4.0 m · now ~5.6 m water…", "no survey data here", "on land — no
+data") draws ABOVE popups. It covered part of MNP10's NO-TAKE banner, CPZ06 rules text and
+GateNoosa's verify line. Pre-existing on 14b; A2 puts compound cards on every shaded tap, so
+the overlap is now routine. Rule-1 adjacent. PRIORITY.
+(b) Long cards clip "Official maps & app" at the bottom edge (CPZ cards, landscape); shorter
+MNP/GUZ cards show it. Whether scrolling reaches it is NOT yet reported (G9). Since v16.77.5 §9.
+(c) Rule 3: two land taps a few houses apart on Woongarra Scenic Dr returned the CPZ06 card and
+"Outside the marine park boundary". The zone card says "Simplified boundary — not
+authoritative"; the out-of-park card states the boundary flatly. Candidate: proximity-aware
+out-of-park wording. Design item, Aaron's call.
+(d) FILTER BY SPECIES renders spot notes as chips ("— geometry warning pin; …", "Beachworms +
+pippis…", "Cool: bream, tarwhine…") plus Catch1-Catch4. Unrelated to zoning.
+(e) Portrait: the iOS status bar overlaps the panel header.
+
+**8. NEW REQUEST — ZONES LAYER FORCED ON AT EVERY LAUNCH.** Aaron wants it not forced on.
+Recommendation on record: remember the last choice, defaulting ON when unset or unreadable,
+plus a visible "Zones hidden" map chip that restores them in one tap — because hidden zones
+with shading off means a silent tap once A3 lands (rule 2). If the motive is clutter, an
+outline-only style is the safer change. Aaron's answer pending. Sequenced after A3 (both
+touch zone-layer init); a storage change, so its own on-phone gate with a force-close.
+
+**9. DISPATCH DISCIPLINE — LESSONS.**
+- P1 stopped at P3 on the planning chat's defect: expected value from an LF count, measured
+  with `Get-Content`. Its STOP-before-P4 also contradicted CLOSE requiring P4. Gate identity
+  on hashes; name the method with any count; route every STOP to CLOSE explicitly.
+- Byte-level editing with line hashes computed in the planning chat worked first time and
+  takes the encoding trap out of the edit path. Standard for `index.html` edits.
+- A length-neutral literal swap needs no non-ASCII input, so v16.77.6 §9's "a build-string
+  bump cannot have pure-ASCII input" applies only to whole-line replacement.
+- Claude Code dropped its Co-Authored-By trailers under a "one line, exactly" commit
+  instruction and recorded the deviation. Correct.
+- `gh` is not installed; Pages runs are queried via the public REST API.
+
+**10. CARRY-FORWARD.**
+(a)-(g) from v16.77.7 §8, unchanged.
+NEW: A3 spike, EXTENDED, read-only: canvas and pane creation order (§6); polygon-path overlap
+ranking (§5); what renders the readout chip, its pane and z-index (§7a); zone-layer init,
+toggle handler, any saved layer state, and whether `zoneOf` depends on layer visibility (§8).
+NEW: readout chip overlap (§7a). NEW: rule-3 out-of-park wording (§7c). NEW: spot card has no
+rules text or official link (§4). NEW: species filter chips (§7d). NEW: status bar (§7e).
+OPEN: G9 scroll check; `:1359` gate (A1 partial); step (b) result (§6); zones answer (§8).
+CLOSED from v16.77.7: `#perf-toggle` / `perfBuildStr()` existence; `.depth-pop` dead; spot
+card contents (all §4).
+STANDING: Leaflet style-block pin (v16.77.3 §6); build-string single source — two literals
+plus one derived scrape (§4).
+OWED BY AARON, do not reconstruct: as v16.77.7.
+
 *v16.77.7 · 18 Sep 2026 — **Q3-a IS REOPENED AND CONFIRMED ON A DEVICE: THE ZONE LAYER
 RECEIVES NO TAPS AT ALL. v16.77.5's CLOSURE OF CANVAS-STACKING IS SUPERSEDED.** No code
 change; `index.html` unchanged at 2,366,676 B / 4,359 lines, build `2026.09.14b`, commit
