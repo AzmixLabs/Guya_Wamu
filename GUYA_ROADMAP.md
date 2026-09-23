@@ -1,5 +1,89 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.10 · 23 Sep 2026 — **A3-S1 SPIKE PASS AND E1 SPECIFIED. FIX DESIGN IS E: ONE ZONE-CARD
+SOURCE, zoneAt VIA THE MAP-CLICK HANDLER. BUILD ORDER REVISED: E1, E2, THEN THE CHIP. THE POLYGON
+CARD BREAKS HARD RULE 2 AT 37 OVERLAP PAIRS PLUS A STROKE BAND ON EVERY EDGE.** No code change:
+`index.html` unchanged at 2,366,969 B, SHA256 `157552EB…D5EC`, build `2026.09.18a`, commit `81fd1b5`.
+Dual-surface clean at v16.77.9 (899,036 B, `2ED3A19E…D2CE`) before this entry. Records:
+`scratchpad\a3_s1_spike.txt` (60,479 B, `8B97C093…E550`); `scratchpad\a3_e1_extract.txt` (19,443 B,
+`C3D4777C…3EE6`). Both ran on Opus 5.5 though dispatched as Sonnet — check /model first.*
+
+**1. MECHANISM — CONFIRMED IN CODE, WIDER THAN v16.77.9 §1.**
+- Each `L.canvas` renderer is appended to overlayPane with its FIRST path, including at INIT from
+  stored data: depth (`:1405`), walks (`:3369`), contours (`:3840`) land above the zone canvas (`:1294`).
+  A phone storing any of these has dead shading-off zone taps FROM LAUNCH. Code-derived; T1.
+- A canvas miss becomes a MAP click, never a lower canvas's. Renderers are never removed.
+  `interactive:false` changes hit-testing only; the canvas element still takes the DOM event.
+- Shading OFF: the map-click handler returned at its first guard (`:3040`), so a miss gave nothing.
+- CORRECTIONS to v16.77.9: slope lines are SVG (shared renderer, root pointer-events none), not
+  canvas. Of the LAYERS toggles only FHA creates a canvas; Streets is tiles, place names are DOM
+  markers in the labels pane (pointer-events none). v16.77.9 §3's "two basemap-ish layers" is wrong.
+
+**2. RULE-2 DEFECT — LIVE. Answers v16.77.8 §5: ZONES features DO overlap.** Of 385
+bbox-intersecting pairs: 124 disjoint, 188 touch-only, 73 overlap. In 37 of the 73 the polygon
+card (`:1286`, `:1293-1294`; Leaflet last-drawn) names a different, less protective type than zoneAt:
+22 hide an MNP; 21 on Moreton features, 16 Great Sandy; 16 are sub-50 m-grid slivers; the other
+21 total ~215,000 m² (lon/lat exact). Largest: MNP03 Rooney Point × HPZ02 Sandy Cape ~60,000 m²
+at -24.807227,153.116119 (card HPZ, zoneAt MNP). Home water: HPZ11 Mud Island × GUZ02 at
+-27.340873,153.261936 (card GUZ02, zoneAt HPZ11); MNP09 Deception Bay × GUZ02, MNP12 Scotts Point
+× GUZ02, MNP13 Bramble Bay × CPZ06 (sub-grid).
+- STROKE BAND — CONFIRMED (extract P2, `:1213` col85799 / col84509 / col79690): a polygon hit is
+  the even-odd fill test OR an edge test within weight/2 + renderer tolerance (zoneRenderer sets
+  none; Canvas default 0). Zone weights MNP 3, CPZ 1.6, HPZ 1.6, GUZ 1.4 px (+1.5 while
+  hover-highlighted, desktop). A tap up to weight/2 px OUTSIDE a polygon hits it, so along the 188
+  touch-only pairs the later-drawn neighbour takes taps just inside the other. At z10, lat -27.3
+  (156,543 × 0.8886 / 1024 = ~136 m/px): MNP band ~204 m outside its fill, GUZ ~95 m. E2 removes it.
+- DURABLE: zone IDs are NOT unique across plans (MNP02 Breaksea Spit vs MNP02 Tripcony
+  Bight-Long Island; HPZ02 Sandy Cape vs HPZ02 Moreton Island to Broadwater); the plan field exists
+  only on Moreton features. Always cite ID + name; never key anything by ID alone.
+- App pip honours holes (47/47); app pip vs independent winding 4000/4000.
+
+**3. READOUT CHIP — MECHANISM KNOWN.** `#hov-depth` (`:3906-3909`) is a body child, fixed, z 1200;
+popups sit inside `.leaflet-map-pane` (stacking context, z 400), so no z-index fix exists. Fix:
+suppress for non-mouse pointerType. Extra gate item: confirm the tap card carries the "now ~x m
+water" figure, else suppression drops it on the phone.
+
+**4. FIX DESIGN — E.** A rejected (zone canvas would take every tap). B rejected (partial; zones
+OFF→ON mirror defect; perf unmeasured). C rejected (no canvas is non-interactive while visible).
+D fixes toggled-off layers only; kept as an optional FHA follow-up. F (single router) in reserve.
+
+**5. BUILD ORDER — REVISED. Supersedes v16.77.9 §4 ("chip first").** (1) E1, spec §7. (2) E2:
+zone polygons `interactive:false`; delete the `:1286-:1294` handlers; loses desktop hover
+tooltip/highlight (accepted). (3) Chip. (4) FHA card gains a zoneAt line (needs a read-only
+FHA × ZONES intersection for a gate coordinate). (5) Zones-toggle persistence (v16.77.8 §8).
+(6) Optional D for FHA. Why: E1's gap is no card (silence, rule 2); E2's is a wrong-type card
+(rule-2 breach); the chip obscures a correct card. E1 and the chip don't interact (chip shows
+only with shading ON). Never E2 before E1.
+
+**6. DECISIONS — AARON, 23 Sep.** (1) Shading-OFF tap outside every zone: OUTPARK card + verify
+line (A2 parity). Accepted cost: the tap that closes a card opens a new one; close via X.
+(2) The shading-OFF branch does NOT honour the zones toggle (zoneAt is visibility-independent,
+as `:3054`). Consequence: hidden zones + shading off is no longer a silent tap, so v16.77.8 §8's "Zones
+hidden" chip becomes a convenience, not a safety item.
+
+**7. E1 SPEC — 4 LINES, `index.html` ONLY.** `:1052/:1091` build literal swap (length-neutral).
+`:1874` (150 B → 196 B, `75B7F033…`) tags the tap's DOM event (`_gPlaced`) when placing a spot.
+`:3040` (184 B → 744 B, `48FED86C…`): mode guards first, then if `!shadeOn`: skip if `_gPlaced`, else
+`L.popup({maxWidth:300,minWidth:240})` with `zonePopup(zoneAt)` or OUTPARK + verify; no pin guard,
+no zones-toggle check. Shading-ON logic unchanged. Size 2,366,969 + 46 + 560 = 2,367,575 B; LF
+count unchanged. WHY `_gPlaced`: Leaflet runs map-click listeners in registration order and `:1874`
+clears `body.placing` before `:3040` checks it, so a class check alone would put a zone card over
+the spot sheet. The same ordering means the shading-ON path very likely opens a depth read
+alongside the spot sheet today (INFERENCE; T2). Left unchanged in E1 — one variable.
+
+**8. FREE TESTS ON 18a — MUST RUN BEFORE E1 DEPLOYS.** T1: keep the two duplicate depth points
+(26 42.000S 153 12.000E); force-close, relaunch; zones ON, FHA OFF, shading OFF, no other layer
+touched; note "Show depth points"; tap inside CPZ05 → predicted NO card. T2: shading ON, Add
+spot, tap water → predicted a depth/zone popup alongside the spot sheet.
+
+**9. CARRY-FORWARD.** CLOSED: A3 spike; v16.77.8 §5 overlap question; v16.77.8 §7a chip mechanism; v16.77.8 §8
+saved-state question (no layer visibility persisted; zoneAt visibility-independent); §6 decisions.
+OPEN: G9 scroll; zones-toggle answer; T1, T2; depth-point deletion (after the E1 gate).
+NEW: FHA tap in a zone gives no zone line, outside parks no OUTPARK line (build 4). Depth points,
+walks, contours under a later canvas stay untappable until relaunch (build 6 or F). 12 m pin guard
+still silences shading-ON taps near depth points — revisit after E2. Shading-ON placing double
+(§7, pending T2). NEXT: E1 build, then its on-phone gate.
+
 *v16.77.9 · 18 Sep 2026 — **A3's MECHANISM IS CONFIRMED ON A DEVICE: SHOWING A CANVAS LAYER
 DURING A SESSION KILLS ZONE TAPS UNTIL RELAUNCH. `:1359` IS GATED, SO A1 IS COMPLETE.** No
 code change: `index.html` unchanged at 2,366,969 B, SHA256 `157552EB…D5EC`, build
