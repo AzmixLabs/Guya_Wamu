@@ -1,5 +1,52 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.9 · 18 Sep 2026 — **A3's MECHANISM IS CONFIRMED ON A DEVICE: SHOWING A CANVAS LAYER
+DURING A SESSION KILLS ZONE TAPS UNTIL RELAUNCH. `:1359` IS GATED, SO A1 IS COMPLETE.** No
+code change: `index.html` unchanged at 2,366,969 B, SHA256 `157552EB…D5EC`, build
+`2026.09.18a`, commit `81fd1b5`. Dual-surface clean at v16.77.8 (895,646 B,
+`e57ec325…9747`) before this entry. Evidence: five on-phone captures.
+
+**1. A3 MECHANISM — CONFIRMED, ONE VARIABLE.** Supersedes v16.77.8 §6's untested step and
+v16.77.7 §3.
+- Fresh launch on 18a. LAYERS: Marine-park zones ON, Fish Habitat Areas OFF, Streets OFF,
+  Place & creek names OFF; depth shading OFF. Tap inside CPZ05 Castlereagh Point-North Reef
+  -> plain zone card. Baseline established.
+- Fish Habitat Areas ON, then OFF. No relaunch. Same polygon -> NO CARD.
+- Showing a canvas layer during a session therefore intercepts zone taps from that point on,
+  and turning the layer back off does NOT restore them. Only a relaunch does. Every 14b
+  silence is explained: those sessions had already shown another canvas layer.
+- Proven for the FHA layer. The generalisation to the other canvas layers (depth points,
+  slope lines, contours, walk) follows from the Leaflet mechanism recorded at v16.77.8 §6 but
+  is untested.
+- A3 IS NOW A FIX, NOT AN INVESTIGATION. Candidate shapes, unranked: a dedicated pane for the
+  zone layer above the other overlay canvases; one shared renderer for every overlay polygon
+  layer; or stopping non-interactive canvases from taking pointer events. The read-only spike
+  still runs first — creation order, pane assignments, z-indexes, plus the questions carried
+  from v16.77.8 §5, §7a and §8 — but it is now scoped against a known mechanism, so it
+  reports a fix design rather than a hypothesis list.
+
+**2. `:1359` GATE — PASS. A1 IS COMPLETE.** A depth point added at `26°42.000'S 153°12.000'E`
+(the v16.77.7 §7 coordinate) returns, on tap: "Depth point", the coordinate, `OUTPARK_TXT`,
+then "Your own Navionics reading. Verify zone & rules officially before fishing." and DELETE
+POINT. The last A1 residual (v16.77.8 §3) is closed and A1 needs nothing further.
+- Incidental: the add-point flow accepted the same coordinate twice, leaving two identical
+  depth points in the store. Not investigated. Throwaway test points must be deleted after
+  use — `:3052-3053`'s 12 m pin guard silences bare taps near them.
+
+**3. LAYER PANEL — NAMES FOR §8's WORK.** The LAYERS section lists exactly: Marine-park
+zones, Fish Habitat Areas, Streets (online), Place & creek names (offline). Sections below:
+TOOLS, WALK TRACKER (GPS · OPT-IN), SESSION LOG. The toggle to be persisted (v16.77.8 §8) is
+"Marine-park zones". Note the interaction: FHA and the two basemap-ish layers are exactly the
+ones whose canvases break zone taps (§1), so §8's work and A3's fix touch the same panel.
+
+**4. CARRY-FORWARD.** As v16.77.8 §10, with these changes.
+CLOSED: `:1359` gate, so A1 is complete (§2); the depth-point mechanism question and the
+"next device test" (§1 — answered with FHA instead).
+OPEN, unchanged: G9 scroll check (v16.77.8 §7b); zones-toggle answer (v16.77.8 §8); the
+depth-points variant of §1.
+NEXT: the A3 spike, scope unchanged, mechanism known (§1). Build order still one variable per
+build; the readout-chip overlap (v16.77.8 §7a) remains the priority defect.
+
 *v16.77.8 · 18 Sep 2026 — **A2 SHIPPED AND GATED: EVERY BARE MAP READ NOW CARRIES A ZONING
 LINE. BUILD `2026.09.18a`, COMMIT `81fd1b5`. ZONE-LAYER TAPS WORK AGAIN IN A FRESH SESSION —
 A3's INTERCEPTOR IS SESSION STATE, NOT INIT STATE.** `index.html` 2,366,969 B (+293), SHA256
