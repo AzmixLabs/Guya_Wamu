@@ -1,5 +1,79 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.11 · 24 Sep 2026 — **E1 SHIPPED AND GATED: BUILD `2026.09.24a`. SHADING-OFF TAPS NOW GET A
+zoneAt ZONING CARD (IN PARK → ZONE CARD, OUTSIDE → OUTPARK + VERIFY). T1 AND T2 CONFIRMED ON 18a.
+CLAUDE.md REV F.** `index.html` 2,367,575 B (2,366,969 + 46 + 560), commit `2c67685`, Pages run
+35944192173 success. Leaflet block 147,552 B `DB49D009…641A` unchanged (matches the CLAUDE.md pin);
+app block 2,150,297 B `C387AC72…C3CD`. Record: `scratchpad\a3_e1_build.txt` (3,229 B,
+`70277819…7AD2`). Ran on Sonnet 5 — the first dispatch this cycle on the intended model.*
+
+**1. E1 BUILD — AS SPECIFIED IN v16.77.10 §7.** Exactly four lines changed: `:1052`, `:1091`
+(build literal, length-neutral), `:1874` (150 → 196 B, `_gPlaced` tag), `:3040` (184 → 744 B,
+shading-off branch). Replacement-line hashes `75B7F033…` / `48FED86C…` matched three-way (P2 input,
+planning chat, written file). LF count 4359 unchanged; bytes ≥ 0x80 686 → 686; guard hashes
+`:1209-:1214`, `:1280-:1282`, `:1332` unchanged; `node --check` PASS on both blocks; perfBuildStr
+regex yields `2026.09.24a`. The build report records no full-file SHA256 — the next build's P0
+records it as the pin.
+
+**2. ON-PHONE GATE — PASS (Aaron, 24 Sep).** Shading OFF: (a) CPZ05 tap with the T1 depth point
+stored → zone card (the reverse of T1); (b) FHA on then off → zone card; (c) zones toggle off →
+zone card; (d) outside every zone, water and land → OUTPARK + verify; (e) MNP09 → NO-TAKE banner;
+(f) Add spot → sheet only, no card; (g) Measure → no card; (h) depth-point marker → its own card
+only. Shading ON: (i) zone card + depth read, unchanged. T0 control (depth point deleted,
+force-close, relaunch, CPZ05 tap → card): PASS per Aaron's "gate all passed".
+
+**3. PRE-BUILD TESTS ON 18a.**
+- T1 CONFIRMED. The two duplicate depth points had already been deleted in an earlier chat
+  (supersedes v16.77.10 §8's "keep"); one point was recreated at 26°42.000'S 153°12.000'E,
+  then force-close, relaunch, zones ON / FHA OFF / shading OFF, CPZ05 tap → NO card. With the T0
+  control, the cause is the depth canvas created at init (v16.77.10 §1). "Show depth points"
+  state not recorded.
+- T2 CONFIRMED. Shading ON, Add spot, tap at 24°54.195'S 152°29.579'E → spot sheet PLUS a zone
+  card (Elliott Heads, CPZ07) behind it. The screenshot can't separate the `:3054` depth-read path
+  from a polygon popup; the fix is the same either way.
+- NEW (T2 screenshot): the readout chip draws over the Add-spot sheet, on the Save button's top
+  edge. Same cause as v16.77.10 §3 (`#hov-depth`, fixed, z 1200, body child). The chip is not only
+  obscuring popups, it covers controls. Chip gate adds: "Add-spot sheet shows no chip".
+
+**4. BUILD ORDER — (1) E1 DONE.** (2) E2: zone polygons `interactive:false`; delete the
+`:1286-:1294` handlers; ranking gate at MNP03 Rooney Point × HPZ02 Sandy Cape,
+−24.807227,153.116119, card must say MNP03. Lines `:1280-:1298` are already extracted with hashes
+in `a3_e1_extract.txt` and untouched by E1 (guard hash `:1280-:1282` unchanged; `:1283-:1298`
+re-pinned in E2's P1). (3) Chip. (4) Placing double: move the `_gPlaced` check into `:3040`'s
+shared guard so the shading-ON path skips too — one line, own build. (5) FHA card gains a zoneAt
+line. (6) Zones-toggle persistence. (7) Optional D for FHA.
+
+**5. OPEN — POSSIBLE MOJIBAKE AT `:2370`.** The build report quotes the perf-panel line as
+`STEP B Â· `; the report's bytes there are C3 82 C2 B7. Either `index.html` carries a
+double-encoded `·` in that header (pre-existing — bytes ≥ 0x80 unchanged by E1) or the report
+script decoded the line as latin1. Free check: the phone's perf-panel header reads
+`STEP B · 2026.09.24a` (report artefact) or `STEP B Â· …` (real → read-only whole-file scan for
+double-encoding signatures before E2).
+
+**6. PROCESS.**
+- CLAUDE.md rev F (committed just before this entry): rule 2 gains the explicit outside-park
+  statement; rule 3 requires tap cards from `zoneAt(latlng)`, never Leaflet's hit-test; new
+  invariants for canvas stacking and map-click listener order; build-string `git log -S` collision
+  check; push + Pages success as the end of every session; encoding verified on bytes, never
+  console text; new "Dispatch discipline" section (repo scratchpad path, CLOSE always, model on
+  the first CLOSE line, byte-verbatim / STOP-don't-fix, anchored insertion checks); session close
+  scoped to standalone sessions; zone IDs not unique. 8,196 B `887A33C9…8E2B` → 11,656 B
+  `74305A27…38A3`, 48 insertions / 4 modified lines.
+- v16.77.10 verify pass: the P1 "fail" came from the planning chat's longest-common-prefix
+  check, which cannot place an insertion when adjacent entries share a prefix; the anchored
+  diagnostic proved the insertion exact. Claude Code wrote that report to its own session temp
+  scratchpad; it was copied into the repo scratchpad byte-identical (9,112 B, `7E5720A2…F29C`).
+  The v16.77.10 delta was retyped rather than inserted verbatim (typography + four correct
+  reference fixes); bytes verified clean, content approved. Both causes now in CLAUDE.md rev F.
+- The E1 Pages poll used a malformed head_sha filter for 24 iterations; the run was found on the
+  unfiltered listing. Harmless.
+- PENDING (Aaron, manual): project-instructions rev F — the same scratchpad, model, byte-verbatim
+  and anchored-insertion items in SOURCE OF TRUTH & SYNC / CLAUDE CODE WORKFLOW.
+
+**7. CARRY-FORWARD.** CLOSED: E1; T1; T2; T0; depth-point deletion. OPEN: G9 scroll; zones-toggle
+answer; `:2370` check (§5); project-instructions rev F. NEW: none beyond §3's chip-over-sheet.
+NEXT: E2.
+
 *v16.77.10 · 23 Sep 2026 — **A3-S1 SPIKE PASS AND E1 SPECIFIED. FIX DESIGN IS E: ONE ZONE-CARD
 SOURCE, zoneAt VIA THE MAP-CLICK HANDLER. BUILD ORDER REVISED: E1, E2, THEN THE CHIP. THE POLYGON
 CARD BREAKS HARD RULE 2 AT 37 OVERLAP PAIRS PLUS A STROKE BAND ON EVERY EDGE.** No code change:
