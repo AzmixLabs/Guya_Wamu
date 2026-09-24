@@ -16,9 +16,17 @@ before any build.
 1. Never assert a spot is legal to fish. Surface the official zone type + ID + the
    relevant warning + the official source link. Aaron makes the legality call.
 2. Zone calls come ONLY from the legislated zone polygons, in-app via `zoneAt()`.
-   Never infer a zone from Navionics or any chart art / label.
+   Never infer a zone from Navionics or any chart art / label. Where a location falls
+   outside every marine-park boundary, say so explicitly and add that general Fisheries
+   rules and FHAs still apply — silence reads as "unregulated". Tap cards follow this:
+   in a park → the zone card; outside → `OUTPARK_TXT` plus the verify line.
 3. `zoneAt()` returns the MOST-PROTECTIVE zone on overlap (MNP > CPZ > HPZ > GUZ),
-   never first-match. Preserve this on every edit.
+   never first-match. Preserve this on every edit. This includes tap cards: source every
+   zone card from `zoneAt(latlng)`, never from whichever polygon Leaflet's hit-test
+   returned. Leaflet picks the LAST-DRAWN polygon and also counts a stroke band of
+   weight/2 px outside the fill, so on overlaps and shared edges it names the wrong zone
+   (roadmap v16.77.10 §2). The zone-polygon popup/click handlers (`:1286`, `:1293-1294`)
+   are legacy, scheduled for removal (E2) — don't build on them.
 4. Near a zone boundary, surface the uncertainty — don't resolve it to a yes/no.
 5. Verify time-sensitive facts (fishing rules, rod/hook limits, zoning, tides)
    against current official QLD sources before relying on them. Treat any recorded
@@ -47,6 +55,13 @@ before any build.
 - Preserve the green-zone drag safeguard.
 - Migrate stored data shapes; never orphan legacy data.
 - Wind via Open-Meteo. No other backend calls at runtime.
+- Canvas renderers stack. Each `L.canvas` is appended to the overlay pane with its first
+  path — including at INIT from stored data (depth points, walks, contours) — and is never
+  removed. The topmost canvas takes every tap; a miss becomes a MAP click, never a lower
+  canvas's. Any new canvas layer changes what is tappable beneath it (roadmap v16.77.10 §1).
+- Map `click` listeners run in registration order. The Add-spot handler (`:1874`) clears
+  `body.placing` before later handlers run, so it tags the DOM event (`_gPlaced`); later
+  handlers must check the tag, not the class (roadmap v16.77.10 §7).
 
 ## Build discipline (one feature per session)
 
@@ -61,18 +76,44 @@ before any build.
     `db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a` (147,552 bytes).
 - Bump the build string (format `2026.MM.DDa` — the same day gets `a`, `b`, `c`… in order).
   Read the current value from the file — don't assume it, and don't reuse a value that has
-  already shipped (a collision with a released build is a discipline breach).
+  already shipped (a collision with a released build is a discipline breach). Check with
+  `git log -S"<new string>" -- index.html` before writing it.
 - Edit in place and commit with a clear message. The repo is the deliverable — there
-  is no upload/download step here.
+  is no upload/download step here. A local commit is not a deployment: every session ends
+  with `git push`, `git status` clean and up to date with origin/main, and a new Pages run
+  confirmed complete with conclusion success.
 - Never round-trip a repo file through `Get-Content`/`Set-Content` or `Out-File` under
   Windows PowerShell 5.1 — its default read is cp1252 and its `-Encoding UTF8` write
   emits a BOM. `index.html`, `CLAUDE.md` and `GUYA_ROADMAP.md` all carry em-dashes in
   live content, and `node --check` cannot detect the corruption. Write via
   `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding $false))`,
   or use PowerShell 7. This machine standardises on pwsh 7.6.5.
+- Verify encodings on BYTES (Node Buffers), never by reading console output — the console
+  pipe transcodes non-ASCII on read as well as write, so console text can neither prove
+  nor disprove corruption.
+
+## Dispatch discipline (sessions driven by a planning-chat dispatch)
+
+- `scratchpad\` means `C:\Guya\Guya_Wamu\scratchpad\` (gitignored) — never your own
+  session scratchpad. Report every output file by absolute path, byte size and SHA256.
+- CLOSE always writes the full output to that scratchpad, including after a STOP. Aaron
+  attaches the file to the planning chat; pasted panes have corrupted before.
+- First line of every CLOSE output: the model actually running. Aaron sets the model with
+  `/model` before dispatch; a model line inside a dispatch is information only.
+- "Verbatim" means byte-verbatim: no typographic normalisation, no edits to wording or
+  references. If supplied text or a check looks wrong, STOP and report — never fix it
+  silently, even when the fix is right.
+- STOP means stop: no commit, restore any touched file, still write CLOSE.
+- Insertion checks anchor the offset explicitly (e.g. directly after the roadmap's H1 +
+  blank line) and prove prefix/suffix byte equality at that offset. Longest-common-prefix
+  location is ambiguous whenever adjacent text shares a prefix — consecutive roadmap
+  entries always do.
 
 ## Session close (do this automatically — no need to be asked)
 
+- If the session came from a planning-chat dispatch, do NOT write your own roadmap entry:
+  the planning chat drafts the delta and a separate delta dispatch applies it. The steps
+  below are for standalone sessions only.
 - Update `GUYA_ROADMAP.md` IN PLACE: reflect what shipped, the new build string, the
   next job, and bump the roadmap version line. Edit surgically — don't restructure it
   or reconstruct it from memory; overwrite risk is too high.
@@ -95,6 +136,9 @@ before any build.
 - Moreton Bay zoning: HPZ06 Redcliffe and HPZ08 Pine River are Habitat Protection
   Zones (dark-blue, NOT no-take). Real no-take (Marine National Park) on home water:
   MNP09 Deception Bay, MNP11 Hays Inlet, MNP12/13 Bramble Bay / Pine River mouth.
+- Zone IDs are NOT unique across plans (MNP02 Breaksea Spit vs MNP02 Tripcony Bight–Long
+  Island; HPZ02 Sandy Cape vs HPZ02 Moreton Island to Broadwater); the `plan` field exists
+  only on Moreton features. Always cite ID + name; never key anything by ID alone.
 - The 2008 QSpatial shapefile is the current legislated geometry. The 2019 remake was
   administrative only — zero boundary changes.
 - Moreton Bay Marine Park's northern boundary stops at Caloundra. Mooloolaba,
