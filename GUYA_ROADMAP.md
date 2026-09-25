@@ -1,5 +1,90 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.13 · 25 Sep 2026 — **NO BUILD. FHA × ZONES SPIKE COMPLETE: FHA ∩ MNP CONFIRMED (31 PAIRS, 16
+FHA FEATURES), SO THE FHA CARD BUILD IS NEXT. G9 LANDSCAPE: THE CARD SCROLLS — NOT A CLIP, NO
+BUILD.** `index.html` unchanged at 2,367,395 B, SHA256 `A104F3C7…CD57B`, build `2026.09.25a`, commit
+`612a49e`; HEAD `1ac5e7f` (docs-only on top: `3d3cbc1` CLAUDE.md rev F.1, `1ac5e7f` roadmap
+v16.77.12). Records: `scratchpad\fha_zones_intersect.txt` (1,878 B, `6D88F01F…D093`, STOP at
+precondition); `scratchpad\fha_zones_intersect2.txt` (382,510 B, `7D626AA8…D0BD`, completed). Both
+on Sonnet 5.*
+
+**1. FHA × ZONES SPIKE (read-only).** The first dispatch STOPPED correctly: it pinned `HEAD =
+612a49e`, which the rev F.1 and v16.77.12 docs commits had already superseded (planning-chat error,
+§7). Amended precondition: HEAD `1ac5e7f` and `git diff --name-only 612a49e HEAD` = CLAUDE.md +
+GUYA_ROADMAP.md only; the P0 `index.html` pin held. P1, in-file data only: ZONES `:1219` (178
+features: MNP 65, HPZ 43, CPZ 38, GUZ 32), FHA `:1304` (35 features, 18 Polygon + 17 MultiPolygon,
+69 rings), `pir :1330`, `pip :1331`, `zoneAt :1332`. P2 (turf 7.4.0): 180 bbox-overlapping pairs,
+123 non-empty — MNP 31, CPZ 32, HPZ 33, GUZ 27; 89 gate-grade (≥ 100 m to the FHA edge and to any
+zone edge). P4 ran `pir`/`pip`/`zoneAt` verbatim in a Node vm: 123/123 samples inside the FHA by the
+app's pip, 123/123 zoneAt most-protective, 0 turf-vs-pip disagreements on sample points; a 100 m
+grid cross-check found no missed pairs. P5: 34 of 35 FHA features extend outside every park; only
+FHA-054 Susan River (B) lies wholly inside. Deviations accepted: quadtree max-inscribed point (≤ 0.5
+m) instead of a fixed 50 m grid; gate margin counts any zone edge, not only containing ones. The
+CLOSE omitted the final `git status` line (harmless, scratchpad gitignored; §7).
+
+**2. CONSEQUENCES FOR THE FHA CARD BUILD.**
+- (a) The v16.77.12 §4 hazard is CONFIRMED: at FHA ∩ MNP the FHA card says "not a marine-park zone
+  and not no-take" where zoneAt returns MNP — on home water too (FHA-012 Hay's Inlet × MNP11 Hays
+  Inlet).
+- (b) The zone line comes from `zoneAt(tap latlng)` only, never from the FHA feature: one FHA spans
+  many zones (FHA-053 K'gari × 18 zone features) and 34/35 FHAs have outside-park parts. Both
+  branches every time — in park → zone line (+ NO-TAKE banner on MNP); outside → OUTPARK + verify.
+- (c) DELETE "not no-take" and "legal fishing is generally permitted" (rule 1) rather than qualify
+  them. Exact wording goes in the build spec.
+- (d) Near-coincident FHA/zone edges are pervasive: 723 sub-metre residual slivers; 4 pairs flip
+  zoneAt under 3-dp DDM rounding (e.g. [018] MNP14 → HPZ09). Evidence for the backlog "within X m of
+  a zone boundary" line (rule 3), not a new defect.
+
+**3. GATE COORDINATES.** Paste, don't type, and confirm the saved spot shows the NEW value
+(v16.77.12 §4 spot-sheet defect).
+- A — FHA ∩ MNP: FHA-012 Hay's Inlet × MNP11 Hays Inlet, -27.239284 153.063527, `27°14.357'S
+  153°3.812'E`, margin 657 m. Expect FHA card + MNP11 + NO-TAKE.
+- B — FHA ∩ CPZ: FHA-012 × CPZ06 Hays Inlet-Bramble Bay, -27.268775 153.064369, `27°16.127'S
+  153°3.862'E`, margin 786 m. Expect CPZ06 line.
+- C — FHA outside every park: FHA-051 Noosa River (A), -26.271507 153.017544, `26°16.290'S
+  153°1.053'E`, 2,366 m to the FHA edge, 29.8 km to the nearest zone. Expect OUTPARK + verify.
+- Reserve: FHA-053 K'gari × MNP02 Breaksea Spit, -24.651605 153.247568, `24°39.096'S 153°14.854'E`,
+  margin 4.6 km.
+- Free baseline on 25a before the build: FHA ON, tap A and C, capture the current card (expected:
+  "not no-take", no zone line / no OUTPARK) as the before-image.
+
+**4. G9 — LANDSCAPE PASS (Aaron, 25 Sep).** Shading ON, long CPZ07 card + depth read (Bluefin Ct
+Platform, not Innes Park — the same worst case: long CPZ card plus depth block). The first view
+clips at "Nearest reading · 35 m away"; swiping inside the card scrolls to "Official maps & app",
+the depth read and "Deepest within 100 m"; a scrollbar shows. Verdict: discoverability, not a clip —
+NO BUILD. Portrait not captured (the portrait screenshot shows the controls panel, not a card): a
+portrait card-scroll check joins the FHA card gate.
+
+**5. NEW FINDINGS (G9 captures).**
+- CHIP OVER THE CAVEAT: before scrolling, the readout chip (`#hov-depth`) covers the zone card's
+  "Simplified boundary — not authoritative. Confirm before fishing." line; after scrolling, the
+  depth read's secondary line. It now hides rule-1 text, not only popups and controls (v16.77.11
+  §3). Chip gate adds: "no chip over any caveat line".
+- STATUS-BAR OVERLAP (portrait, home-screen app): the iOS status bar draws over the controls-panel
+  header ("Woongarra Coast" / build line). Safe-area-inset candidate. Cosmetic, low, own build.
+- STALE COPY: the panel's Offline note calls all depths "your own Navionics readings, not their
+  chart data" — untrue since the LiDAR/survey CSV imports, and Navionics is a rejected source. The
+  recorded "ZONE LEGEND (2024 PLAN)" mislabel is still live. Copy items, low.
+
+**6. BUILD ORDER.** (1) E1 DONE. (2) E2 DONE. (3) G9 CLOSED — no build; portrait check moves into
+(4)'s gate. (4) FHA card: zoneAt line per tap (zone line / OUTPARK), delete the two sentences in
+§2(c); gate = §3 A/B/C against the baseline + portrait card scroll. (5) Chip (gate: no chip over the
+Add-spot sheet; no chip over any caveat line). (6) Placing double. (7) Zones-toggle persistence. (8)
+Optional D for FHA. Read-only whenever it fits: spot-sheet coordinate spike. Low, own builds:
+status-bar safe area; Offline-note copy. BACKLOG unchanged: go-to-coordinates.
+
+**7. PROCESS.**
+- A read-only dispatch pins the files it reads by hash (P0), never `HEAD`: a docs-only commit
+  invalidates a HEAD pin without changing anything the dispatch reads.
+- Every CLOSE ends with an explicit `git status` clean / up-to-date line, read-only sessions
+  included.
+- PENDING (Aaron, manual): project-instructions rev F.
+
+**8. CARRY-FORWARD.** CLOSED: FHA × ZONES; G9 (landscape). OPEN: FHA card build (next — spec in a
+planning chat); 25a baseline taps at A and C; portrait card scroll (in the FHA gate); spot-sheet
+coordinate spike; zones-toggle answer; project-instructions rev F; delete TEST MNP03 and TEST HPZ11
+spots. NEW: chip over caveat; status-bar overlap; Offline-note copy. NEXT: FHA card build spec.
+
 *v16.77.12 · 25 Sep 2026 — **E2 SHIPPED AND GATED: BUILD `2026.09.25a`. EVERY ZONE CARD NOW COMES
 FROM zoneAt. THE RANKING DEFECT WAS REPRODUCED ON 24a AND IS GONE ON 25a AT BOTH TEST OVERLAPS.**
 `index.html` 2,367,395 B (2,367,575 − 1,113 + 933), SHA256 `A104F3C7…CD57B`, commit `612a49e`,
