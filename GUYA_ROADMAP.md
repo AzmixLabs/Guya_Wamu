@@ -1,5 +1,28 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.14 · 25 Sep 2026 — **NO BUILD. G9 PORTRAIT PASS — G9 CLOSED IN BOTH ORIENTATIONS. SUPERSEDES
+v16.77.13 §4 (portrait line), §6 item (3) and the gate in item (4), and §8's "portrait card scroll"
+item.** `index.html` unchanged at 2,367,395 B, `A104F3C7…CD57B`, build `2026.09.25a`, commit
+`612a49e`. v16.77.13 was committed from the pre-portrait delta (6,458 B, `6E346F91…2489`); this
+entry records the correction instead of editing it.*
+
+**1. G9 PORTRAIT — PASS (Aaron, 25 Sep).** Home-screen app, panel collapsed, shading ON, CPZ07
+Elliott Heads card with depth read: the whole card fits without scrolling — heading, rules, caveat,
+"Official maps & app", depth read ("dries ≈ 1.9 m") and "Deepest within 100 m". The chip sat below
+the card, clear of it; chip position follows the tap, so v16.77.13 §5's chip-over-caveat finding
+stands (landscape capture).
+
+**2. CORRECTIONS TO v16.77.13.** §6 (3) now reads: G9 CLOSED — no build. §6 (4) gate = §3 A/B/C
+against the 25a baseline; no portrait check. §8: CLOSED gains G9 (both orientations); the "portrait
+card scroll" OPEN item is removed.
+
+**3. NEW FINDING, EXTENDED.** v16.77.13 §5 status-bar overlap: confirmed with the controls panel
+collapsed as well as expanded.
+
+**4. CARRY-FORWARD.** OPEN: FHA card build (next — spec in a planning chat); 25a baseline taps at A
+and C; spot-sheet coordinate spike; zones-toggle answer; project-instructions rev F; delete TEST
+MNP03 and TEST HPZ11 spots. NEXT: FHA card build spec.
+
 *v16.77.13 · 25 Sep 2026 — **NO BUILD. FHA × ZONES SPIKE COMPLETE: FHA ∩ MNP CONFIRMED (31 PAIRS, 16
 FHA FEATURES), SO THE FHA CARD BUILD IS NEXT. G9 LANDSCAPE: THE CARD SCROLLS — NOT A CLIP, NO
 BUILD.** `index.html` unchanged at 2,367,395 B, SHA256 `A104F3C7…CD57B`, build `2026.09.25a`, commit
