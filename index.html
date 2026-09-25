@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.25a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.09.26a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.25a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.09.26a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1280,6 +1280,7 @@ function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
 function zonePopup(p){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
   h+=`<div class="rules">${s.rules}</div><div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.<div class="links"><a href="${p.src||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps'}" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>`;return h;}
+function zoneCard(ll){const z=zoneAt(ll.lat,ll.lng);return z?zonePopup(z):'<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';}
 const counts={MNP:0,CPZ:0,HPZ:0,GUZ:0};
 const zoneRenderer=L.canvas({padding:0.5});
 const zoneLayer=L.geoJSON(ZONES,{renderer:zoneRenderer,interactive:false,style:styleFor,onEachFeature:(f,layer)=>{counts[f.properties.zt]=(counts[f.properties.zt]||0)+1;
@@ -3047,7 +3048,7 @@ map.on('click',e=>{if(slopeMode||document.body.classList.contains('drawing')||do
      footprint. They agree today; unifying them would couple the readout to the renderer and is a
      decision, not a tidy-up. Note R1 itself is declared twice (buildShade and
      buildAutoContours) - logged, not touched here. */
-  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.near<=NEAR_MAX)))return;
+  if(!(inWaterFast(shadeMaskFeats(),e.latlng.lat,e.latlng.lng)||(r&&r.near<=NEAR_MAX))){if(e.originalEvent&&e.originalEvent._gPlaced)return;L.popup({maxWidth:300,minWidth:240}).setLatLng(e.latlng).setContent(zoneCard(e.latlng)).openOn(map);return;}
   const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
   const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
   if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
