@@ -25,8 +25,9 @@ before any build.
    zone card from `zoneAt(latlng)`, never from whichever polygon Leaflet's hit-test
    returned. Leaflet picks the LAST-DRAWN polygon and also counts a stroke band of
    weight/2 px outside the fill, so on overlaps and shared edges it names the wrong zone
-   (roadmap v16.77.10 §2). The zone-polygon popup/click handlers (`:1286`, `:1293-1294`)
-   are legacy, scheduled for removal (E2) — don't build on them.
+   (roadmap v16.77.10 §2). Since E2 (build 2026.09.25a) the zone polygons are
+   `interactive:false` with no popup, tooltip, hover or click handler (`:1285-:1294`) —
+   never add one back.
 4. Near a zone boundary, surface the uncertainty — don't resolve it to a yes/no.
 5. Verify time-sensitive facts (fishing rules, rod/hook limits, zoning, tides)
    against current official QLD sources before relying on them. Treat any recorded
@@ -104,6 +105,10 @@ before any build.
   references. If supplied text or a check looks wrong, STOP and report — never fix it
   silently, even when the fix is right.
 - STOP means stop: no commit, restore any touched file, still write CLOSE.
+- Input files from the planning chat (replacement blocks, roadmap deltas) arrive as
+  downloads pinned by SHA256 and are located by hash; copy their bytes, never retype them.
+- CLAUDE.md is changed only by Aaron, by hand. Your self-modification guard blocks it — that
+  is a boundary to keep, not one to widen with a permission rule.
 - Insertion checks anchor the offset explicitly (e.g. directly after the roadmap's H1 +
   blank line) and prove prefix/suffix byte equality at that offset. Longest-common-prefix
   location is ambiguous whenever adjacent text shares a prefix — consecutive roadmap
