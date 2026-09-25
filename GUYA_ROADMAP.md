@@ -1,5 +1,52 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.15 · 26 Sep 2026 — **NO BUILD. 25a BASELINE CAPTURED: THE FHA CARD HAZARD IS CONFIRMED ON
+DEVICE — AT A NO-TAKE POINT THE FHA CARD REPLACES THE zoneAt CARD. NEW RULE-2 DEFECT CANDIDATE: A
+SHADING-ON TAP OUTSIDE EVERY ZONE (FHA OFF) RETURNS NOTHING.** `index.html` unchanged at 2,367,395 B,
+`A104F3C7…CD57B`, build `2026.09.25a`, commit `612a49e`. PK verified at v16.77.14 before planning.*
+
+**1. 25a BASELINE (Aaron, 26 Sep).** Pasted TEST spots at A (FHA-012 × MNP11, `27°14.357'S
+153°3.812'E`) and C (FHA-051, outside every park, `26°16.290'S 153°1.053'E`); taps ~100 m clear of
+the pins.
+- FHA ON — A: shading OFF → FHA card only; shading ON → FHA card + "No data here — this point is on
+  land." Both carry "legal fishing is generally permitted" and "This is not a marine-park zone and
+  not no-take"; no zone line, no NO-TAKE. C: FHA card (+ "No survey data within 120 m here." when
+  ON); no OUTPARK. The FHA tap REPLACES the zoneAt card in both shading states.
+- FHA OFF (first pass) — A: MNP11 + NO-TAKE, shading OFF and ON (ON adds the depth line). C shading
+  OFF: OUTPARK + verify. C shading ON: SILENT — no card, no chip.
+- Spot cards correct at both: A "Hays Inlet (MNP11)" + NO-TAKE; C OUTPARK text + verify.
+
+**2. NEW DEFECT CANDIDATE — SHADING-ON SILENCE OUTSIDE EVERY ZONE.** Rule 2: silence reads as
+"unregulated". Hypothesis (unverified): the `:3050` water gate uses `shadeMaskFeats()` (built from
+ZONES) as the water mask, so out-of-zone water returns before the OUTPARK branch — statewide, not
+only Noosa. Extract E9 traces it with FHA OFF. If confirmed, it precedes the FHA card build.
+
+**3. FHA CARD SPEC — REVISIONS.** Zone block FIRST on every FHA render path: `zonePopup(zoneAt(tap))`
+verbatim (option a), or the `:3054` OUTPARK .pop + verify when zoneAt is null; FHA block second.
+Pure deletion in the FHA text, no replacement sentence (the existing caveat already says zone status
+is separate): "development — legal fishing is generally permitted." → "development."; delete "This
+is not a marine-park zone and not no-take." Keep "Marked navigational channels are excluded."
+Option b (the spot card's compact zone line) deferred — new rule-carrying markup would be a second
+variable; E11 reports whether it is reusable.
+
+**4. GATE (FHA CARD).** A, B, C × shading OFF and ON, taps ≥ 50 m from the TEST pins. A: MNP11 +
+NO-TAKE visible on first view, FHA-012 block below. B: CPZ06 line, then FHA block. C: OUTPARK +
+verify, then FHA-051 block. Nowhere: "not no-take", "generally permitted". Both official links
+reachable by scroll. FHA-032 Kolan River regression. Chip over caveat = known, recorded not failed.
+
+**5. EXTRACT (read-only, next).** `scratchpad\fha_card_extract.txt`, E1–E11: FHA layer options and
+handlers; card text; static vs per-tap; event path shading OFF/ON; all FHA render sites; CSS
+nesting; spot card; minimal edit sites; E9 shading-ON silence (FHA OFF); E10 FHA tap precedence;
+E11 spot-card zone line reusability.
+
+**6. NEW FINDINGS, LOW.** Leaflet popups render under the controls panel (C, FHA OFF, shading OFF):
+the start of each OUTPARK line is hidden. autoPanPadding candidate; related to chip-over-caveat.
+
+**7. CARRY-FORWARD.** CLOSED: 25a baseline. OPEN: FHA card extract (next); shading-ON silence (E9);
+FHA card build; spot-sheet coordinate spike; zones-toggle answer; project-instructions rev F;
+delete TEST MNP03, TEST HPZ11 and — after the FHA gate — the A/B/C TEST spots. NEW: popup under
+panel. NEXT: extract, then build dispatch from E8 (or E9's fix first if confirmed).
+
 *v16.77.14 · 25 Sep 2026 — **NO BUILD. G9 PORTRAIT PASS — G9 CLOSED IN BOTH ORIENTATIONS. SUPERSEDES
 v16.77.13 §4 (portrait line), §6 item (3) and the gate in item (4), and §8's "portrait card scroll"
 item.** `index.html` unchanged at 2,367,395 B, `A104F3C7…CD57B`, build `2026.09.25a`, commit
