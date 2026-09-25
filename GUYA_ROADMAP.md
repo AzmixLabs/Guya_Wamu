@@ -1,5 +1,92 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.12 · 25 Sep 2026 — **E2 SHIPPED AND GATED: BUILD `2026.09.25a`. EVERY ZONE CARD NOW COMES
+FROM zoneAt. THE RANKING DEFECT WAS REPRODUCED ON 24a AND IS GONE ON 25a AT BOTH TEST OVERLAPS.**
+`index.html` 2,367,395 B (2,367,575 − 1,113 + 933), SHA256 `A104F3C7…CD57B`, commit `612a49e`,
+Pages run 36085653449 success. Records: `scratchpad\a3_e2_build.txt` (7,222 B, `40CC47F3…F4F0`,
+first dispatch — STOP at P2a); `scratchpad\a3_e2_build2.txt` (4,128 B, `B1BBB8F5…0A59`, shipped).
+Both on Sonnet 5.*
+
+**1. E2 BUILD.** `:1285` gains `interactive:false`; `:1286-:1293` become an 8-line comment (no
+popup, tooltip, hover or click handler, never add one back); `:1294` is the bare `}}).addTo(map);`.
+Line count unchanged, so every other line reference stays valid. Block delivered as a downloaded
+file pinned by hash (933 B, `9C5B11C3…040C`), copied byte-for-byte.
+- First dispatch STOPPED correctly at P2a: the planning chat's rule ("zoneLayer only via
+  addTo/removeLayer/hasLayer") was broader than the risk it guarded and caught `applyZoneFade()`
+  (`:2253-:2264`: eachLayer, getBounds, setStyle(styleFor)) — none of which touches hit-testing.
+  Re-dispatch pinned the exact reference set {1285, 1289, 1298, 2254, 2258, 2262} and confirmed
+  `styleFor`/`applyZoneFade` never return `interactive` or bind handlers. NEW GUARD: `:2253-:2264`
+  SHA256 `A676FAD2…231D`.
+- P2b: `shadeMaskFeats()` maps EVERY ZONES feature, unfiltered and cached — a shading-ON in-zone
+  tap always passes the `:3050` water gate now that the polygon handler is gone.
+- P2c: Leaflet confirmed with columns — GeoJSON passes its options (incl. `interactive:false`) to
+  every Polygon/MultiPolygon; a canvas tap with no interactive hit re-fires as a MAP click.
+- P2d: `:2370` bytes are `c2 b7` (correct `·`); zero double-encoding hits file-wide. The `Â·` in
+  v16.77.11 §5 was an artefact of the E1 build report's quoting. CLOSED.
+
+**2. ON-DEVICE A/B — FIRST OBSERVATION OF THE v16.77.10 §2 DEFECT.** Test spots saved at the
+spike's overlap coordinates (spots are DOM markers, so the zone canvas stayed topmost on 24a).
+- HPZ11 Mud Island × GUZ02, 27°20.452'S 153°15.716'E, z21: 24a card **GUZ02** → 25a **HPZ11**.
+- MNP03 Rooney Point × HPZ02 Sandy Cape, 24°48.434'S 153°06.967'E, z21: 24a card **HPZ02** → 25a
+  **MNP03 + NO-TAKE**. The overlap there is a strip ~1.8 m wide (≈70 px against a 5 m scale bar of
+  ≈190 px: 70 ÷ 190 × 5) — a long near-coincident boundary, not a block. Rarely hit; worst
+  direction when hit (no-take shown as habitat protection).
+
+**3. GATE — PASS (25a).** (a), (b) as §2. (c) shading ON, Innes Park CPZ06 → zone card + readout
+chip. (d) second MNP03 capture at the strip → MNP03 + NO-TAKE (shading state not visible in the
+capture). (e) shading OFF, Innes Park → zone card. (f) Add spot → sheet only, no card; the placing
+tap pre-fills the coordinate correctly. (g) Measure (240 m) → no card. (h) FHA ON, FHA-032 Kolan
+River → FHA card, unchanged. (i) zone fade intact: same place and zoom, shading OFF shows the CPZ06
+yellow tint over the water, shading ON fades it (compared against the 24a Innes Park capture).
+
+**4. NEW FINDINGS.**
+- G9 IS STILL A FREE DEVICE CHECK, NOT YET A BUILD: long CPZ cards clip "Official maps & app"
+  (rule 1's source link) and, with shading ON, hide `openDepthRead`'s depth section under the
+  zone card (Innes Park, 24a and 25a). Whether swiping inside the card scrolls to them is still
+  unreported (v16.77.8 §7b). Scroll works → discoverability item; it doesn't → a real clip and a
+  build. Either way G9 now precedes the chip: suppressing the chip on touch before G9 is resolved
+  would leave the phone with no visible depth read at all.
+- FHA CARD WORDING — POSSIBLE RULE 1/2 HAZARD (inference). The FHA card says "legal fishing is
+  generally permitted" and "This is not a marine-park zone and not no-take", with no zoneAt line.
+  Where an FHA overlaps an MNP, that reads as "fishable, not no-take" at a no-take point.
+  Existence of any FHA ∩ MNP overlap is unverified → read-only FHA × ZONES intersection next. If
+  any exists, the FHA card build (zoneAt line + wording that the FHA designation alone decides
+  nothing about zoning) moves to directly after G9.
+- SPOT-SHEET COORDINATE INPUT — DEFECT CANDIDATE. A typed coordinate for TEST MNP03 did not take;
+  the spot saved the previous value (24°54.195'S 152°29.579'E, from T2). Pasting a string with
+  straight apostrophes worked. Hypothesis: iOS Smart Punctuation turns ' into ’, the parser
+  rejects it, and the sheet silently keeps the old value — a wrong location presented as right
+  ("no data beats wrong data"). Read-only spike: quote the parser and save path; test ' vs ’ vs ′
+  and decimal input; find where the stale value comes from. Likely fix: accept ’ and ′, refuse to
+  save an unparsed coordinate with a visible error. Precedes go-to-coordinates, which would reuse
+  this parser.
+
+**5. BUILD ORDER.** (1) E1 DONE. (2) E2 DONE. (3) G9 — device check first, then build if it clips.
+(4) FHA × ZONES read-only → FHA card build here IF any FHA ∩ MNP, else after (6). (5) Chip (with
+"no chip over the Add-spot sheet" in its gate). (6) Placing double. (7) Zones-toggle persistence.
+(8) Optional D for FHA. Read-only whenever it fits: spot-sheet coordinate spike.
+BACKLOG — GO-TO-COORDINATES: input accepting DDM and decimal (reuse the spot parser once fixed);
+fly to the point; drop a temporary DOM marker (never a canvas); open the zoneAt card or OUTPARK
+for that exact point; no GPS, nothing stored (rule 5). Later: "within X m of a zone boundary" on
+that card (rule 3). Doubles as a precise harness for zone gates. Until then, saved TEST spots do
+the job (pasted coordinates).
+
+**6. PROCESS — REV F.**
+- CLAUDE.md is changed by Aaron, by hand: Claude Code's self-modification guard blocked the
+  v16.77.11 copy and was right to. Keep the guard. Rev F.1 of CLAUDE.md (this cycle) updates rule
+  3 for E2 and adds the two rules below to its Dispatch discipline.
+- Inputs travel as downloads pinned by SHA256 and are located by hash; the repo scratchpad is for
+  Claude Code's outputs.
+- A STOP rule names the dependency it guards (popup, tooltip, click, `interactive`), not a
+  whitelist of calls — a whitelist broader than the risk costs a dispatch round trip (§1).
+- PENDING (Aaron, manual): project-instructions rev F (scratchpad path, model is Aaron's step,
+  byte-verbatim / STOP-don't-fix, anchored insertion checks, CLAUDE.md manual, hash-pinned inputs).
+
+**7. CARRY-FORWARD.** CLOSED: E2; `:2370`; the 24a/25a overlap A/B. OPEN: G9 scroll check (next,
+free); FHA × ZONES intersection; spot-sheet coordinate spike; zones-toggle answer;
+project-instructions rev F; delete TEST MNP03 and TEST HPZ11 spots. NEXT: G9 device check, then
+FHA × ZONES.
+
 *v16.77.11 · 24 Sep 2026 — **E1 SHIPPED AND GATED: BUILD `2026.09.24a`. SHADING-OFF TAPS NOW GET A
 zoneAt ZONING CARD (IN PARK → ZONE CARD, OUTSIDE → OUTPARK + VERIFY). T1 AND T2 CONFIRMED ON 18a.
 CLAUDE.md REV F.** `index.html` 2,367,575 B (2,366,969 + 46 + 560), commit `2c67685`, Pages run
