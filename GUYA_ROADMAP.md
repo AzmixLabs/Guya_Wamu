@@ -1,5 +1,60 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.16 · 26 Sep 2026 — **BUILD 2026.09.26a SHIPPED (SHADING-ON OUT-OF-ZONE SILENCE FIX, RULE 2);
+FHA CARD RE-SCOPED AS STRUCTURAL. ON-PHONE GATE FOR 26a PENDING.** `index.html` 2,367,767 B,
+`CF23D682…FD5`, build `2026.09.26a`, commit `b7dfb9f` (Pages run 36201848026 green; live page
+byte-identical to the repo file; not yet device-tested). Records: `scratchpad\fha_card_extract.txt`
+(48,966 B, `2D3263F0…BBDF5`, read-only extract on 25a); `scratchpad\silence_fix.txt` (16,457 B,
+`B7EE0F2C…12A56`, 43/43 checks). Line numbers below are 26a unless marked 25a; 26a inserted one
+line at :1283, so every 25a line after :1282 is +1.*
+
+**1. E9 CONFIRMED (25a).** Shading-ON map taps outside every zone were silent unless a depth sample
+lay within NEAR_MAX 120 m: the water gate's mask shadeMaskFeats() is built from ZONES only
+(25a :1994-:2001). Statewide; hidden wherever imported coverage exists. Rule 2 defect. Shading OFF
+(25a :3040) unaffected.
+
+**2. 2026.09.26a — SHIPPED.** New `zoneCard(ll)` at :1283 (zoneAt → zonePopup, else the OUTPARK +
+verify markup copied byte-for-byte from :3055). The :3051 gate-false branch now opens zoneCard (no
+depth block), honouring `_gPlaced`. Diff: 4 hunks, index.html only (build string :1052/:1091,
+:1283, :3051); Leaflet block, zoneAt, zonePopup, drag safeguard (:1584-:1586), :3041 and :3055
+byte-identical to b53d3c2. vm: C bare → OUTPARK card, no openDepthRead; A → unchanged; C with
+_gPlaced → no card; out-of-zone tap 6 m from a depth pin → term2 passes, nearPin returns silently;
+grid sweep 37,631 points → 29,833 out-of-zone all carded (land included, matching shading OFF),
+7,798 in-zone unchanged. Placed spots go to `spots`, not `points`, so they never pass term2/nearPin
+— the _gPlaced guard is load-bearing.
+
+**3. FHA CARD MECHANICS (from the 25a extract).** The FHA card displaces the zone card because
+bindPopup's _openPopup (26a :1312) DomEvent.stop()s the click — the map handler never runs. E3 =
+STATIC (string built once per feature). The FHA build is structural: delete :1312; per-tap handler
+at :1314-:1315 for both shading states; new `fhaCard(ll,p) = zoneCard(ll)+fhaPopup(p)` reusing the
+26a helper; raw-byte deletions on the FHA rules line :1307 (DEL-1 51 B, DEL-2 62 B; line 308 → 195
+B). Rendered-text strings in the old spec match nothing (F1) — specify against raw bytes.
+
+**4. DECISIONS.** (a) Silence fix first, own build — done (§2). (b) FHA handler in tool modes
+returns without card or stop (tool clicks pass through; fixes F2); capture the F2 baseline on 26a
+first (26a does not touch the FHA path, so it is the same baseline 25a would give). (c) Gate points
+named by name + plan: MNP11 and CPZ06 are duplicated IDs. (d) FHA gate adds: zone block incl.
+NO-TAKE visible without scrolling, portrait and landscape.
+
+**5. NEW, UNTESTED.** F2: with FHA ON, taps inside an FHA polygon block Add-spot (26a :1875), slope
+(:1904) and measure (:3380). F7: FHA-wins depends on the FHA canvas being topmost; a later canvas
+degrades safely to the zone card. Pre-existing, noted in silence_fix.txt: shading ON, an IN-zone
+tap that has just placed a spot still opens the zone + depth card over the spot sheet (the
+shading-ON path never checks _gPlaced in-zone) — probably the known "placing double"; confirm at
+that item.
+
+**6. 26a ON-PHONE GATE (home-screen app, force-close first; taps ≥ 50 m from pins).** FHA OFF,
+shading ON: C (FHA-051 Noosa River, outside every park) → OUTPARK + verify card, no depth block; A
+(Hays Inlet (MNP11), Moreton Bay MP) → zone card + NO-TAKE + depth/land line, unchanged; Add-spot
+near C → spot card only, no OUTPARK card over it. Regression, FHA ON at C → today's FHA-only card
+(expected until the FHA build).
+
+**7. CARRY-FORWARD.** QUEUE: 26a on-phone gate → F2 baseline on 26a (same phone session) → FHA
+card → chip → placing double (incl. §5 in-zone case) → zones-toggle persistence. OPEN: v16.77.15
+and v16.77.16 PK re-upload; zones-toggle answer; project-instructions rev F; delete TEST
+MNP03/HPZ11 and, after the FHA gate, A/B/C TEST spots; spot-sheet coordinate spike; optional
+CLAUDE.md trailer note; F8 comment wording.
+
 *v16.77.15 · 26 Sep 2026 — **NO BUILD. 25a BASELINE CAPTURED: THE FHA CARD HAZARD IS CONFIRMED ON
 DEVICE — AT A NO-TAKE POINT THE FHA CARD REPLACES THE zoneAt CARD. NEW RULE-2 DEFECT CANDIDATE: A
 SHADING-ON TAP OUTSIDE EVERY ZONE (FHA OFF) RETURNS NOTHING.** `index.html` unchanged at 2,367,395 B,
