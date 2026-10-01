@@ -1,5 +1,83 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.18 · 1 Oct 2026 — **BUILD 2026.09.26b SHIPPED AND ON-PHONE GATE PASSED (FHA CARD: ZONE
+BLOCK FIRST, PER-TAP HANDLER, RULE-1 DELETIONS). NEW PRIORITY: SLOPE MODE HAS NO EXIT — A
+ZONE-SILENT TRAP.** `index.html` 2,368,305 B, `5951E392…D13B3`, build `2026.09.26b`, commit
+`c038fc1` (Pages run 36220022095 green; live page byte-identical to the repo file; device-tested).
+Record: `scratchpad\fha_card_build.txt` (51,928 B, `208F2889…5BDDC`, 114 PASS / 0 FAIL). Line
+numbers below are 26b; 26b = 26a + 1 from :1309, + 2 after :1315.*
+
+**1. SHIPPED.** Static FHA bindPopup deleted. One per-tap handler (:1314–:1317) opens
+`fhaCard(ll,p) = zoneCard(ll) + fhaPopup(p)` (:1309) in both shading states — zone block first
+from zoneAt(tap), FHA block second, no depth block. Defensive tool-mode return (slopeMode /
+drawing / placing / measuring): no card, no stop. FHA rules line :1307 308 → 195 B: "legal
+fishing is generally permitted" and "not a marine-park zone and not no-take" removed (rule 1);
+neither phrase remains in index.html. Diff: 5 hunks, 9 insertions / 7 deletions, index.html
+only. zoneAt, zonePopup, zoneCard, drag safeguard, applyZoneFade guard, every tool handler,
+Leaflet block and CSS byte-identical to 26a. vm calibrated against 26a first; all 35 FHA features
+× both shading states pass; 2,916-tap sweep outside every FHA identical to 26a, none silent.
+
+**2. F2 CLOSED — MECHANISM.** Measure, Add-spot and slope survive inside FHAs because
+body.measuring / .placing / .slopemode set `pointer-events:none` on `.leaflet-overlay-pane` (CSS
+:693–:695, :845–:846, :856–:858); the FHA canvas inherits it, so taps reach the map as plain
+clicks. The CSS, not the handler, protects the tools (26a with a forced hit blocks them).
+Freehand draw uses raw pointer events and body.drawing has no pointer-events rule. Only tool-mode
+change vs 26a: a click landing on the FHA canvas while drawing now opens nothing (26a opened a
+stray FHA card).
+
+**3. ON-PHONE GATE — PASSED.** A, Hays Inlet (MNP11) NO-TAKE → Hay's Inlet FHA-012 Mgmt A: shading
+OFF + ON, portrait + landscape; NO-TAKE visible without scrolling in all four (portrait shows the
+whole card; landscape needs a scroll to reach the FHA block). B CPZ06 → FHA-012 Mgmt A; C OUTPARK
+→ FHA-051 Mgmt A (Noosa River); Kolan GUZ → FHA-032 Mgmt B — each in both shading states.
+Measure, Add-spot, freehand draw and spot pin inside FHAs PASS; slope chained inside the Elliott
+River FHA PASS (first device test of slope). Controls PASS: OUTPARK card out of zone (Burnett
+Heads); CPZ04 card with FHA ON and OFF outside FHAs (Mon Repos); depth read in-zone with shading
+ON. FHA-OFF-inside-FHA control waived (no FHA canvas when the layer is off). A device report that
+point A "isn't Hays Inlet" is resolved: the TEST spot at A reads Hays Inlet (MNP11) NO-TAKE,
+matching the harness.
+
+**4. KNOWN, BY DESIGN.** With the FHA layer ON, taps inside an FHA give no depth read (per spec;
+FHA OFF restores it — revisit only if it bites in use). FHA plan IDs are not unique: 9 plans have
+Mgmt A and Mgmt B features (FHA-051 = 2 polygons); gate points and notes name plan + management.
+
+**5. NEW PRIORITY — SLOPE EXIT.** Slope mode has no exit except force-closing the app; Undo,
+Clear and Save do not leave it. While stuck, every map tap is zone-silent: the read handler
+returns in slopeMode and the overlay pane ignores taps. A rule-2 silence path — next build, ahead
+of chip. Plan: an Exit button on the slope bar calling the existing exitSlope(); confirm only
+when ≥ 2 unsaved points; Save, Undo, Clear and the "+ Slope line" button unchanged. Slope chains
+only near depth points (by design).
+
+**6. BACKLOG.** (a) F7 canvas order: a canvas created after FHA toggle-on (first auto-contour
+build, first walk) sits above the FHA canvas, and the FHA block silently drops for that session
+(the zone card still shows); depth pins, walks and contours present at load sit below it, so
+inside an FHA their own popups are claimed by the FHA card. (b) "API KEY REQUIRED" placeholder
+base tiles at Hays Inlet and Noosa. (c) Depth tooltips overlap popup text. (d) Portrait: the
+panel covers the map until collapsed (pre-existing). (e) Zone cards state rod/hook limits as
+fact — rule 4, pre-existing; needs a verify-against-official-QLD-sources task.
+
+**7. CARRY-FORWARD.** QUEUE: slope exit build + on-phone gate → chip → placing double (incl.
+v16.77.16 §5 in-zone case) → zones-toggle persistence. OPEN: delete TEST MNP03/HPZ11, A/B/C and
+26 Sep TEST spots, then version:2 export; v16.77.17 + v16.77.18 PK re-upload; zones-toggle
+answer; project-instructions rev F; spot-sheet coordinate spike; optional CLAUDE.md trailer note;
+F8 comment wording.
+
+*v16.77.17 · 26 Sep 2026 — **NO BUILD. 26a ON-PHONE GATE PASSED; F2 NOT REPRODUCED; FHA CARD
+DISPATCH REVISED.** Build `2026.09.26a` unchanged. Entry reconstructed from the 26 Sep handoff:
+the drafting chat's v16.77.17 text was never applied and was not located when filing.*
+
+**1. 26a GATE — PASSED** per v16.77.16 §6.
+
+**2. F2 NOT REPRODUCED.** With FHA ON, measure and Add-spot work inside FHA-051; slope untested.
+Mechanism proved in v16.77.18 §2.
+
+**3. FHA CARD DISPATCH REVISED.** Added: P6 mechanism proof before any edit; a defensive tool-mode
+branch in the FHA handler (no card, no stop); no depth block in fhaCard. Executed as build 26b
+(v16.77.18).
+
+**4. CARRY-FORWARD.** QUEUE: FHA card build → FHA card on-phone gate → chip → placing double →
+zones-toggle persistence. OPEN: as v16.77.16 §7, plus cleanup after the FHA gate; F8 comment
+wording.
+
 *v16.77.16 · 26 Sep 2026 — **BUILD 2026.09.26a SHIPPED (SHADING-ON OUT-OF-ZONE SILENCE FIX, RULE 2);
 FHA CARD RE-SCOPED AS STRUCTURAL. ON-PHONE GATE FOR 26a PENDING.** `index.html` 2,367,767 B,
 `CF23D682…FD5`, build `2026.09.26a`, commit `b7dfb9f` (Pages run 36201848026 green; live page
