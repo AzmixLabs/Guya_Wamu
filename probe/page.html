@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Guya - Storage / offline probe (temporary)</title>
+<style>
+  body{margin:0;padding:18px 16px 40px;background:#0b1620;color:#dce8ee;font-family:-apple-system,system-ui,sans-serif;font-size:16px;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#7d95a3;font-size:13px;margin-bottom:16px}
+  .sec{background:#122230;border:1px solid #23394a;border-radius:10px;padding:14px;margin-bottom:14px}
+  .lbl{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#6f8794;margin-bottom:8px}
+  .dim{color:#7d95a3;font-size:13px;line-height:1.45;margin-top:8px}
+  .btn{width:100%;padding:13px;font-size:16px;border-radius:8px;border:1px solid #2c4a60;background:#1b3242;color:#dce8ee;font-weight:600;margin-top:8px}
+  .btn[disabled]{opacity:.55}
+  .btn.danger{border-color:#5a2c30;background:#3a1b1f;color:#e9b8b5}
+  textarea{width:100%;box-sizing:border-box;height:340px;background:#0e1c26;color:#dce8ee;border:1px solid #2c4a60;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.45}
+  a.back{display:block;text-align:center;margin-top:18px;padding:14px;background:#1b3242;border:1px solid #2c4a60;border-radius:10px;color:#8fd4c4;font-size:17px;text-decoration:none;font-weight:600}
+  ol{padding-left:20px;margin:6px 0}
+</style>
+</head>
+<body>
+<h1>Storage / offline probe</h1>
+<div class="sub">Temporary diagnostic (P0). Uses only its own stores: IndexedDB "guya_probe", Cache "guya-probe-v1", localStorage keys "guya_probe_*", and a service worker limited to this probe/ folder. It does not read or write any Guya app data. Nothing is sent anywhere.</div>
+
+<div class="sec"><div class="lbl">How to run it</div>
+  <ol>
+    <li>Open this page from the home-screen Guya (Storage check, section 7).</li>
+    <li>Tap <b>Run write tests</b>. Wait for "done".</li>
+    <li>Reload this page once (second load).</li>
+    <li>Force-close Guya, reopen, come back here (blob and cache re-verify).</li>
+    <li>Turn on Airplane Mode, reload this page (offline serve).</li>
+    <li>Tap <b>Copy report</b> after each step and paste it into the planning chat.</li>
+  </ol>
+</div>
+
+<div class="sec"><div class="lbl">Report</div>
+  <textarea id="rep" readonly>working...</textarea>
+  <button class="btn" id="run">Run write tests (20 MB IndexedDB blob, Cache put, persist())</button>
+  <button class="btn" id="copy">Copy report</button>
+  <div class="dim" id="st"></div>
+</div>
+
+<div class="sec"><div class="lbl">Clean up</div>
+  <button class="btn danger" id="rm">Remove probe data</button>
+  <div class="dim" id="rmout"></div>
+  <div class="dim">Deletes ONLY IndexedDB "guya_probe", Cache "guya-probe-v1", localStorage keys starting "guya_probe_", and unregisters the probe service worker. One thing it cannot undo: if persist() was granted, that applies to the whole site and stays.</div>
+</div>
+
+<a class="back" href="../storage_check.html">Back to Storage check</a>
+
+<script>
+(function () {
+  'use strict';
+  var DB = 'guya_probe', STORE = 'blobs', CACHE = 'guya-probe-v1', LS = 'guya_probe_';
+  var BLOB_BYTES = 20 * 1024 * 1024;
+  var lines = {}, order = [];
+  var rep = document.getElementById('rep'), st = document.getElementById('st');
+  function set(k, v) { if (!(k in lines)) order.push(k); lines[k] = v; render(); }
+  function render() { rep.value = order.map(function (k) { return k + ': ' + lines[k]; }).join('\n'); }
+  function lsGet(k) { try { return localStorage.getItem(LS + k); } catch (e) { return null; } }
+  function lsSet(k, v) { localStorage.setItem(LS + k, v); }
+  function mb(n) { return (n / 1048576).toFixed(2) + ' MB'; }
+  function hex(buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16); return s; }
+  function sha256(buf) { return crypto.subtle.digest('SHA-256', buf).then(hex); }
+  function err(e) { return 'ERROR ' + (e && (e.name || '') + ' ' + (e.message || e)); }
+
+  /* ---- IndexedDB helpers (database "guya_probe" only) ---- */
+  function openDb() { return new Promise(function (res, rej) { var r = indexedDB.open(DB, 1); r.onupgradeneeded = function () { r.result.createObjectStore(STORE); }; r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; r.onblocked = function () { rej(new Error('blocked')); }; }); }
+  function idbPut(db, key, val) { return new Promise(function (res, rej) { var tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(val, key); tx.oncomplete = function () { res(); }; tx.onerror = tx.onabort = function () { rej(tx.error || new Error('tx aborted')); }; }); }
+  function idbGet(db, key) { return new Promise(function (res, rej) { var tx = db.transaction(STORE, 'readonly'); var rq = tx.objectStore(STORE).get(key); rq.onsuccess = function () { res(rq.result); }; rq.onerror = function () { rej(rq.error); }; }); }
+  function dbExists() { if (!indexedDB.databases) return Promise.resolve(null); return indexedDB.databases().then(function (l) { return l.some(function (d) { return d.name === DB; }); }).catch(function () { return null; }); }
+
+  /* deterministic 20 MB payload (xorshift32) - no network, no app data */
+  function makePayload() { var a = new Uint8Array(BLOB_BYTES), x = 0x9E3779B9 | 0; for (var i = 0; i < a.length; i += 4) { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; a[i] = x & 255; a[i + 1] = (x >>> 8) & 255; a[i + 2] = (x >>> 16) & 255; a[i + 3] = (x >>> 24) & 255; } return a.buffer; }
+
+  /* ---- passive checks: run on every load, write nothing except the SW registration ---- */
+  function passive() {
+    var ua = navigator.userAgent, m = ua.match(/OS (\d+)[_.](\d+)(?:[_.](\d+))?/);
+    set('probe', 'p0-2026.11.15a   time ' + new Date().toISOString());
+    set('url', location.href);
+    set('user agent', ua);
+    set('iOS version', m ? (m[1] + '.' + m[2] + (m[3] ? '.' + m[3] : '')) : 'not an iOS user agent');
+    set('home-screen container', (typeof navigator.standalone !== 'undefined') ? String(navigator.standalone) : ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ? 'true (display-mode)' : 'false / unknown'));
+    set('navigator.onLine', String(navigator.onLine));
+    set('secure context', String(window.isSecureContext));
+    set('crypto.subtle', (window.crypto && crypto.subtle) ? 'present' : 'MISSING');
+    set('DecompressionStream', (typeof DecompressionStream !== 'undefined') ? 'present' : 'MISSING');
+    set('CompressionStream', (typeof CompressionStream !== 'undefined') ? 'present' : 'MISSING');
+    set('indexedDB', (typeof indexedDB !== 'undefined') ? 'present' : 'MISSING');
+    set('Cache API', (typeof caches !== 'undefined') ? 'present' : 'MISSING');
+    set('serviceWorker', ('serviceWorker' in navigator) ? 'present' : 'MISSING');
+    var loads = (parseInt(lsGet('loads') || '0', 10) || 0) + 1; try { lsSet('loads', String(loads)); } catch (e) {}
+    set('load number (this container)', String(loads));
+
+    var p = [];
+    /* estimate */
+    if (navigator.storage && navigator.storage.estimate) p.push(navigator.storage.estimate().then(function (e) { set('estimate()', 'usage ' + mb(e.usage) + ' of quota ' + mb(e.quota)); }).catch(function (e) { set('estimate()', err(e)); }));
+    else set('estimate()', 'not supported');
+    /* persisted (read only here; persist() is requested by the Run button) */
+    if (navigator.storage && navigator.storage.persisted) p.push(navigator.storage.persisted().then(function (v) { set('persisted() now', String(v)); }).catch(function (e) { set('persisted() now', err(e)); }));
+    else set('persisted() now', 'not supported');
+    set('persist() result (last Run)', lsGet('persist_result') || 'not run yet');
+
+    /* blob re-verify from a previous visit */
+    var want = lsGet('blob_sha');
+    if (!want) set('IDB 20 MB blob, previous visit', 'nothing stored yet - tap Run write tests');
+    else p.push(dbExists().then(function (ex) {
+      if (ex === false) { set('IDB 20 MB blob, previous visit', 'FAIL - expected hash is stored but database "guya_probe" is GONE (evicted?) - written ' + lsGet('blob_at')); return; }
+      return openDb().then(function (db) { return idbGet(db, 'b20').then(function (v) { db.close(); if (!v) { set('IDB 20 MB blob, previous visit', 'FAIL - database present but the record is missing - written ' + lsGet('blob_at')); return; }
+        return sha256(v).then(function (h) { set('IDB 20 MB blob, previous visit', (h === want ? 'PASS' : 'FAIL') + ' - ' + mb(v.byteLength) + ' re-read, SHA-256 ' + (h === want ? 'matches' : 'DIFFERS from') + ' the hash stored at ' + lsGet('blob_at') + ' (' + h.slice(0, 16) + '...)'); }); }); });
+    }).catch(function (e) { set('IDB 20 MB blob, previous visit', err(e)); }));
+
+    /* cache re-verify from a previous visit */
+    var tok = lsGet('cache_token');
+    if (!tok) set('Cache API item, previous visit', 'nothing stored yet - tap Run write tests');
+    else if (typeof caches === 'undefined') set('Cache API item, previous visit', 'Cache API missing');
+    else p.push(caches.open(CACHE).then(function (c) { return c.match('probe-item'); }).then(function (r) { if (!r) { set('Cache API item, previous visit', 'FAIL - no match (cache evicted?) - put at ' + lsGet('cache_at')); return; } return r.text().then(function (t) { set('Cache API item, previous visit', (t === tok ? 'PASS' : 'FAIL') + ' - match() returned ' + (t === tok ? 'the stored token' : 'a different body') + ', put at ' + lsGet('cache_at')); }); }).catch(function (e) { set('Cache API item, previous visit', err(e)); }));
+
+    /* service worker: register under ./ (= .../probe/), report control and how this page was served */
+    if ('serviceWorker' in navigator) {
+      set('SW controlling this page', navigator.serviceWorker.controller ? ('YES - ' + navigator.serviceWorker.controller.scriptURL) : 'no (expected on the first load; should be YES on the second)');
+      p.push(navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
+        set('SW registered', 'scope ' + reg.scope + ' - ' + (reg.active ? 'active' : reg.waiting ? 'waiting' : reg.installing ? 'installing' : 'no worker'));
+        if (!navigator.serviceWorker.controller) { set('SW ping', 'page not controlled yet - reload once'); return; }
+        return fetch('__ping', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+          set('SW ping', 'answered by the worker, version ' + j.version + ', page cached ' + j.pageCached);
+          set('this page was served from', j.lastNav.source === 'cache' ? 'CACHE (network unavailable) - offline serve WORKS' : j.lastNav.source === 'network' ? 'network (turn on Airplane Mode and reload to test offline)' : j.lastNav.source);
+        }).catch(function (e) { set('SW ping', err(e)); });
+      }).catch(function (e) { set('SW registered', err(e)); }));
+    }
+    return Promise.all(p);
+  }
+
+  /* ---- write tests: only on the button ---- */
+  function runWrites() {
+    var btn = document.getElementById('run'); btn.disabled = true; st.textContent = 'running...';
+    var chain = Promise.resolve();
+    /* persist() - applies to the whole site, not just the probe */
+    chain = chain.then(function () { if (!(navigator.storage && navigator.storage.persist)) { lsSet('persist_result', 'not supported'); return; }
+      return navigator.storage.persisted().then(function (before) { return navigator.storage.persist().then(function (granted) { var s = 'persisted() before ' + before + ' -> persist() returned ' + granted + ' at ' + new Date().toISOString(); lsSet('persist_result', s); set('persist() result (last Run)', s); }); }).catch(function (e) { lsSet('persist_result', err(e)); set('persist() result (last Run)', err(e)); }); });
+    /* 20 MB blob: write, re-read in a NEW transaction, compare SHA-256, store the expected hash for the next visit */
+    chain = chain.then(function () { if (!(window.crypto && crypto.subtle)) { set('IDB 20 MB blob, this run', 'skipped - crypto.subtle missing'); return; }
+      var t0 = Date.now(), payload = makePayload();
+      return sha256(payload).then(function (h0) { return openDb().then(function (db) { var t1 = Date.now();
+        return idbPut(db, 'b20', payload).then(function () { var t2 = Date.now(); payload = null;
+          return idbGet(db, 'b20').then(function (v) { var t3 = Date.now(); db.close(); if (!v) throw new Error('record missing straight after the write');
+            return sha256(v).then(function (h1) { var ok = h1 === h0 && v.byteLength === BLOB_BYTES; if (ok) { lsSet('blob_sha', h0); lsSet('blob_at', new Date().toISOString()); }
+              set('IDB 20 MB blob, this run', (ok ? 'PASS' : 'FAIL') + ' - wrote ' + mb(BLOB_BYTES) + ' as an ArrayBuffer in ' + (t2 - t1) + ' ms, re-read in a new transaction in ' + (t3 - t2) + ' ms, SHA-256 ' + (ok ? 'identical' : 'DIFFERENT') + ' (' + h1.slice(0, 16) + '...); expected hash saved for the next visit'); }); }); }); }); })
+        .catch(function (e) { set('IDB 20 MB blob, this run', err(e)); }); });
+    /* Cache API put, immediate match; the token is re-checked on the next visit */
+    chain = chain.then(function () { if (typeof caches === 'undefined') { set('Cache API put, this run', 'Cache API missing'); return; }
+      var tok = 'guya-probe-token-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      return caches.open(CACHE).then(function (c) { return c.put('probe-item', new Response(tok, { headers: { 'Content-Type': 'text/plain' } })).then(function () { return c.match('probe-item'); }); })
+        .then(function (r) { return r ? r.text() : null; }).then(function (t) { var ok = t === tok; if (ok) { lsSet('cache_token', tok); lsSet('cache_at', new Date().toISOString()); } set('Cache API put, this run', (ok ? 'PASS' : 'FAIL') + ' - put then match in cache "guya-probe-v1"; token saved for the next visit'); })
+        .catch(function (e) { set('Cache API put, this run', err(e)); }); });
+    chain = chain.then(function () { if (navigator.storage && navigator.storage.estimate) return navigator.storage.estimate().then(function (e) { set('estimate() after writes', 'usage ' + mb(e.usage) + ' of quota ' + mb(e.quota)); }).catch(function () {}); });
+    return chain.then(function () { st.textContent = 'done ' + new Date().toISOString() + ' - now reload this page once'; btn.disabled = false; });
+  }
+
+  /* ---- cleanup: probe names only ---- */
+  function removeProbe() {
+    var out = document.getElementById('rmout'), done = [];
+    var p = [];
+    try { var keys = []; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(LS) === 0) keys.push(k); } keys.forEach(function (k) { localStorage.removeItem(k); }); done.push(keys.length + ' localStorage key(s) "guya_probe_*"'); } catch (e) { done.push('localStorage: ' + err(e)); }
+    p.push(new Promise(function (res) { var r = indexedDB.deleteDatabase(DB); r.onsuccess = function () { done.push('IndexedDB "guya_probe" deleted'); res(); }; r.onerror = r.onblocked = function () { done.push('IndexedDB "guya_probe": delete failed or blocked'); res(); }; }));
+    if (typeof caches !== 'undefined') p.push(caches.delete(CACHE).then(function (ok) { done.push('Cache "guya-probe-v1" ' + (ok ? 'deleted' : 'was not present')); }).catch(function (e) { done.push('Cache: ' + err(e)); }));
+    if ('serviceWorker' in navigator) p.push(navigator.serviceWorker.getRegistrations().then(function (rs) { var probeScope = new URL('./', location.href).href; return Promise.all(rs.filter(function (r) { return r.scope === probeScope; }).map(function (r) { return r.unregister().then(function (ok) { done.push('service worker ' + r.scope + (ok ? ' unregistered' : ' NOT unregistered')); }); })); }).catch(function (e) { done.push('service worker: ' + err(e)); }));
+    return Promise.all(p).then(function () { out.textContent = 'Removed: ' + done.join('; ') + '.'; });
+  }
+
+  document.getElementById('run').onclick = function () { runWrites(); };
+  document.getElementById('rm').onclick = function () { if (confirm('Remove probe data? (IndexedDB "guya_probe", Cache "guya-probe-v1", localStorage "guya_probe_*", probe service worker)')) removeProbe(); };
+  document.getElementById('copy').onclick = function () { var t = rep.value; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { st.textContent = 'copied'; }, function () { rep.focus(); rep.select(); st.textContent = 'select-all done - use Copy from the menu'; }); else { rep.focus(); rep.select(); try { document.execCommand('copy'); st.textContent = 'copied'; } catch (e) { st.textContent = 'select-all done - use Copy from the menu'; } } };
+  window.__guyaProbe = { passive: passive, runWrites: runWrites, removeProbe: removeProbe };
+  passive().then(function () { st.textContent = 'passive checks done'; }, function (e) { st.textContent = err(e); });
+})();
+</script>
+</body>
+</html>

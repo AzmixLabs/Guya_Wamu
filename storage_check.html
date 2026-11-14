@@ -78,6 +78,14 @@
   <div class="dim">Deletes ONLY keys whose name starts with <code>woongarra_imported_rollback_v2:</code> (including the colon). One key per delete, each behind a confirm naming that exact key. Never touches <code>woongarra_imported_v2</code>, spots, profiles, photos, or the import receipt.</div>
 </div>
 
+<div class="sec"><div class="lbl">7 · Storage / offline probe (P0)</div>
+  <div class="dim" id="p0Status" style="margin-top:0;margin-bottom:10px">...</div>
+  <a class="back" href="probe/page.html" style="margin-top:0">Open the storage / offline probe</a>
+  <button class="btn danger" id="p0Rm" style="margin-top:10px">Remove probe data</button>
+  <div class="dim" id="p0Out"></div>
+  <div class="dim">The probe is a separate page (<code>probe/page.html</code>) with its own service worker limited to the <code>probe/</code> folder - it cannot control Guya or this page. It uses ONLY IndexedDB <code>guya_probe</code>, Cache <code>guya-probe-v1</code> and localStorage keys starting <code>guya_probe_</code>; it never touches a Guya app key. "Remove probe data" deletes exactly those and unregisters the probe worker.</div>
+</div>
+
 <a class="back" href="index.html">← Back to Guya</a>
 
 <script>
@@ -335,6 +343,32 @@
     }
   }
   renderRollbackSection();
+})();
+</script>
+<script>
+/* Section 7 - P0 probe launcher. Separate script block: the diagnostic script above is unchanged. Touches ONLY
+   localStorage keys starting "guya_probe_", IndexedDB "guya_probe", Cache "guya-probe-v1" and the service worker
+   registered for the probe/ folder. */
+(function(){
+  var LS='guya_probe_', DB='guya_probe', CACHE='guya-probe-v1';
+  var status=document.getElementById('p0Status'), out=document.getElementById('p0Out');
+  function probeScope(){ return new URL('probe/', location.href).href; }
+  function probeKeys(){ var k=[]; try{ for(var i=0;i<localStorage.length;i++){ var n=localStorage.key(i); if(n&&n.indexOf(LS)===0) k.push(n); } }catch(e){} return k; }
+  function render(){
+    var parts=[probeKeys().length+' probe localStorage key(s)'];
+    var p=('serviceWorker' in navigator)?navigator.serviceWorker.getRegistration(probeScope()).then(function(r){ parts.push((r&&r.scope===probeScope())?'probe service worker registered':'no probe service worker'); }).catch(function(){ parts.push('service worker state unknown'); }):Promise.resolve(parts.push('service workers not supported'));
+    p.then(function(){ status.textContent='Now: '+parts.join(', ')+'.'; });
+  }
+  document.getElementById('p0Rm').onclick=function(){
+    if(!confirm('Remove probe data? (IndexedDB "guya_probe", Cache "guya-probe-v1", localStorage "guya_probe_*", probe service worker)')) return;
+    var done=[], p=[];
+    try{ var keys=probeKeys(); keys.forEach(function(k){ localStorage.removeItem(k); }); done.push(keys.length+' localStorage key(s)'); }catch(e){ done.push('localStorage failed'); }
+    p.push(new Promise(function(res){ try{ var r=indexedDB.deleteDatabase(DB); r.onsuccess=function(){ done.push('IndexedDB guya_probe deleted'); res(); }; r.onerror=r.onblocked=function(){ done.push('IndexedDB guya_probe: failed or blocked'); res(); }; }catch(e){ done.push('IndexedDB unavailable'); res(); } }));
+    if(typeof caches!=='undefined') p.push(caches.delete(CACHE).then(function(ok){ done.push('Cache guya-probe-v1 '+(ok?'deleted':'was not present')); }).catch(function(){ done.push('Cache failed'); }));
+    if('serviceWorker' in navigator) p.push(navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.filter(function(r){ return r.scope===probeScope(); }).map(function(r){ return r.unregister().then(function(ok){ done.push('probe service worker '+(ok?'unregistered':'NOT unregistered')); }); })); }).catch(function(){ done.push('service worker failed'); }));
+    Promise.all(p).then(function(){ out.textContent='Removed: '+done.join('; ')+'.'; render(); });
+  };
+  render();
 })();
 </script>
 </body>
