@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15c</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1288,7 +1288,8 @@ function zonePopup(p,nb){const s=STYLES[p.zt]||ZT_UNKNOWN,pk=parkOf(p);let h=`<d
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
   if(s.unknown)h+=`<div class="notake">Unrecognised zone type — treat as no-take until confirmed officially.</div>`;
   h+=`<div class="rules">${s.unknown?s.rules:((pk&&pk.verified&&pk.limits&&pk.limits[p.zt])||LIMITS_UNCONF)}</div>${nb?'<div class="nearb">'+NEARB_TXT(nb)+'</div>':''}<div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.${parkLinks(p)}</div></div>`;return h;}
-function zoneCard(ll){const k=zoneLookup(ll.lat,ll.lng);if(k.state==='zone')return zonePopup(k.z,k.nb?k.nb.b:0);if(k.state==='notresolved')return '<div class="pop"><div class="nearb">'+NOTRES_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.'+parkLinks(k.nb.p)+'</div></div>';if(k.state==='outside')return '<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';if(k.state==='inpark')return '<div class="pop"><div class="nearb">'+INPARK_TXT(k.park)+'</div><div class="warn">Verify zone &amp; rules officially before fishing.'+parkLinks({park:k.park})+'</div></div>';return '<div class="pop"><div class="nearb">'+UNASSESSED_TXT+'</div></div>';}
+function zoneCard(ll){return zoneCardCore(ll)+fhaLine(ll.lat,ll.lng);} /* R4a: every zone card ends with an FHA line */
+function zoneCardCore(ll){const k=zoneLookup(ll.lat,ll.lng);if(k.state==='zone')return zonePopup(k.z,k.nb?k.nb.b:0);if(k.state==='notresolved')return '<div class="pop"><div class="nearb">'+NOTRES_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.'+parkLinks(k.nb.p)+'</div></div>';if(k.state==='outside')return '<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';if(k.state==='inpark')return '<div class="pop"><div class="nearb">'+INPARK_TXT(k.park)+'</div><div class="warn">Verify zone &amp; rules officially before fishing.'+parkLinks({park:k.park})+'</div></div>';return '<div class="pop"><div class="nearb">'+UNASSESSED_TXT+'</div></div>';}
 const counts={MNP:0,CPZ:0,HPZ:0,GUZ:0};
 const zoneRenderer=L.canvas({padding:0.5});
 const zoneLayer=L.geoJSON(ZONES,{renderer:zoneRenderer,interactive:false,style:styleFor,onEachFeature:(f,layer)=>{counts[f.properties.zt]=(counts[f.properties.zt]||0)+1;
@@ -1314,7 +1315,16 @@ const FHA={"type":"FeatureCollection","features":[{"type":"Feature","properties"
 function fhaPopup(p){return '<div class="pop"><h2>'+p.name+' FHA</h2><div class="zid">'+p.plan+(p.mgmt?(' \u00b7 Management '+p.mgmt):'')+' \u00b7 Fisheries Act 1994</div>'+
   '<div class="rules" style="margin-top:.4em">Declared <b>Fish Habitat Area</b>: habitat is protected from physical disturbance and development. Marked navigational channels are excluded.</div>'+
   '<div class="warn">\u26a0 Indicative boundary, currency Aug 2023 (latest gazettal 21 May 2024) \u2014 <b>not authoritative</b>. Bag/size/gear rules and zone status are separate \u2014 confirm current rules before fishing.<div class="links"><a href="https://www.business.qld.gov.au/industries/farms-fishing-forestry/fisheries/development/fish-habitat-area/plan" target="_blank" rel="noopener">Official FHA plans \u2197</a></div></div></div>';}
-function fhaCard(ll,p){return zoneCard(ll)+fhaPopup(p);}
+function fhaCard(ll,p){return zoneCard(ll);} /* R4a: the FHA block now comes from fhaAt(tap) inside zoneCard, not from the polygon Leaflet hit */
+/* R4a (build 2026.11.15c, branch r4a-fha-lookup): the FHA block no longer depends on Leaflet's canvas hit-test or on the FHA layer being switched on. fhaAt() is a point-in-polygon lookup over the baked FHA features; fhaLookup() gives one of four states and fhaLine() prints one of them under EVERY zone card: the FHA block(s); or FHA_NONE_TXT, only inside FHA_COVERAGE (the extent the baked dataset was cut to: lon 151.9 to 153.7, lat -28.2 to -24.4, currency Aug 2023); or FHA_NOTLOADED_TXT; or FHA_UNASSESSED_TXT everywhere else and on any exception. An FHA is a habitat declaration under the Fisheries Act 1994: nothing here says a place is no-take, and nothing here says fishing is lawful (hard rule 1). */
+const FHA_COVERAGE={box:{W:151.9,S:-28.2,E:153.7,N:-24.4},currency:"Aug 2023",loaded:true,src:"baked FHA dataset (35 features); extent as recorded in GUYA_ROADMAP.md: lon 151.9-153.7, lat -28.2 to -24.4"};
+const FHA_NONE_TXT="No declared Fish Habitat Area at this point (data current to Aug 2023)";
+const FHA_NOTLOADED_TXT="FHA data not loaded here";
+const FHA_UNASSESSED_TXT="FHA not assessed for this area";
+let _fbb=null;
+function fhaAt(lat,lng){if(!_fbb)_fbb=FHA.features.map(f=>{let w=180,s=90,e=-180,n=-90;const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;for(const poly of polys)for(const r of poly)for(const c of r){if(c[0]<w)w=c[0];if(c[0]>e)e=c[0];if(c[1]<s)s=c[1];if(c[1]>n)n=c[1];}return [w,s,e,n];});const out=[];for(let i=0;i<FHA.features.length;i++){const b=_fbb[i];if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3])continue;const g=FHA.features[i].geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;for(const poly of polys){if(pip([lng,lat],poly)){out.push(FHA.features[i].properties);break;}}}return out;}
+function fhaLookup(lat,lng){try{if(!(typeof lat==='number'&&typeof lng==='number'&&isFinite(lat)&&isFinite(lng)))return {state:'unassessed'};const c=FHA_COVERAGE,b=c.box;const inBox=lng>=b.W&&lng<=b.E&&lat>=b.S&&lat<=b.N;if(c.loaded!==true)return {state:inBox?'notloaded':'unassessed'};const h=fhaAt(lat,lng);if(h.length)return {state:'fha',hits:h};return {state:inBox?'none':'unassessed'};}catch(e){return {state:'unassessed'};}}
+function fhaLine(lat,lng){const k=fhaLookup(lat,lng);if(k.state==='fha')return k.hits.map(fhaPopup).join('');return '<div class="pop"><div class="warn">'+(k.state==='none'?FHA_NONE_TXT:k.state==='notloaded'?FHA_NOTLOADED_TXT:FHA_UNASSESSED_TXT)+'</div></div>';}
 const fhaLayer=L.geoJSON(FHA,{renderer:L.canvas({padding:0.5}),
   style:{color:'#39b37a',weight:2,dashArray:'2 5',fillColor:'#39b37a',fillOpacity:0.07,opacity:0.9},
   onEachFeature:(f,layer)=>{layer.bindTooltip(f.properties.name+' FHA',{sticky:true,className:'tip',direction:'top',opacity:1});
