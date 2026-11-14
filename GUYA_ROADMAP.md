@@ -1,5 +1,131 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.19 · 14 Nov 2026 — **BUILD 2026.10.01a SHIPPED (SLOPE BAR EXIT BUTTON), PUSHED 14 NOV —
+44 DAYS AFTER ITS COMMIT. MULTI-REGION ARCHITECTURE SPIKE COMPLETE: OPTION D, STAGED. THE SPIKE
+FOUND A RULE-2 DEFECT IN THE SHIPPED BUILD: A FALSE "OUTSIDE THE MARINE PARK" CARD EVERYWHERE
+OUTSIDE THE TWO BAKED PARKS.** `index.html` 2,368,393 B, `9E15DBFA…47256`, build `2026.10.01a`,
+commit `0c8d6ff` (Pages run 43520147979 green; live page byte-identical to the repo file; not yet
+device-tested). Records: `scratchpad\slope_exit_build_v2.txt` (16,117 B, `9C308D8E…3877C`, V1–V6
+PASS); `docs\multiregion_spike_2026-11-14.md` (109,009 B, `A21CC83B…4BA58`; Fable 5.2, read-only,
+five checkpointed phases). Line numbers below are 10.01a.*
+
+**1. SHIPPED — 2026.10.01a.** The slope bar gains an unconditional Exit (`#sl-exit`, rightmost,
+not primary) bound directly to exitSlope (:1942), mirroring measure's Done. No confirm: the
+`#sl-btn` toggle already discards an unsaved chain without one. Diff: 4 hunks, 4/3, index.html
+only (build :1052/:1091, `#sbar` :1036, handler +:1942). **Process defect:** the build report's
+Phase 4 said "SHIPPED" but recorded only a commit message (no hash, push or Pages run); the commit
+sat local from 1 Oct until the spike's Phase 0 precondition caught it. From now on a planning chat
+accepts "shipped" only when the report carries all three: commit hash, push line, Pages run ID.
+
+**2. CORRECTION TO v16.77.18 §5.** Slope mode DOES have exits: re-tapping "+ Slope line"
+(`#sl-btn`, :1938) toggles it off with no confirm, and Save (:1941) exits after a successful save
+(≥ 2 points; a silent no-op below 2). The real gap was discoverability: `#sbar` had no
+unconditional exit (unlike `#mbar`'s Done), the launcher reads as "add" not "off", and in portrait
+it is hidden by the auto-collapse. The field report "only force-close works" = launcher toggle not
+discovered. Closed by §1. Lesson: field reports state symptoms; verify the code path before
+writing a mechanism claim into the roadmap.
+
+**3. SLOPE-EXIT ON-PHONE GATE — PENDING.** (1) build string shows 2026.10.01a; (2) portrait, Exit
+with 0 points, then a zone tap opens a card; (3) landscape, Exit with 3 points — mode ends, chain
+cleared, saved count unchanged; (4) Save at 2 points saves and exits; (5) "+ Slope line" still
+toggles off; (6) portrait with a long 3-point readout: all four buttons visible and tappable, no
+clipping or spill (v2 report P3 estimates ~17 px left for `#sl-readout` at 320 CSS px); (7) after
+exit, A (MNP11 + FHA block), an out-of-zone tap (OUTPARK) and a measure all work. Overflow goes to
+the next build, not a patch.
+
+**4. SPIKE — RULE DEFECTS IN THE SHIPPED BUILD (independent of multi-region; Stage 1 fixes them).**
+(a) **False OUTPARK outside the baked corpus.** zoneAt (:1335) returns null for any point outside
+the 178 baked features (Great Sandy north limit −24.498; Moreton Bay south limit −27.933). All
+seven null-consuming sites (:1283, :3044, :3054, :3058, :1309, :1362/:1373, :3642) then assert
+"Outside the marine park boundary. General Queensland fisheries rules still apply…" — north of
+Baffle Creek (GBR Coast MP, per CLAUDE.md; not re-verified by the spike), south of the border,
+and overseas (a Fiji tap says Queensland rules apply). Four of the seven compose the OUTPARK HTML
+inline. Not yet observed in use: every field session has been inside the two parks or the
+Sunshine Coast gap. (b) **Rod/hook text keyed on zone type only** (:1223–:1225) — correct only
+because both baked parks share the figures; the first GBR Coast MP CPZ would show 2 rods/2 hooks
+where 1/1 applies. :1280 defaults a missing park to "Great Sandy MP". (c) **Unknown zone type
+fails least protective** (`STYLES[p.zt]||STYLES.GUZ` :1280; rank 98 at :1335). (d) **No FHA point
+lookup:** the FHA block exists only via the canvas hit-test, so its absence is ambiguous (no FHA /
+layer off / F7 / tool mode); an in-zone card with the FHA layer off says nothing about FHAs.
+(e) **Tide port uncapped:** nearestPort (:3469) has no cap; PORT_MAX_KM = 200 (:3470) guards only
+the catch tide-stamp (:3782); the HAT gate (:2929), tideHeightNow (:2946), flats band (:1990),
+best-bite (:3509) and live conditions (:4133) silently take a far port. (f) **Croc text is
+Bargara-specific** (:1190) and false north of the Boyne. (g) **Header/title constants**
+("Woongarra Coast · Great Sandy MP" at Hays Inlet and Noosa; :9, :16, :1052; default view and
+recentre are Redcliffe, :1228/:1327). (h) **Offline cold launch UNVERIFIED:** no service worker or
+manifest; Pages serves `max-age=600`; the app may not open from cold with no signal. (i) idwIndex
+cell width south of −24.85 (117.6 m at Redcliffe vs a 120 m reach; derived, not demonstrated).
+(j) Embedded tide tables end 2027-12-31.
+
+**5. SPIKE — SCALE.** SEQ-complete ≈ 7 regions × 25,000 = 175,000 stored points × 29.6 B/pt =
+5,180,000 B. **Correction to the spike's 2d ("exceeds the ~5 MiB cap"):** 5,180,000 ÷ 1,048,576 =
+4.94 MiB, just under 5 MiB — but that is 99% of the cap with nothing left for user data or REPLACE
+rollback snapshots, so the conclusion stands: localStorage is the ONLY ceiling binding at SEQ
+scale. Heap ~40 MB and a ~1.4× load chain are fine. Viewport-scoped loading is needed only past
+~0.5–1 M resident points (≈ 20–40 regions). Zones hit the single-file ceiling at the first new
+park (+~0.9 MB per Great-Sandy-sized park). 52% of stored points (70,066 of 134,372) never reach
+the runtime pool. Lossless delta-varint columnar encoding: 4.1–5.3 B/pt at today's precision
+(≤ 0.11 m, 1 cm); typed-array decode ≈ 48× faster than JSON.parse (desktop ratio). Pages (1 GB
+site, 100 MiB/file, no brotli, max-age=600) never binds.
+
+**6. PLAN — OPTION D, STAGED.** Great Sandy and Moreton Bay zones stay baked in index.html.
+Additional parks and all depth data ship as static, hash-verified packs on Pages, downloaded only
+by an explicit tap in a Regions panel, stored in IndexedDB; installed zone packs are always
+resident and never evicted. Service worker for the app shell only, conditional on T0/P0.
+Viewport-scoped residency (local, no network) deferred until installed points exceed ~250,000.
+Rejected: Option A's fetch-on-pan (no signal in the field; panning becomes a route into "zone not
+loaded"); Option C tiles for zones (seams through legislated polygons). **Rule-2 fail-safe:** a
+four-state `zoneLookup()` over a baked `ZONE_COVERAGE` index — zone / outside / notloaded /
+unassessed; OUTPARK is reachable only from a positive coverage hit; zoneAt keeps its contract.
+Same pattern for FHA (`fhaAt()` + `FHA_COVERAGE`). **Park identity:** a required `park` on every
+zone record; a `PARKS` table carries limits with `verified:{date,source}`; unverified → no
+figures. Unknown zone types fail most protective. Cost: two CLAUDE.md invariants change by
+Aaron's hand (static same-origin data files; one `sw.js`). **OPEN FORK (Aaron):** if the ambition
+is "finish SEQ and stop", Option B (IndexedDB only) + Stage 1 suffices (~13 builds, no new files).
+Not needed until Stage 2/4 — Stages 0, 1 and 3 are common to both.
+
+**7. PLANNING-CHAT AMENDMENT TO THE SPIKE.** The coverage extents become the new single point of
+failure (spike §5.1 #1): a wrong verified-empty row yields a confident, sourced, false OUTPARK.
+Do not hand-draw them. Derive every park extent and verified-empty row mechanically from the
+official QLD ArcGIS marine-park boundary layer, plus the Commonwealth Australian Marine Parks
+layer, bounded to state waters, each recorded with source URL and query date. A planning-chat
+assertion is not a source.
+
+**8. BUILD SEQUENCE** (full detail: spike §4.2). **Stage 0:** T0 cold-launch test (no build —
+Aaron: force-close, flight mode on, launch from the icon; repeat after an idle night); P0
+storage/offline probe in storage_check.html + a sub-scoped probe service worker (Sonnet).
+**Stage 1 — rule fixes, ship regardless:** R1 collapse the OUTPARK copies; R2 zoneLookup +
+ZONE_COVERAGE (Opus); R3a park identity / PARKS; R3b unknown type fails protective; R4a fhaAt + an
+FHA line on every card (Opus); R4b FHA layer non-interactive (closes F7; Aaron must accept losing
+the desktop FHA tooltip); P1 tide-port cap everywhere (Aaron's call: HAT-gate behaviour with no
+port in range); H1 region-aware header and croc text. **Stage 2:** S1 shell service worker
+(conditional on T0/P0; version:2 export off the phone first; rescue page and kill switch
+mandatory — a broken worker's only cure on iOS is deleting the icon, which deletes the logbook).
+**Stage 3:** M1 IndexedDB dual-write → M2 async boot (Fable) → M3 backup version:3, v2 reader kept
+forever → M4 retire the localStorage copy (gated on a v3 export held off the phone). **Stage 4:**
+K1 pack builder + first pack → K2 Regions panel → K3 "not on this phone" states → K4 supersede
+local datasets (never `legacy_unknown`). **Stage 5, on trigger:** Z1a/Z1b zone packs (first region
+north of Baffle Creek); T1 tide tables (before 2027-12-31); V1 viewport residency (> ~250,000
+installed points).
+
+**9. BACKLOG EFFECTS.** IndexedDB migration (Hold) → M1–M4. 19.08 MB backup duplication → M3.
+Rod/hook stated as fact (v16.77.18 §6e) → R3a. F7 → R4a + R4b. MN v3 → deliver as the first pack
+(avoids the ~1,045 KiB REPLACE transient). Gold Coast → unblocked after K2; needs a verified-empty
+coverage row, its own tide port and a land mask (masks stop at −27.35/−27.66; maskWater returns
+true outside them, so topographic data would paint dry ground). Bribie → a depth pack (+ Bongaree
+port). #16 Scout → R2 + P1 (Z1 for a new park). National Hold → architecture stops being the
+blocker after V1; per-state sourcing still is. Canvas rasterisation (v16.67 §E) stays the
+fallback. New latent items: §4 (i) and (j).
+
+**10. CARRY-FORWARD.** QUEUE: slope-exit on-phone gate → T0 → placing double (moved ahead of chip:
+R1 edits the same map-click handler) → Stage 1 (R1 → R2 → R3a → R3b → R4a → R4b → P1 → H1) →
+chip → zones-toggle persistence; P0 any time (separate file). Stages 2–4 after the fork. OPEN:
+scale-ambition fork; official-source pass for R2 coverage rows (before the R2 dispatch); R4b
+tooltip; P1 no-port HAT behaviour; CLAUDE.md invariant edit (before S1/K1); delete TEST
+MNP03/HPZ11, A/B/C and 26 Sep TEST spots, then version:2 export; zones-toggle answer;
+project-instructions rev F; spot-sheet coordinate spike; optional CLAUDE.md trailer note; F8
+comment wording.
+
 *v16.77.18 · 1 Oct 2026 — **BUILD 2026.09.26b SHIPPED AND ON-PHONE GATE PASSED (FHA CARD: ZONE
 BLOCK FIRST, PER-TAP HANDLER, RULE-1 DELETIONS). NEW PRIORITY: SLOPE MODE HAS NO EXIT — A
 ZONE-SILENT TRAP.** `index.html` 2,368,305 B, `5951E392…D13B3`, build `2026.09.26b`, commit
