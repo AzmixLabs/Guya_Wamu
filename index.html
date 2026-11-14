@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.14b</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.14c</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.14b</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.14c</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1224,6 +1224,7 @@ const STYLES = {
   HPZ:{name:"Habitat Protection (dark blue)",stroke:"#1f63ad",fill:"#2f86d6",weight:1.6,dash:null,fillOp:0.18,notake:false,rules:"Dark-blue zone — the marine park adds no extra line-fishing limits here. General Fisheries rules apply: 3 hand-held rods or lines and 6 hooks or lures per person. ONE hook = a single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged set of up to 6; a bait jig of up to 6 hooks (#1-#12)."},
   GUZ:{name:"General Use (light blue)",stroke:"#26a2d6",fill:"#74cdf2",weight:1.4,dash:null,fillOp:0.14,notake:false,rules:"Light-blue zone — least restrictive marine-park zone; no extra line-fishing limits. General Fisheries rules apply: 3 hand-held rods or lines and 6 hooks or lures per person. ONE hook = a single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged set of up to 6; a bait jig of up to 6 hooks (#1-#12)."}
 };
+const ZT_UNKNOWN={name:"Unrecognised zone type",stroke:"#b03a2e",fill:"#e74c3c",weight:3,dash:"7 5",fillOp:0.30,notake:false,unknown:true,rules:"Guya does not know this zone type, so it shows no limits for it. Check the official zoning map for what applies here."}; /* R3b (build 2026.11.14c): a zone type missing from ORDER/STYLES ranks ABOVE MNP in zoneAt() and renders this restricted style - never the General Use fallback */
 const ORDER=["MNP","CPZ","HPZ","GUZ"];const OUTPARK_TXT="Outside the marine park boundary. General Queensland fisheries rules still apply, and a Fish Habitat Area may too.";
 const map=L.map('map',{zoomControl:false,maxZoom:21,tap:true}).setView([-27.2275,153.0950],12);
 L.control.zoom({position:'topright'}).addTo(map);
@@ -1267,7 +1268,7 @@ function setBase(w){const n=BASES[w];if(!n||n===currentBase)return;map.removeLay
 document.querySelectorAll('#baseseg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#baseseg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');setBase(b.dataset.base);});
 
 var _shadeFade=false;var slopeView=false; /* var (hoisted) - shadeOn is let and in TDZ when zones first style */
-function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
+function styleFor(f){const s=STYLES[f.properties.zt]||ZT_UNKNOWN;
   /* F3 (build 2026.09.05a): the clamp is gated on whether shade is actually painted over THIS
      polygon, not on the global shading flag. _shadeFade stays the master switch (shading off ->
      nothing is ever clamped); f._shFade is the per-feature coverage flag written by
@@ -1277,8 +1278,9 @@ function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
      and is not part of this fix. */
   const fo=(_shadeFade&&f._shFade)?Math.min(s.fillOp,0.06):s.fillOp;
   return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:fo,opacity:0.95};}
-function zonePopup(p,nb){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
+function zonePopup(p,nb){const s=STYLES[p.zt]||ZT_UNKNOWN;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
+  if(s.unknown)h+=`<div class="notake">Unrecognised zone type — treat as no-take until confirmed officially.</div>`;
   h+=`<div class="rules">${s.rules}</div>${nb?'<div class="nearb">'+NEARB_TXT(nb)+'</div>':''}<div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.<div class="links"><a href="${p.src||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps'}" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>`;return h;}
 function zoneCard(ll){const z=zoneAt(ll.lat,ll.lng),nb=nearBoundaryHit(ll.lat,ll.lng);if(z)return zonePopup(z,nb?nb.b:0);if(nb)return '<div class="pop"><div class="nearb">'+NOTRES_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.<div class="links"><a href="'+((nb.p&&nb.p.src)||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps')+'" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>';return '<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';}
 const counts={MNP:0,CPZ:0,HPZ:0,GUZ:0};
@@ -1332,7 +1334,7 @@ document.getElementById('phead').onclick=()=>setCollapsed(!document.getElementBy
 /* ---- point-in-polygon zone lookup ---- */
 function pir(pt,ring){let x=pt[0],y=pt[1],ins=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){let xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}return ins;}
 function pip(pt,coords){if(!pir(pt,coords[0]))return false;for(let k=1;k<coords.length;k++)if(pir(pt,coords[k]))return false;return true;}
-function zoneAt(lat,lng){let best=null,bi=99;for(const f of ZONES.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;let inside=false;for(const poly of polys){if(pip([lng,lat],poly)){inside=true;break;}}if(inside){const i=ORDER.indexOf(f.properties.zt);const rank=(i<0?98:i);if(rank<bi){bi=rank;best=f.properties;if(rank===0)return best;}}}return best;}
+function zoneAt(lat,lng){let best=null,bi=99;for(const f of ZONES.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;let inside=false;for(const poly of polys){if(pip([lng,lat],poly)){inside=true;break;}}if(inside){const i=ORDER.indexOf(f.properties.zt);const rank=(i<0?-1:i);if(rank<bi){bi=rank;best=f.properties;if(rank<0)return best;}}}return best;}
 /* R0 (build 2026.11.14b): boundary-proximity band, hard rule 4. The baked ZONES polygons are simplified. ZBAND holds, per feature (park, then zid), ceil(H)+5 in whole metres, where H is the symmetric Hausdorff distance between that feature's baked boundary and its live official boundary (QLD ParksMarineProtectedAreas layers 15 and 2 as fetched 14 Nov 2026), sampled every 5 m. Inside a feature's band of its baked boundary the official zone may differ from zoneAt(): cards surface that and never resolve it. zoneAt() is unchanged. Park key: features with a plan field are Moreton Bay (MB), the rest Great Sandy (GS). A feature missing from the table gets ZBAND_MAX; an exception inside the lookup also reads as near (fail protective). */
 const ZBAND={GS:{CPZ25:39,GUZ01:46,GUZ07:26,CPZ01:38,GUZ02:37,GUZ03:34,GUZ05:33,MNP01:6,CPZ02:44,MNP05:6,MNP06:6,MNP07:6,HPZ05:34,CPZ04:35,CPZ06:37,HPZ04:35,HPZ07:29,CPZ07:34,CPZ11:39,GUZ08:34,GUZ09:37,GUZ10:28,MNP04:6,CPZ09:6,CPZ13:38,CPZ17:36,CPZ18:6,CPZ19:46,MNP15:6,HPZ13:39,CPZ22:37,GUZ11:34,GUZ12:23,CPZ23:39,CPZ20:38,HPZ09:39,CPZ16:30,HPZ10:37,CPZ12:6,CPZ05:37,MNP03:6,HPZ20:30,GUZ13:36,MNP17:6,GUZ14:34,MNP02:6,GUZ06:38,HPZ02:37,HPZ17:21,MNP16:6,HPZ19:29,HPZ06:31,CPZ03:6,CPZ15:36,CPZ08:38,MNP08:6,MNP12:6,HPZ18:30,GUZ17:34,MNP18:6,HPZ21:19,HPZ22:27,HPZ23:37,MNP27:6,HPZ24:38,MNP24:6,MNP25:6,MNP28:6,MNP26:6,HPZ27:37,CPZ28:37,MNP29:6,MNP30:6,MNP31:6,HPZ25:31,CPZ27:38,CPZ26:36,GUZ04:29,MNP14:6,MNP10:6,HPZ12:36,CPZ24:29,HPZ26:16,HPZ28:38,HPZ08:35,MNP20:6,MNP19:6,HPZ14:6,MNP21:6,MNP22:6,HPZ01:37,CPZ21:56,HPZ15:36,CPZ10:35,MNP13:6,MNP09:6,HPZ11:6,GUZ16:40,GUZ15:35,MNP11:6,CPZ14:6,MNP23:6,HPZ03:31,HPZ16:37},MB:{GUZ08:17,MNP13:17,CPZ10:17,MNP24:16,CPZ02:18,MNP15:18,MNP33:16,MNP01:17,MNP10:15,CPZ06:17,MNP02:17,MNP05:17,MNP11:17,MNP14:7,MNP20:16,MNP26:17,MNP34:17,MNP30:17,MNP31:20,MNP25:15,MNP32:15,HPZ08:17,HPZ15:14,HPZ14:16,MNP04:16,GUZ14:17,HPZ13:16,MNP16:16,CPZ03:16,HPZ03:17,HPZ05:17,MNP12:12,MNP29:16,HPZ12:18,MNP17:17,CPZ04:18,MNP09:16,GUZ03:15,GUZ04:8,GUZ01:14,GUZ15:13,HPZ11:16,GUZ10:15,GUZ05:11,GUZ11:16,MNP07:15,CPZ09:16,HPZ10:17,GUZ02:18,CPZ01:18,MNP08:7,MNP06:17,MNP27:15,HPZ01:18,GUZ12:17,MNP18:7,HPZ04:18,GUZ06:17,HPZ09:11,HPZ07:13,HPZ02:22,MNP23:18,GUZ09:13,CPZ07:17,MNP19:16,CPZ05:11,HPZ06:17,MNP22:15,GUZ07:17,GUZ13:16,MNP28:17,MNP21:18,CPZ08:18,MNP03:7}};
 const ZBAND_MAX=56;let _zbb=null;
