@@ -785,7 +785,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .pop .rules{color:#c4d4dc;margin:0 0 9px}
   .pop .kv{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#c4d4dc;margin:0 0 8px;line-height:1.6}
   .pop .kv b{color:var(--depth)}
-  .pop .notake{background:rgba(231,76,60,.14);border:1px solid rgba(231,76,60,.45);border-radius:8px;padding:8px 10px;color:#ff9b8c;font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.45}.pop .outpark{color:var(--ink);font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.5}
+  .pop .notake{background:rgba(231,76,60,.14);border:1px solid rgba(231,76,60,.45);border-radius:8px;padding:8px 10px;color:#ff9b8c;font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.45}.pop .outpark{color:var(--ink);font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.5}.pop .nearb{background:rgba(244,182,44,.12);border:1px solid rgba(244,182,44,.5);border-radius:8px;padding:8px 10px;color:#ffd27a;font-weight:600;font-size:12px;margin:0 0 9px;line-height:1.45}.pop .nearb a{color:var(--accent)}
   .pop .warn{font-size:11px;color:var(--ink-dim);border-top:1px dashed var(--line);padding-top:8px;line-height:1.5}
   .pop .warn a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
   .pop .del{margin-top:9px;width:100%;border:1px solid rgba(231,76,60,.4);background:rgba(231,76,60,.1);color:#ff9b8c;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;min-height:34px;border-radius:8px;cursor:pointer}
@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.14a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.14b</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.14a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.14b</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1277,10 +1277,10 @@ function styleFor(f){const s=STYLES[f.properties.zt]||STYLES.GUZ;
      and is not part of this fix. */
   const fo=(_shadeFade&&f._shFade)?Math.min(s.fillOp,0.06):s.fillOp;
   return{color:s.stroke,weight:s.weight,dashArray:s.dash,fillColor:s.fill,fillOpacity:fo,opacity:0.95};}
-function zonePopup(p){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
+function zonePopup(p,nb){const s=STYLES[p.zt]||STYLES.GUZ;let h=`<div class="pop"><h2>${p.name}</h2><div class="zid">${p.zid} · ${p.plan||'Great Sandy MP'}</div><div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${s.name}</div>`;
   if(s.notake)h+=`<div class="notake">⛔ NO-TAKE — fishing prohibited. All gear stowed &amp; secured.</div>`;
-  h+=`<div class="rules">${s.rules}</div><div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.<div class="links"><a href="${p.src||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps'}" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>`;return h;}
-function zoneCard(ll){const z=zoneAt(ll.lat,ll.lng);return z?zonePopup(z):'<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';}
+  h+=`<div class="rules">${s.rules}</div>${nb?'<div class="nearb">'+NEARB_TXT(nb)+'</div>':''}<div class="warn">⚠ Simplified boundary — <b>not authoritative</b>. Confirm before fishing.<div class="links"><a href="${p.src||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps'}" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>`;return h;}
+function zoneCard(ll){const z=zoneAt(ll.lat,ll.lng),nb=nearBoundaryHit(ll.lat,ll.lng);if(z)return zonePopup(z,nb?nb.b:0);if(nb)return '<div class="pop"><div class="nearb">'+NOTRES_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.<div class="links"><a href="'+((nb.p&&nb.p.src)||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps')+'" target="_blank" rel="noopener">Official maps & app ↗</a></div></div></div>';return '<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>';}
 const counts={MNP:0,CPZ:0,HPZ:0,GUZ:0};
 const zoneRenderer=L.canvas({padding:0.5});
 const zoneLayer=L.geoJSON(ZONES,{renderer:zoneRenderer,interactive:false,style:styleFor,onEachFeature:(f,layer)=>{counts[f.properties.zt]=(counts[f.properties.zt]||0)+1;
@@ -1333,6 +1333,23 @@ document.getElementById('phead').onclick=()=>setCollapsed(!document.getElementBy
 function pir(pt,ring){let x=pt[0],y=pt[1],ins=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){let xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}return ins;}
 function pip(pt,coords){if(!pir(pt,coords[0]))return false;for(let k=1;k<coords.length;k++)if(pir(pt,coords[k]))return false;return true;}
 function zoneAt(lat,lng){let best=null,bi=99;for(const f of ZONES.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;let inside=false;for(const poly of polys){if(pip([lng,lat],poly)){inside=true;break;}}if(inside){const i=ORDER.indexOf(f.properties.zt);const rank=(i<0?98:i);if(rank<bi){bi=rank;best=f.properties;if(rank===0)return best;}}}return best;}
+/* R0 (build 2026.11.14b): boundary-proximity band, hard rule 4. The baked ZONES polygons are simplified. ZBAND holds, per feature (park, then zid), ceil(H)+5 in whole metres, where H is the symmetric Hausdorff distance between that feature's baked boundary and its live official boundary (QLD ParksMarineProtectedAreas layers 15 and 2 as fetched 14 Nov 2026), sampled every 5 m. Inside a feature's band of its baked boundary the official zone may differ from zoneAt(): cards surface that and never resolve it. zoneAt() is unchanged. Park key: features with a plan field are Moreton Bay (MB), the rest Great Sandy (GS). A feature missing from the table gets ZBAND_MAX; an exception inside the lookup also reads as near (fail protective). */
+const ZBAND={GS:{CPZ25:39,GUZ01:46,GUZ07:26,CPZ01:38,GUZ02:37,GUZ03:34,GUZ05:33,MNP01:6,CPZ02:44,MNP05:6,MNP06:6,MNP07:6,HPZ05:34,CPZ04:35,CPZ06:37,HPZ04:35,HPZ07:29,CPZ07:34,CPZ11:39,GUZ08:34,GUZ09:37,GUZ10:28,MNP04:6,CPZ09:6,CPZ13:38,CPZ17:36,CPZ18:6,CPZ19:46,MNP15:6,HPZ13:39,CPZ22:37,GUZ11:34,GUZ12:23,CPZ23:39,CPZ20:38,HPZ09:39,CPZ16:30,HPZ10:37,CPZ12:6,CPZ05:37,MNP03:6,HPZ20:30,GUZ13:36,MNP17:6,GUZ14:34,MNP02:6,GUZ06:38,HPZ02:37,HPZ17:21,MNP16:6,HPZ19:29,HPZ06:31,CPZ03:6,CPZ15:36,CPZ08:38,MNP08:6,MNP12:6,HPZ18:30,GUZ17:34,MNP18:6,HPZ21:19,HPZ22:27,HPZ23:37,MNP27:6,HPZ24:38,MNP24:6,MNP25:6,MNP28:6,MNP26:6,HPZ27:37,CPZ28:37,MNP29:6,MNP30:6,MNP31:6,HPZ25:31,CPZ27:38,CPZ26:36,GUZ04:29,MNP14:6,MNP10:6,HPZ12:36,CPZ24:29,HPZ26:16,HPZ28:38,HPZ08:35,MNP20:6,MNP19:6,HPZ14:6,MNP21:6,MNP22:6,HPZ01:37,CPZ21:56,HPZ15:36,CPZ10:35,MNP13:6,MNP09:6,HPZ11:6,GUZ16:40,GUZ15:35,MNP11:6,CPZ14:6,MNP23:6,HPZ03:31,HPZ16:37},MB:{GUZ08:17,MNP13:17,CPZ10:17,MNP24:16,CPZ02:18,MNP15:18,MNP33:16,MNP01:17,MNP10:15,CPZ06:17,MNP02:17,MNP05:17,MNP11:17,MNP14:7,MNP20:16,MNP26:17,MNP34:17,MNP30:17,MNP31:20,MNP25:15,MNP32:15,HPZ08:17,HPZ15:14,HPZ14:16,MNP04:16,GUZ14:17,HPZ13:16,MNP16:16,CPZ03:16,HPZ03:17,HPZ05:17,MNP12:12,MNP29:16,HPZ12:18,MNP17:17,CPZ04:18,MNP09:16,GUZ03:15,GUZ04:8,GUZ01:14,GUZ15:13,HPZ11:16,GUZ10:15,GUZ05:11,GUZ11:16,MNP07:15,CPZ09:16,HPZ10:17,GUZ02:18,CPZ01:18,MNP08:7,MNP06:17,MNP27:15,HPZ01:18,GUZ12:17,MNP18:7,HPZ04:18,GUZ06:17,HPZ09:11,HPZ07:13,HPZ02:22,MNP23:18,GUZ09:13,CPZ07:17,MNP19:16,CPZ05:11,HPZ06:17,MNP22:15,GUZ07:17,GUZ13:16,MNP28:17,MNP21:18,CPZ08:18,MNP03:7}};
+const ZBAND_MAX=56;let _zbb=null;
+const NEARB_TXT=b=>"⚠ Near a zone boundary — Guya's boundaries here are simplified by up to "+b+" m. The zone may differ within that distance. Confirm on the official map before fishing.";
+const NOTRES_TXT="⚠ Near a marine-park zone boundary — zone not resolved at this point. Treat it as restricted until you confirm on the official map.";
+function zoneBandOf(p){const t=ZBAND[p.plan?'MB':'GS'];const b=t?t[p.zid]:0;return b>0?b:ZBAND_MAX;}
+function nearBoundaryHit(lat,lng){try{
+  if(!_zbb)_zbb=ZONES.features.map(f=>{let w=180,s=90,e=-180,n=-90;const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;for(const poly of polys)for(const r of poly)for(const c of r){if(c[0]<w)w=c[0];if(c[0]>e)e=c[0];if(c[1]<s)s=c[1];if(c[1]>n)n=c[1];}return [w,s,e,n];});
+  const M=6371008.8*Math.PI/180,kx=M*Math.cos(lat*Math.PI/180),px=lng*kx,py=lat*M;let best=null;
+  for(let i=0;i<ZONES.features.length;i++){const f=ZONES.features[i],b=zoneBandOf(f.properties);if(best&&b<=best.b)continue;const bb=_zbb[i],dy=b/M,dx=b/kx;
+    if(lng<bb[0]-dx||lng>bb[2]+dx||lat<bb[1]-dy||lat>bb[3]+dy)continue;
+    const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;const b2=b*b;let hit=false;
+    for(const poly of polys){for(const r of poly){let ax=r[0][0]*kx,ay=r[0][1]*M;for(let k=1;k<r.length;k++){const bx=r[k][0]*kx,by=r[k][1]*M,ex=bx-ax,ey=by-ay,l2=ex*ex+ey*ey;let t=l2?((px-ax)*ex+(py-ay)*ey)/l2:0;t=t<0?0:t>1?1:t;const qx=ax+t*ex-px,qy=ay+t*ey-py;if(qx*qx+qy*qy<=b2){hit=true;break;}ax=bx;ay=by;}if(hit)break;}if(hit)break;}
+    if(hit)best={b:b,p:f.properties};}
+  return best;}catch(e){return {b:ZBAND_MAX,p:null};}}
+function nearBoundary(lat,lng){const h=nearBoundaryHit(lat,lng);return h?h.b:null;}
+function notResolvedLine(p){return '<div class="nearb">'+NOTRES_TXT+'<div class="links"><a href="'+((p&&p.src)||'https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps')+'" target="_blank" rel="noopener">Official maps & app ↗</a></div></div>';}
 
 /* ---- coordinate parsing (DDM / DMS / decimal) ---- */
 function parseCoord(str){if(!str)return null;str=str.trim();const re=/(\d+(?:\.\d+)?)\s*[°d\s]\s*(?:(\d+(?:\.\d+)?)\s*['′m]?\s*)?(?:(\d+(?:\.\d+)?)\s*["″s]?\s*)?([NSEW])/gi;let m,parts=[];while((m=re.exec(str))){let dd=parseFloat(m[1])+(m[2]?parseFloat(m[2])/60:0)+(m[3]?parseFloat(m[3])/3600:0);const h=m[4].toUpperCase();if(h==='S'||h==='W')dd=-dd;parts.push({h,dd});}
@@ -1355,22 +1372,22 @@ const depthLayer=L.layerGroup().addTo(map);
 const depthRenderer=L.canvas({padding:0.5});
 function depthIcon(p,z){const notake=z&&z.notake;const txt=(p.depth!==''&&p.depth!=null)?p.depth+' m':'•';
   return L.divIcon({className:'depthpin',html:`<span class="dp-tag${notake?' notake':''}">${txt}</span>`,iconSize:[0,0]});}
-function depthPopup(p,z){let h=`<div class="pop"><h2>${p.label||'Depth point'}</h2>`;
+function depthPopup(p,z){const nb=nearBoundaryHit(p.lat,p.lng);let h=`<div class="pop"><h2>${p.label||'Depth point'}</h2>`;
   h+=`<div class="kv">Depth <b>${(p.depth!==''&&p.depth!=null)?p.depth+' m':'—'}</b><br>${toDDM(p.lat,true)}  ${toDDM(p.lng,false)}</div>`;
   if(z){const s=STYLES[z.zt]||{};h+=`<div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${z.name} (${z.zid})</div>`;
-    if(z.notake)h+=`<div class="notake">⛔ Inside a NO-TAKE green zone. Confirm before fishing.</div>`;}
-  else h+=`<div class="outpark">${OUTPARK_TXT}</div>`;
+    if(z.notake)h+=`<div class="notake">⛔ Inside a NO-TAKE green zone. Confirm before fishing.</div>`;if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
+  else h+=nb?notResolvedLine(nb.p):`<div class="outpark">${OUTPARK_TXT}</div>`;
   h+=`<div class="warn">Your own Navionics reading. Verify zone &amp; rules officially before fishing.</div><button class="del" data-id="${p.id}">Delete point</button></div>`;return h;}
 function renderDepths(){depthLayer.clearLayers();const list=document.getElementById('dp-list');list.innerHTML='';
   const LIMIT=120;let shown=0;
-  points.forEach(p=>{const z=zoneAt(p.lat,p.lng);const hasD=(p.depth!==''&&p.depth!=null);
-    const mk=L.circleMarker([p.lat,p.lng],{renderer:depthRenderer,radius:5,weight:1.5,color:(z&&z.notake)?'#ff5d5d':'#0b3a59',fillColor:ctColor(p.depth),fillOpacity:.92}).addTo(depthLayer);
+  points.forEach(p=>{const z=zoneAt(p.lat,p.lng);const nr=!z&&!!nearBoundary(p.lat,p.lng);const hasD=(p.depth!==''&&p.depth!=null);
+    const mk=L.circleMarker([p.lat,p.lng],{renderer:depthRenderer,radius:5,weight:1.5,color:(z&&z.notake)?'#ff5d5d':(nr?'#ffb020':'#0b3a59'),fillColor:ctColor(p.depth),fillOpacity:.92}).addTo(depthLayer);
     mk.bindTooltip(hasD?(p.depth+' m'):'•',{direction:'top',className:'ct-tip'});
     mk.bindPopup(depthPopup(p,z),{maxWidth:280,minWidth:230});
     if(shown<LIMIT){shown++;
       const row=document.createElement('div');row.className='dp-item';const s=z?(STYLES[z.zt]||{}):{};
       row.innerHTML=`<span class="d">${hasD?p.depth+'m':'—'}</span><span class="n">${p.label||toDDM(p.lat,true)+' '+toDDM(p.lng,false)}</span>`
-        +(z?`<span class="z" style="color:${s.stroke};border-color:${s.stroke}">${z.zt}</span>`:`<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">—</span>`)
+        +(z?`<span class="z" style="color:${s.stroke};border-color:${s.stroke}">${z.zt}</span>`:nr?`<span class="z" style="color:#ffb020;border-color:#ffb020">?</span>`:`<span class="z" style="color:#8aa3b0;border-color:#8aa3b0">—</span>`)
         +`<button class="x" data-id="${p.id}">✕</button>`;
       row.querySelector('.x').onclick=()=>{removePt(p.id);};
       row.querySelector('.n').onclick=()=>{map.setView([p.lat,p.lng],17);mk.openPopup();};
@@ -1500,12 +1517,12 @@ function condLine(c){if(!c||!c.env)return '';const e=c.env,bits=[];
   if(e.moon&&e.moon.name)bits.push(e.moon.name.toLowerCase()+(e.moon.illum!=null?' '+e.moon.illum+'%':''));
   return bits.length?'<div class="catch-cond">'+bits.join(' \u00b7 ')+'</div>':'';}
 function starSpan(i,r,id){const pct=r>=i?100:(r>=i-0.5?50:0);return '<span class="st" data-act="rate" data-id="'+id+'" data-val="'+i+'"><span class="bk">\u2605</span><span class="fr" style="width:'+pct+'%">\u2605</span></span>';}
-function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:'#9fb3bf';const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
+function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:(nearBoundary(s.lat,s.lng)?'#ffb020':'#9fb3bf');const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
   return L.divIcon({className:'spotpin',iconSize:[0,0],html:'<span class="sp"><span class="sp-dot" style="background:'+col+'">'+(n?'<span class="cnt">'+n+'</span>':'')+'</span><span class="sp-name">'+esc(s.name||'Spot')+'</span></span>'});}
-function spotPopup(s,z){let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
+function spotPopup(s,z){const nb=nearBoundaryHit(s.lat,s.lng);let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
   if(z){const st=STYLES[z.zt]||{};h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
-    if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';}
-  else h+='<div class="outpark">'+OUTPARK_TXT+'</div>';h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
+    if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
+  else h+=nb?notResolvedLine(nb.p):'<div class="outpark">'+OUTPARK_TXT+'</div>';h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
   const kv=[];if(s.species)kv.push('Target: '+s.species);if(s.structure)kv.push('Structure: '+s.structure);
   if(s.tide)kv.push('Best tide: '+s.tide);if(s.depth!==''&&s.depth!=null)kv.push('Depth: '+s.depth+' m');
   if(kv.length)h+='<div class="kv">'+kv.join('<br>')+'</div>';
@@ -3638,9 +3655,9 @@ const PORT_MAX_KM=200;function portInRange(ll){const p=nearestPort(ll);if(!p)ret
       if(n>0||isT){any=true;bump+=n*0.5+(isT?0.6:0);
         const nm=recSpeciesNameByKey[sel]||(isGrp?sel.slice(4):sel);parts.push(nm+(n>0?(' \u00d7'+n):(isT?' (target)':'')));}});
     return {match:any,bump:bump,label:parts.join(' \u00b7 ')};}
-  function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;
-    if(!z)return '<span class="bb-dim">outside marine-park zoning — general fisheries rules + FHAs still apply, confirm via Qld Fishing 2.0</span>';
-    return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>');}
+  function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;const nb=(typeof nearBoundary==='function')?nearBoundary(s.lat,s.lng):null;
+    if(!z)return nb?'<span style="color:#ffd27a">'+NOTRES_TXT+'</span>':'<span class="bb-dim">outside marine-park zoning — general fisheries rules + FHAs still apply, confirm via Qld Fishing 2.0</span>';
+    return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>')+(nb?' <span style="color:#ffd27a">'+NEARB_TXT(nb)+'</span>':'');}
   function scoreSpotsFor(ymd){const list=(typeof spots!=='undefined'?spots:[]);if(!list.length)return [];
     const [aLat,aLng]=ANCHOR();const ev=compute(ymd,aLat,aLng);
     const _T=tideTable();const tide=_T?_T[ymd]:null;
