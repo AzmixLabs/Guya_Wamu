@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.10.01a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.14a</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.10.01a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.14a</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -3041,7 +3041,7 @@ function openDepthRead(latlng,prefixHTML){
   setTimeout(function(){const fb=document.getElementById('dp-find');if(!fb)return;
     fb.onclick=function(){findDeepest(latlng.lat,latlng.lng);map.closePopup();};},0);
 }
-map.on('click',e=>{if(slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;if(!shadeOn){if(e.originalEvent&&e.originalEvent._gPlaced)return;const z0=zoneAt(e.latlng.lat,e.latlng.lng);L.popup({maxWidth:300,minWidth:240}).setLatLng(e.latlng).setContent(z0?zonePopup(z0):'<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>').openOn(map);return;} /* E1: shading-off taps get a zoning card from zoneAt (MNP>CPZ>HPZ>GUZ); zones toggle deliberately ignored; no 12 m pin guard; _gPlaced set at :1874 because that handler clears body.placing before this one runs */
+map.on('click',e=>{if(slopeMode||document.body.classList.contains('drawing')||document.body.classList.contains('placing')||(typeof measuring!=='undefined'&&measuring))return;if(!shadeOn){if(e.originalEvent&&e.originalEvent._gPlaced)return;L.popup({maxWidth:300,minWidth:240}).setLatLng(e.latlng).setContent(zoneCard(e.latlng)).openOn(map);return;} /* E1: shading-off taps get a zoning card from zoneAt (MNP>CPZ>HPZ>GUZ); zones toggle deliberately ignored; no 12 m pin guard; _gPlaced set at :1874 because that handler clears body.placing before this one runs */
   const r=idwDepthAt(e.latlng.lat,e.latlng.lng);
   /* water = inside a legislated zone polygon (coast) OR ANY sample - dries or sounding - within
      NEAR_MAX (river/estuary and areas outside the marine-park's zoned extent, e.g. Mooloolaba-
@@ -3055,7 +3055,7 @@ map.on('click',e=>{if(slopeMode||document.body.classList.contains('drawing')||do
   const mLat2=111320,mLng2=111320*Math.cos(e.latlng.lat*Math.PI/180);
   const nearPin=points.some(p=>{const dy=(e.latlng.lat-p.lat)*mLat2,dx=(e.latlng.lng-p.lng)*mLng2;return (dy*dy+dx*dx)<144;});
   if(nearPin)return; /* your pins keep their own popups; imported samples no longer block reads */
-  const z=zoneAt(e.latlng.lat,e.latlng.lng);openDepthRead(e.latlng,z?zonePopup(z):'<div class="pop"><div class="outpark">'+OUTPARK_TXT+'</div><div class="warn">Verify zone &amp; rules officially before fishing.</div></div>');}); /* A2: zoning line on every bare read -- zone card in park, out-of-park text + verify outside */
+  openDepthRead(e.latlng,zoneCard(e.latlng));}); /* A2: zoning line on every bare read -- zone card in park, out-of-park text + verify outside */
 /* ---------- Channel marks: deepest point within 100 m ---------- */
 let chanLayer=null;
 function findDeepest(lat0,lng0){
