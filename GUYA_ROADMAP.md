@@ -1,5 +1,57 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.21 · 16 Nov 2026 — **FABLE DISPATCH 2 CLOSED: SIX MORE BUILDS ON BRANCHES (R2b, B0, R4c, R0b+R3c, B1,
+B2); NOTHING NEW ON MAIN. LIVE IS STILL 2026.11.15a AND STILL UNGATED. PLAN: LINEARISE ALL BRANCH WORK INTO ONE
+CHAIN, THEN MERGE ONE BUILD PER PHONE GATE.** Main `90a459a` (roadmap v16.77.20, docs-only, Pages run
+43657289479). Record: `scratchpad\fable_batch2.md` (81,268 B, `858E3AAC…475C4`). No roadmap entry was written by
+the session.*
+
+**1. BRANCHES** (all pushed; none merged or deployed — no Actions run for any head; live = main throughout).
+| branch | head | base | build | job |
+|---|---|---|---|---|
+| `r2-zone-lookup` | `cbebbf6` | main | 2026.11.15b | R2 zoneLookup + ZONE_COVERAGE |
+| `r4a-fha-lookup` | `fbd57fc` | r2 | 2026.11.15c | R4a fhaAt + FHA line on every zone card |
+| `r2b-wording` | `aaa672e` | r4a | 2026.11.15d | "nearpark" state; "At or near the {park} boundary"; unassessed 0% inside the box (reachable only through a decode/exception failure) |
+| `r4c-fha-band` | `3cd8347` | r2b | 2026.11.15f | FHA boundary band (below) |
+| `r0b-safeguard` | `a9f83e4` | r4c | 2026.11.15g | drag safeguard alerts on unresolved/unassessed/unknown; unknown type = no-take on every surface |
+| `b0-labels` | `8c81769` | main | 2026.11.15e | dead CARTO labels → Esri Reference/World_Boundaries_and_Places (maxNativeZoom 17); attribution corrected |
+| `b1-imagery` | `2f63684` | b0 | 2026.11.15h | region-aware default imagery: QLD aerial / NSW Imagery (CC BY 4.0) / Esri elsewhere |
+| `b1-imagery` | `84af2af` | 2f63684 | 2026.11.15i | offline saver caches QLD and NSW imagery only, never Esri |
+
+**2. R4c — FHA BOUNDARIES.** Live FHA layer fetched (layer 7, 15 Nov): 35 live ↔ 35 baked in the coverage box,
+one-to-one — no FHA currency defect. Baked vs live symmetric Hausdorff 1.54–39.16 m (median 22.52); bands
+ceil(H)+5 = 7–45 m (median 28; the first-baked Bundaberg–Hervey Bay set 43–45). Recall gate 9,990 of 9,990
+differing points (of 1,000,000) flagged. False alarms: 6.60% of in-FHA points carry the near line; 0.103% of
+no-FHA points read "FHA not resolved" instead of "No declared…". Currency: the app's "Aug 2023 (latest gazettal
+21 May 2024)" equals the NEWEST per-feature attribute in the live layer (its description text, "effective 17 March
+2017", is the stale part) — but 20 of the 35 FHAs carry older individual currencies, back to Nov 1997.
+
+**3. DECISIONS (planning chat, 16 Nov).** (a) NSW imagery is displayed but NOT bulk-saved: the CC BY 4.0 record
+excludes third-party material and the mosaic contains some; Spatial Services' terms page is gone. The saver
+becomes Queensland-only. (b) Stop persisting Esri tiles as they are viewed (the legacy `CachedTiles` path) —
+same principle as B2; tiles already saved stay. (c) The overlap-strip check at −24.49832 passing 398/400 is
+accepted (the range sits 0.07 m north of Great Sandy's limit; 398/398 inside it) — closed. (d) "unassessed" via a
+failure is accepted: it is the honest answer when nothing could be evaluated. (e) Label overlay maxNativeZoom 17
+accepted; check at z18–z20 on the phone. (f) Each FHA block shows that FHA's own currency and latest gazettal (R4d).
+(g) The drag safeguard also alerts when the drop lies inside an R0 band of an MNP or unknown-type feature, and an
+unknown type never gets the "GREEN" wording (R0c).
+
+**4. CHAIN PLAN.** Fable dispatch 3 builds branch `chain-2026-11-16` from main, cherry-picking in this order with
+build strings re-stamped in chain order (2026.11.16a…): B0, R2, R4a, R2b, R4c, R0b+R3c, then new R0c and R4d, then
+B1, the saver (amended to Queensland-only), then new B4 (Esri view-through storage off). Each commit re-verified
+against its new base. Old branches kept until the chain is merged. Merging = fast-forward main one commit at a
+time, each followed by Pages green and its phone gate; Aaron may gate adjacent commits together, but each stays its
+own build.
+
+**5. PHONE GATES OWED (unchanged from v16.77.20 §8).** Slope exit (10.01a); regression for 14a/14c/15a; R0; P0
+probe; T0. No merge until these pass.
+
+**6. CARRY-FORWARD.** QUEUE: phone gates → chain merges (one build per gate) → placing double → chip →
+zones-toggle persistence. OPEN: scale-ambition fork; CLAUDE.md hand edits (rule 5 hook definition; runtime-hosts
+wording; static-files/sw.js invariants); P1 no-port HAT behaviour; H1; TEST-spot cleanup + version:2 export;
+zones-toggle answer; project-instructions rev F; spot-sheet coordinate spike; F8 comment wording. The Fable
+included window ends 17 Nov 07:59Z; later builds default to Sonnet (Opus for rule-critical logic).
+
 *v16.77.20 · 15 Nov 2026 — **FABLE BATCH CLOSED: FOUR BUILDS SHIPPED (R1, R0, R3b, R3a), BUILD 2026.11.15a
 LIVE; P0 PROBE SHIPPED; R2 AND R4a ON BRANCHES; BASEMAP SURVEY DONE. NOTHING SINCE 2026.10.01a IS
 DEVICE-TESTED.** `index.html` 2,377,773 B, `29CBD0E0…8BD8A`, build `2026.11.15a`, commit `faf1716`; main
