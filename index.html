@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15a</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15e</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15a</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15e</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1245,9 +1245,9 @@ const zoomReadout=L.DomUtil.create('div','leaflet-control-scale-line',scaleCtl.g
 zoomReadout.textContent='z'+map.getZoom().toFixed(1);
 map.on('zoomend',()=>{zoomReadout.textContent='z'+map.getZoom().toFixed(1);});
 map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('labels').style.pointerEvents='none';
-const labels=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',{subdomains:'abcd',pane:'labels',maxZoom:21,maxNativeZoom:20,attribution:'Labels © OpenStreetMap, © CARTO'});
+const labels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{pane:'labels',maxZoom:21,maxNativeZoom:17,attribution:'Labels: Esri, HERE, Garmin, (c) OpenStreetMap contributors, and the GIS user community'}); /* B0 (build 2026.11.15e): the CARTO label tiles now need an API key and return a watermark image. Esri reference overlay, no key. Native zoom capped at 17: deeper tiles are blank outside the cities, so Leaflet upscales z17 instead of dropping the labels. */
 labels.addTo(map);
-const qld=L.tileLayer('https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:20,attribution:'Aerial imagery © State of Queensland (Dept of Resources)'});
+const qld=L.tileLayer('https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:20,attribution:'Includes material © State of Queensland (Department of Natural Resources and Mines, Manufacturing and Regional and Rural Development); © Planet Labs Netherlands B.V. reproduced under licence from Planet and Geoplex, all rights reserved, 2026.'});
 /* ---------- OFFLINE TILE CACHE (IndexedDB, no service worker) ---------- */
 const TILE_DB='woongarra_tiles_v1';
 function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(TILE_DB,1);
@@ -1267,7 +1267,7 @@ const CachedTiles=L.TileLayer.extend({
     }).catch(()=>{img.src=url;});
     return img;}
 });
-const sat=new CachedTiles('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,crossOrigin:true,attribution:'Imagery © Esri, Maxar, Earthstar Geographics · cached offline'});
+const sat=new CachedTiles('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:19,crossOrigin:true,attribution:'Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community · cached offline'});
 const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:21,maxNativeZoom:19,attribution:'© OpenStreetMap contributors'});
 qld.addTo(map);let currentBase=qld;const BASES={qld,sat,osm};
 function setBase(w){const n=BASES[w];if(!n||n===currentBase)return;map.removeLayer(currentBase);n.addTo(map);n.bringToBack();currentBase=n;}
