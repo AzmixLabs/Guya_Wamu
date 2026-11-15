@@ -1,5 +1,91 @@
 # Guya — Feature Backlog & Roadmap
 
+*v16.77.20 · 15 Nov 2026 — **FABLE BATCH CLOSED: FOUR BUILDS SHIPPED (R1, R0, R3b, R3a), BUILD 2026.11.15a
+LIVE; P0 PROBE SHIPPED; R2 AND R4a ON BRANCHES; BASEMAP SURVEY DONE. NOTHING SINCE 2026.10.01a IS
+DEVICE-TESTED.** `index.html` 2,377,773 B, `29CBD0E0…8BD8A`, build `2026.11.15a`, commit `faf1716`; main
+`463693c` (P0, index.html untouched). Records: `scratchpad\fable_batch.md` (119,962 B, `56025627…E5F7370`);
+`scratchpad\coverage_extents.md` (79,914 B, `7E5D302F…117876D`); `scratchpad\coverage\coverage_rows_v2.json`
+(77,725 B, `37DA9FE5…8BCD68`); `scratchpad\basemap_survey.md` (39,546 B, `EDCD5CC8…464C8`). Line numbers below are
+the build each item names.*
+
+**1. SHIPPED.** Each with commit, push, Pages run (success) and live file byte-identical.
+| build | job | commit | Pages run |
+|---|---|---|---|
+| 2026.11.14a | R1 — the inline OUTPARK copies at the map-click and depth-read sites now call zoneCard(); no visible change | `a7901f0` | 43583257892 |
+| 2026.11.14b | R0 — boundary-proximity band (§2) | `de3525e` | 43598779948 |
+| 2026.11.14c | R3b — unknown zone type ranks above MNP and renders "Unrecognised zone type — treat as no-take until confirmed officially." with no figures | `97b9e56` | 43601560839 |
+| 2026.11.15a | R3a — `park` code on all 178 features; `PARKS` table with `verified:{2026-09-05, roadmap v16.77.1, CLAUDE.md rule 5}`; unknown park → "Limits not confirmed for this park — check the official source.", no figures, "park unknown" | `faf1716` | 43603352656 |
+| — | P0 — storage/offline probe: storage_check.html §7 + probe/page.html + probe/sw.js (scope ./probe/ only) | `463693c` | 43610521420 |
+Also committed: roadmap v16.77.19 + `docs\multiregion_spike_2026-11-14.md` (`0d4b2c2`, run 43582107127).
+
+**2. R0 — WHAT IT FIXES.** coverage_extents.md §2.3: the baked polygons are vertex-subset simplifications of the
+live official zones — Great Sandy CPZ/HPZ/GUZ up to 50.20 m off (all 31 MNP at full resolution), Moreton Bay all
+74 up to 16.57 m (no-take MNP31 14.32 m, MNP11 Hays Inlet 11.70 m). Inside those slivers the app named the wrong
+zone or showed OUTPARK inside a park (one point officially in no-take MNP25). R0 bakes a per-feature band
+(ceil(Hausdorff baked↔live) + 5 m; Great Sandy 6–56 m, median 31; Moreton 7–22 m, median 17; table 1.6 KB). Zone
+hit + near → the card plus "⚠ Near a zone boundary — Guya's boundaries here are simplified by up to {b} m…"; no hit
++ near → "⚠ Near a marine-park zone boundary — zone not resolved at this point…", never OUTPARK. Recall gate:
+1,802 of 1,802 points (of 1,000,000) where baked and live disagree are flagged; false-alarm share 2.31% (GS) /
+1.61% (MB) of in-park points; outside every band byte-identical to 14a. Saved-spot surfaces (spotPopup,
+spotIcon) included; any lookup exception → "near, 56 m".
+
+**3. COVERAGE FINDINGS** (coverage_extents.md; Fable 5.2, read-only). Currency check PASS: live Great Sandy
+104 / Moreton Bay 74 features match the app by zid, name and type. No official park outer-boundary layer exists;
+boundaries are derived by dissolving the official zones (the QLD "marine park" layer is itself such a dissolve;
+Queensland has three state marine parks — GBR Coast, Great Sandy, Moreton Bay). Great Sandy and GBR Coast are
+contiguous with a 9 m overlap at −24.4983 (152.043–152.114°E) where a GBR Coast MNP applies. GBR Coast carries
+Scientific Research zones (unknown to the app until R3b). Current Australian Marine Parks fetched (DCCEEW, 2025):
+nearest to the study box is the Coral Sea park, 10.8 km off its NE corner.
+
+**4. ON BRANCHES — pushed, NOT merged, NOT deployed** (Pages deploys from main only; inferred from the workflow
+type and verified after each push: no Actions run for either head).
+- `r2-zone-lookup` `cbebbf6`, build 2026.11.15b, +71 KB: `zoneLookup()` over `ZONE_COVERAGE` (one study-area
+  VERIFIED-EMPTY row: box S −28.15, N −24.49885, W 151.50, E 153.89, minus each park buffered 50 m, built
+  shrink-only; PARK rows at 49 m). States: zone / notresolved (R0) / outside / inpark / unassessed. Burnett Heads,
+  Mooloolaba, Noosa, Gold Coast → OUTPARK; north of 24°30′S, NSW and overseas → unassessed. 48 checks pass.
+- `r4a-fha-lookup` `fbd57fc` on r2, build 2026.11.15c: `fhaAt()`; every zoneCard ends with an FHA line (the FHA
+  block, "No declared Fish Habitat Area at this point (data current to Aug 2023)", or "FHA not assessed for this
+  area"); with the FHA layer OFF a tap inside an FHA still reports it. 40 checks pass.
+
+**5. DECISIONS (planning chat, 15 Nov).** (a) R2b before any merge: a non-zone point inside the box in no row and
+no band gets a new "nearpark" card ("⚠ Close to a marine-park boundary — zone not resolved…"); "unassessed" only
+outside the box; the inpark card becomes "⚠ At or near the {park} boundary — zone not resolved…". (b) Job 8's
+overlap-strip check range ends at −24.49832 (the dispatch overshot Great Sandy's limit by 2.3 m). (c) R3b's removal
+of the MNP early return (order independence) and its styleFor fallback are accepted. (d) The probe's persist()
+call is site-wide and irreversible — accepted (it reduces eviction). (e) Aaron's hand edits to CLAUDE.md: rule 5
+should name the "ONE hook =" definition the cards print on v16.77.1's authority; restate "No other backend calls at
+runtime" honestly (imagery tiles already stream from several hosts); the static-files / sw.js invariants before
+S1/K1. (f) Moreton's plan name ("Zoning Plan 2019") to be re-verified.
+
+**6. BASEMAP SURVEY** (basemap_survey.md). The CARTO labels overlay (index.html:1248) is dead: every tile is the
+same 2,398-byte "API KEY REQUIRED" watermark — visible on the live app now. Keyless replacement on a host already
+used: Esri Reference/World_Boundaries_and_Places (CORS `*`). Interstate imagery: NSW Imagery — open CC BY, keyless,
+CORS `*`, to z20; Tasmania theLIST — CC BY-NC-ND, z19; Victoria and South Australia — licensed / subscribers only,
+do not use; WA — dynamic, personal-use only; NT — none found; ACT — per-capture, host unreachable. Esri World
+Imagery stays the keyless national fallback; DEA is open but 10 m and stops at z14. The offline saver bulk-caches
+Esri imagery against Esri's terms — switch it to openly licensed layers (QLD, NSW). Two attribution strings are out
+of date (QLD department name; Esri now credits "Vantor").
+
+**7. NEW BACKLOG.** R4c: FHA boundary band — baked FHA polygons are "indicative" and unmeasured, so "No declared
+FHA" can be wrong near an edge; FHA currency (service "effective 17 March 2017" vs the app's "Aug 2023")
+unreconciled. R0b: the drag safeguard does not alert on not-resolved slivers. R3c: an unknown zone type's
+`notake` still comes from the data on pins, spots, zoneTag and the safeguard (close before any GBR pack). R4b: FHA
+line on pin popup, spot popup and zoneTag. After R4a merges: OUTPARK's "…a Fish Habitat Area may too" sits above a
+line that now says whether one does.
+
+**8. PHONE GATES OWED — before anything more ships to main.** (1) Slope exit, 2026.10.01a (§3 of v16.77.19).
+(2) Regression for 14a/14c/15a: zone cards inside MNP/CPZ/HPZ/GUZ in both shading states read as before, park label
+and figures unchanged, OUTPARK off Mooloolaba unchanged. (3) R0: −27.656743, 153.466377 → amber "not resolved";
+a Hays Inlet MNP11 edge → card + one amber line, NO-TAKE visible in portrait; FHA tap near an edge; spot/pin in a
+sliver amber; landscape link on screen; best-spots row readable. (4) P0 probe: the 7 steps in the log, reports
+copied. (5) T0 cold launch in flight mode.
+
+**9. CARRY-FORWARD.** QUEUE: phone gates (§8) → Fable run 2 on branches (R2b, B0 labels, R4c, R0b+R3c, B1
+region-aware imagery, B2 offline-saver policy) → merge sequence, one build per phone gate: B0 → r2 → r4a → r2b → …
+→ then placing double → chip → zones-toggle persistence. OPEN: scale-ambition fork; §5(e) CLAUDE.md edits; P1
+no-port HAT behaviour; H1; TEST-spot cleanup + version:2 export; zones-toggle answer; project-instructions rev F;
+spot-sheet coordinate spike; F8 comment wording.
+
 *v16.77.19 · 14 Nov 2026 — **BUILD 2026.10.01a SHIPPED (SLOPE BAR EXIT BUTTON), PUSHED 14 NOV —
 44 DAYS AFTER ITS COMMIT. MULTI-REGION ARCHITECTURE SPIKE COMPLETE: OPTION D, STAGED. THE SPIKE
 FOUND A RULE-2 DEFECT IN THE SHIPPED BUILD: A FALSE "OUTSIDE THE MARINE PARK" CARD EVERYWHERE
