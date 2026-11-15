@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15d</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.15f</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15d</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.15f</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1321,10 +1321,17 @@ const FHA_COVERAGE={box:{W:151.9,S:-28.2,E:153.7,N:-24.4},currency:"Aug 2023",lo
 const FHA_NONE_TXT="No declared Fish Habitat Area at this point (data current to Aug 2023)";
 const FHA_NOTLOADED_TXT="FHA data not loaded here";
 const FHA_UNASSESSED_TXT="FHA not assessed for this area";
+/* R4c (build 2026.11.15f): FHA boundary band. The baked FHA polygons are indicative. FBAND holds, per feature (plan id | management), ceil(H)+5 in whole metres, where H is the symmetric Hausdorff distance between the baked boundary and the live official one (QLD ParksMarineProtectedAreas layer 7 as fetched 15 Nov 2026), sampled every 5 m. Within a feature's band of its baked edge the FHA answer is not asserted either way: a hit gets FHA_NEAR_TXT after its block, a miss gets FHA_NOTRES_TXT instead of FHA_NONE_TXT. A feature missing from the table gets FBAND_MAX; an exception inside the band test reads as near. */
+const FBAND={"FHA-031|A":44,"FHA-031|B":7,"FHA-030|A":44,"FHA-029|B":45,"FHA-029|A":45,"FHA-052|A":44,"FHA-002|A":43,"FHA-032|B":43,"FHA-014|A":21,"FHA-008|A":28,"FHA-008|B":30,"FHA-020|B":25,"FHA-016|B":26,"FHA-017|A":29,"FHA-010|A":29,"FHA-015|A":28,"FHA-012|A":28,"FHA-022|B":26,"FHA-023|B":28,"FHA-019|B":24,"FHA-051|B":24,"FHA-051|A":28,"FHA-011|A":28,"FHA-011|B":28,"FHA-013|A":29,"FHA-013|B":27,"FHA-021|A":27,"FHA-021|B":24,"FHA-030|B":28,"FHA-055|A":29,"FHA-056|A":28,"FHA-054|A":27,"FHA-054|B":7,"FHA-064|A":29,"FHA-053|B":28};
+const FBAND_MAX=45;
+const FHA_NEAR_TXT=b=>"⚠ Near a Fish Habitat Area boundary — Guya's FHA boundaries here are indicative (up to "+b+" m off). Confirm on the official FHA plan.";
+const FHA_NOTRES_TXT="FHA not resolved at this point — confirm on the official FHA plan.";
+function fhaBandOf(p){const b=FBAND[p.plan+'|'+p.mgmt];return b>0?b:FBAND_MAX;}
+function fhaNearHit(lat,lng){try{fhaAt(lat,lng);const M=6371008.8*Math.PI/180,kx=M*Math.cos(lat*Math.PI/180),px=lng*kx,py=lat*M;let best=0;for(let i=0;i<FHA.features.length;i++){const f=FHA.features[i],b=fhaBandOf(f.properties);if(b<=best)continue;const bb=_fbb[i],dy=b/M,dx=b/kx;if(lng<bb[0]-dx||lng>bb[2]+dx||lat<bb[1]-dy||lat>bb[3]+dy)continue;const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;const b2=b*b;let hit=false;for(const poly of polys){for(const r of poly){let ax=r[0][0]*kx,ay=r[0][1]*M;for(let k=1;k<r.length;k++){const bx=r[k][0]*kx,by=r[k][1]*M,ex=bx-ax,ey=by-ay,l2=ex*ex+ey*ey;let t=l2?((px-ax)*ex+(py-ay)*ey)/l2:0;t=t<0?0:t>1?1:t;const qx=ax+t*ex-px,qy=ay+t*ey-py;if(qx*qx+qy*qy<=b2){hit=true;break;}ax=bx;ay=by;}if(hit)break;}if(hit)break;}if(hit)best=b;}return best||null;}catch(e){return FBAND_MAX;}}
 let _fbb=null;
 function fhaAt(lat,lng){if(!_fbb)_fbb=FHA.features.map(f=>{let w=180,s=90,e=-180,n=-90;const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;for(const poly of polys)for(const r of poly)for(const c of r){if(c[0]<w)w=c[0];if(c[0]>e)e=c[0];if(c[1]<s)s=c[1];if(c[1]>n)n=c[1];}return [w,s,e,n];});const out=[];for(let i=0;i<FHA.features.length;i++){const b=_fbb[i];if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3])continue;const g=FHA.features[i].geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;for(const poly of polys){if(pip([lng,lat],poly)){out.push(FHA.features[i].properties);break;}}}return out;}
-function fhaLookup(lat,lng){try{if(!(typeof lat==='number'&&typeof lng==='number'&&isFinite(lat)&&isFinite(lng)))return {state:'unassessed'};const c=FHA_COVERAGE,b=c.box;const inBox=lng>=b.W&&lng<=b.E&&lat>=b.S&&lat<=b.N;if(c.loaded!==true)return {state:inBox?'notloaded':'unassessed'};const h=fhaAt(lat,lng);if(h.length)return {state:'fha',hits:h};return {state:inBox?'none':'unassessed'};}catch(e){return {state:'unassessed'};}}
-function fhaLine(lat,lng){const k=fhaLookup(lat,lng);if(k.state==='fha')return k.hits.map(fhaPopup).join('');return '<div class="pop"><div class="warn">'+(k.state==='none'?FHA_NONE_TXT:k.state==='notloaded'?FHA_NOTLOADED_TXT:FHA_UNASSESSED_TXT)+'</div></div>';}
+function fhaLookup(lat,lng){try{if(!(typeof lat==='number'&&typeof lng==='number'&&isFinite(lat)&&isFinite(lng)))return {state:'unassessed'};const c=FHA_COVERAGE,b=c.box;const inBox=lng>=b.W&&lng<=b.E&&lat>=b.S&&lat<=b.N;if(c.loaded!==true)return {state:inBox?'notloaded':'unassessed'};const h=fhaAt(lat,lng),nb=fhaNearHit(lat,lng);if(h.length)return {state:'fha',hits:h,nb:nb};if(nb)return {state:'notresolved',nb:nb};return {state:inBox?'none':'unassessed'};}catch(e){return {state:'unassessed'};}}
+function fhaLine(lat,lng){const k=fhaLookup(lat,lng);if(k.state==='fha')return k.hits.map(fhaPopup).join('')+(k.nb?'<div class="pop"><div class="nearb">'+FHA_NEAR_TXT(k.nb)+'</div></div>':'');return '<div class="pop"><div class="warn">'+(k.state==='none'?FHA_NONE_TXT:k.state==='notresolved'?FHA_NOTRES_TXT:k.state==='notloaded'?FHA_NOTLOADED_TXT:FHA_UNASSESSED_TXT)+'</div></div>';}
 const fhaLayer=L.geoJSON(FHA,{renderer:L.canvas({padding:0.5}),
   style:{color:'#39b37a',weight:2,dashArray:'2 5',fillColor:'#39b37a',fillOpacity:0.07,opacity:0.9},
   onEachFeature:(f,layer)=>{layer.bindTooltip(f.properties.name+' FHA',{sticky:true,className:'tip',direction:'top',opacity:1});
