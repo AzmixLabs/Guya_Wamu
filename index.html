@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.16i</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.16j</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.16i</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.16j</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1127,7 +1127,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
     <div class="blk"><div class="lbl">Offline maps (beta)</div>
       <div class="dp-actions"><button class="dp-btn" id="ofl-save">💾 Save this view</button></div>
-      <div id="ofl-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Switch the base layer to <b>Esri Sat</b>, zoom to the area you want, then Save. Tiles for the current view (plus 2 zoom levels closer) are stored on this device so the map still draws with no signal. Imagery only — zones, spots &amp; tides already work offline.</div>
+      <div id="ofl-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Zoom to the area you want, then Save. Offline save is available for Queensland imagery only. Tiles for the current view (plus 2 zoom levels closer) are stored on this device so the map still draws with no signal. Imagery only — zones, spots &amp; tides already work offline.</div>
     </div>
     <div class="blk"><div class="lbl">Depth points (your soundings)</div>
       <div class="dp-actions">
@@ -1248,7 +1248,10 @@ map.on('zoomend',()=>{zoomReadout.textContent='z'+map.getZoom().toFixed(1);});
 map.createPane('labels');map.getPane('labels').style.zIndex=450;map.getPane('labels').style.pointerEvents='none';
 const labels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{pane:'labels',maxZoom:21,maxNativeZoom:17,attribution:'Labels: Esri, HERE, Garmin, (c) OpenStreetMap contributors, and the GIS user community'}); /* B0 (build 2026.11.15e): the CARTO label tiles now need an API key and return a watermark image. Esri reference overlay, no key. Native zoom capped at 17: deeper tiles are blank outside the cities, so Leaflet upscales z17 instead of dropping the labels. */
 labels.addTo(map);
-const qld=L.tileLayer('https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/{z}/{y}/{x}',{maxZoom:21,maxNativeZoom:20,attribution:'Includes material © State of Queensland (Department of Natural Resources and Mines, Manufacturing and Regional and Rural Development); © Planet Labs Netherlands B.V. reproduced under licence from Planet and Geoplex, all rights reserved, 2026.'});
+/* B2 (build 2026.11.16j): offline-saver policy. Only the Queensland aerial is saved. NSW Imagery is displayed but never saved: its CC BY 4.0 record excludes third-party material, the mosaic contains some, and no bulk-use terms could be read (roadmap v16.77.21 3a). OpenTiles draws a tile from IndexedDB when the saver has stored it (keys 'qld:z/x/y' in the existing tiles store, tracked in _openKeys) and from the network otherwise; it never stores a tile just because it was viewed. Esri World Imagery is never bulk-saved. Tiles saved before this build (keys 'esri:...') are left in place and still draw on the Esri Sat layer. */
+const _openKeys=new Set();
+const OpenTiles=L.TileLayer.extend({createTile:function(coords,done){const img=document.createElement('img');img.setAttribute('role','presentation');img.alt='';const key=this.options.ck+':'+coords.z+'/'+coords.x+'/'+coords.y,url=this.getTileUrl(coords);L.DomEvent.on(img,'load',L.Util.bind(this._tileOnLoad,this,done,img));L.DomEvent.on(img,'error',L.Util.bind(this._tileOnError,this,done,img));if(_openKeys.has(key))idbGet(key).then(b=>{img.src=b?URL.createObjectURL(b):url;}).catch(()=>{img.src=url;});else img.src=url;return img;}});
+const qld=new OpenTiles('https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/{z}/{y}/{x}',{ck:'qld',maxZoom:21,maxNativeZoom:20,attribution:'Includes material © State of Queensland (Department of Natural Resources and Mines, Manufacturing and Regional and Rural Development); © Planet Labs Netherlands B.V. reproduced under licence from Planet and Geoplex, all rights reserved, 2026.'});
 /* ---------- OFFLINE TILE CACHE (IndexedDB, no service worker) ---------- */
 const TILE_DB='woongarra_tiles_v1';
 function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(TILE_DB,1);
@@ -1258,6 +1261,8 @@ function idbGet(key){return idbOpen().then(db=>new Promise((res,rej)=>{const t=d
 function idbPut(key,blob){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readwrite').objectStore('tiles').put(blob,key);t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
 function idbCount(){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readonly').objectStore('tiles').count();t.onsuccess=()=>res(t.result||0);t.onerror=()=>res(0);})).catch(()=>0);}
 function idbClear(){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readwrite').objectStore('tiles').clear();t.onsuccess=()=>res(true);t.onerror=()=>res(false);})).catch(()=>false);}
+function idbKeys(){return idbOpen().then(db=>new Promise((res)=>{const t=db.transaction('tiles','readonly').objectStore('tiles').getAllKeys();t.onsuccess=()=>res(t.result||[]);t.onerror=()=>res([]);})).catch(()=>[]);}
+idbKeys().then(ks=>{ks.forEach(k=>{if(typeof k==='string'&&k.indexOf('qld:')===0)_openKeys.add(k);});});
 const CachedTiles=L.TileLayer.extend({
   createTile:function(coords,done){const img=document.createElement('img');img.setAttribute('role','presentation');img.alt='';img.crossOrigin='';
     const key='esri:'+coords.z+'/'+coords.x+'/'+coords.y;const url=this.getTileUrl(coords);
@@ -4247,9 +4252,9 @@ renderContours();
   if(hereBtn)hereBtn.onclick=()=>{const c=map.getCenter();load(c.lat,c.lng,'this view');};
   const t0=tideLine();if(t0)out.innerHTML=t0+'<span class="bb-dim">Tap Live wind or This view for wind, rain &amp; swell.</span>';
 })();
-/* ---------- OFFLINE MAP SAVE (prefetch Esri tiles for current view) ---------- */
+/* ---------- OFFLINE MAP SAVE (prefetch QLD aerial tiles for the current view; never Esri, never NSW) ---------- */
 async function saveViewOffline(o){
-  if(currentBase!==sat){o.innerHTML='<span style="color:#ffc04d">Switch the base layer to <b>Esri Sat</b> first \u2014 that\u2019s the layer that can be cached \u2014 then Save.</span>';return;}
+  const c0=map.getCenter(),reg=baseRegion(c0.lat,c0.lng);if(reg!=='qld'){o.textContent='Offline save is available for Queensland imagery only.';return;}
   if(!navigator.onLine){o.innerHTML='<span style="color:#ffc04d">You\u2019re offline. Connect to save tiles for later.</span>';return;}
   const b=map.getBounds(),z0=Math.min(19,Math.max(13,Math.round(map.getZoom()))),zMax=Math.min(19,z0+2),queue=[];
   for(let z=z0;z<=zMax;z++){const nw=map.project(b.getNorthWest(),z).divideBy(256).floor(),se=map.project(b.getSouthEast(),z).divideBy(256).floor();
@@ -4258,18 +4263,18 @@ async function saveViewOffline(o){
   if(!total){o.textContent='Nothing to save here.';return;}
   if(total>1500){o.innerHTML='<span style="color:#ffc04d">That area is large ('+total+' tiles). Zoom in a little and save it in pieces.</span>';return;}
   o.textContent='Saving '+total+' tiles\u2026 keep this screen open.';let done=0,fail=0,idx=0;
-  const tpl='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/';
-  async function one(t){const key='esri:'+t.z+'/'+t.x+'/'+t.y;const ex=await idbGet(key);if(ex){done++;return;}
-    try{const r=await fetch(tpl+t.z+'/'+t.y+'/'+t.x,{mode:'cors'});if(!r.ok)throw 0;await idbPut(key,await r.blob());done++;}catch(e){fail++;}
+  const tpl='https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/tile/';
+  async function one(t){const key='qld:'+t.z+'/'+t.x+'/'+t.y;const ex=await idbGet(key);if(ex){_openKeys.add(key);done++;return;}
+    try{const r=await fetch(tpl+t.z+'/'+t.y+'/'+t.x,{mode:'cors'});if(!r.ok)throw 0;await idbPut(key,await r.blob());_openKeys.add(key);done++;}catch(e){fail++;}
     if((done+fail)%20===0)o.textContent='Saving\u2026 '+(done+fail)+'/'+total+(fail?(' ('+fail+' failed)'):'');}
   async function worker(){while(idx<queue.length)await one(queue[idx++]);}
   await Promise.all([worker(),worker(),worker(),worker(),worker(),worker()]);
   const cnt=await idbCount();
-  o.innerHTML='Saved \u2014 '+done+' tiles ('+fail+' failed). <b>'+cnt+'</b> total offline on the <b>Esri Sat</b> layer. This view will now draw with no signal. <button class="lnk" id="ofl-clear">clear cache</button>';
+  o.innerHTML='Saved \u2014 '+done+' tiles ('+fail+' failed). <b>'+cnt+'</b> tiles stored on this device. This view will now draw with no signal on the <b>QLD Aerial</b> layer. <button class="lnk" id="ofl-clear">clear cache</button>';
   const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}
 (function(){const b=document.getElementById('ofl-save'),o=document.getElementById('ofl-out');if(!b||!o)return;
   b.onclick=()=>saveViewOffline(o);
-  idbCount().then(c=>{if(c>0){o.innerHTML='<b>'+c+'</b> map tiles saved offline (Esri Sat). Switch to that layer to use them, save more from any view, or <button class="lnk" id="ofl-clear">clear cache</button>.';
+  idbCount().then(c=>{if(c>0){o.innerHTML='<b>'+c+'</b> map tiles saved offline. Tiles saved earlier from Esri Sat still draw on that layer; new saves store the Queensland aerial. Save more from any view there, or <button class="lnk" id="ofl-clear">clear cache</button>.';
     const cb=document.getElementById('ofl-clear');if(cb)cb.onclick=async()=>{await idbClear();o.textContent='Offline cache cleared.';};}});
 })();
 /* ---------- BADGES & ACHIEVEMENTS (item 6) ----------
