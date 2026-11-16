@@ -1049,7 +1049,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 <div class="panel" id="panel">
   <div class="phead" id="phead">
-    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.16e</span></div></div>
+    <span class="dot"></span><div><h1>Woongarra Coast</h1><div class="sub">Great Sandy MP · Zones + Depths · <span style="opacity:.8">build 2026.11.16f</span></div></div>
     <button class="collapse" id="collapse">–</button>
   </div>
   <div class="panel-body">
@@ -1088,7 +1088,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="toggle" style="margin-top:8px"><input type="checkbox" id="sp-toggle" checked><span>Show spots <span id="sp-count" class="dp-count">0</span></span></label>
       <label class="toggle" style="margin-top:6px"><input type="checkbox" id="sp-lock"><span>🔓 Unlock pins to drag</span></label>
       <div class="pf-row">Logging as <span class="pf-chip" id="pf-chip" role="button" tabindex="0"></span></div>
-      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.16e</div>
+      <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5b7280;letter-spacing:.5px">build 2026.11.16f</div>
       <div class="dp-actions" style="margin-top:8px"><button class="dp-btn" id="sp-wind">🌬 Wind check vs spots</button></div>
       <div id="sp-wind-out" style="font-size:10.5px;color:var(--ink-dim);margin-top:6px;line-height:1.4"></div>
       <div id="sp-species" class="sp-species" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px"></div>
@@ -1226,6 +1226,7 @@ const STYLES = {
 };
 const ZT_UNKNOWN={name:"Unrecognised zone type",stroke:"#b03a2e",fill:"#e74c3c",weight:3,dash:"7 5",fillOp:0.30,notake:false,unknown:true,rules:"Guya does not know this zone type, so it shows no limits for it. Check the official zoning map for what applies here."}; /* R3b (build 2026.11.14c): a zone type missing from ORDER/STYLES ranks ABOVE MNP in zoneAt() and renders this restricted style - never the General Use fallback */
 /* R3a (build 2026.11.15a): park identity lives in the data. Every ZONES feature carries a required park code. PARKS holds, per park, its name, zoning plan, official link and the limits sentence per zone type, with verified:{date,source}. zonePopup prints a limits sentence ONLY from a park whose limits are verified; any other park gets LIMITS_UNCONF and no figures; a feature whose park is missing or not in PARKS prints 'park unknown' and no park link, never a default park. STYLES keeps names and colours only. The rod and hook figures in SEQ_LIMITS are the two verified at roadmap v16.77.1 for Great Sandy and Moreton Bay only (CLAUDE.md rule 5): do not attach SEQ_LIMITS to another park without verifying that park. */
+const ZT_UNKNOWN_TXT="Unrecognised zone type — treat as no-take until confirmed officially.";const DROP_UNRES_TXT="Heads up — Guya can't resolve the zone at this spot. Treat it as restricted until you confirm on the official map.";function zoneNoTake(z){return !!z&&(!STYLES[z.zt]||!!z.notake);} /* R0b + R3c (build 2026.11.15g): (1) the drag safeguard keeps its green-zone alert and also alerts, with DROP_UNRES_TXT, when a spot is dropped where the zone is not resolved (notresolved, nearpark, inpark, unassessed) or on a zone of unrecognised type; (2) an unrecognised zone type counts as no-take on the pin ring, pin tag, pin popup, spot icon, spot popup and zoneTag, whatever the data's notake flag says. */
 const SEQ_LIMITS={MNP:"NO-TAKE green zone. Fishing and collecting are prohibited. All fishing gear must be stowed and secured while in this zone.",CPZ:"Yellow zone — the marine park TIGHTENS the general limit here: 2 hand-held rods or handlines per person, and 2 hooks in total per person — not 2 per line. ONE hook = a single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged set of up to 6; a bait jig of up to 6 hooks (#1-#12). Limited collecting.",HPZ:"Dark-blue zone — the marine park adds no extra line-fishing limits here. General Fisheries rules apply: 3 hand-held rods or lines and 6 hooks or lures per person. ONE hook = a single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged set of up to 6; a bait jig of up to 6 hooks (#1-#12).",GUZ:"Light-blue zone — least restrictive marine-park zone; no extra line-fishing limits. General Fisheries rules apply: 3 hand-held rods or lines and 6 hooks or lures per person. ONE hook = a single hook; a double or treble; a lure with up to 3 hooks; a fly; a squid jig; a ganged set of up to 6; a bait jig of up to 6 hooks (#1-#12)."};
 const PARKS={GS:{name:"Great Sandy Marine Park",short:"Great Sandy MP",plan:"Marine Parks (Great Sandy) Zoning Plan 2024",link:"https://parks.qld.gov.au/parks/great-sandy-marine/management-and-zoning/app-and-maps",limits:SEQ_LIMITS,verified:{date:"2026-09-05",source:"roadmap v16.77.1 s1-s4; CLAUDE.md rule 5 (confirmed for the Great Sandy and Moreton Bay marine parks ONLY)"}},MB:{name:"Moreton Bay Marine Park",short:"Moreton Bay MP",plan:"Marine Parks (Moreton Bay) Zoning Plan 2019 (2008 zone boundaries unchanged)",link:"https://parks.qld.gov.au/parks/moreton-bay/zoning/app-and-maps",limits:SEQ_LIMITS,verified:{date:"2026-09-05",source:"roadmap v16.77.1 s1-s4; CLAUDE.md rule 5 (confirmed for the Great Sandy and Moreton Bay marine parks ONLY)"}}};
 const LIMITS_UNCONF="Limits not confirmed for this park — check the official source.";
@@ -1407,18 +1408,18 @@ function savePts(){try{localStorage.setItem(STORE,JSON.stringify(points));}catch
 let points=loadPts();
 const depthLayer=L.layerGroup().addTo(map);
 const depthRenderer=L.canvas({padding:0.5});
-function depthIcon(p,z){const notake=z&&z.notake;const txt=(p.depth!==''&&p.depth!=null)?p.depth+' m':'•';
+function depthIcon(p,z){const notake=zoneNoTake(z);const txt=(p.depth!==''&&p.depth!=null)?p.depth+' m':'•';
   return L.divIcon({className:'depthpin',html:`<span class="dp-tag${notake?' notake':''}">${txt}</span>`,iconSize:[0,0]});}
 function depthPopup(p,z){const k=zoneLookup(p.lat,p.lng),nb=k.nb||null;let h=`<div class="pop"><h2>${p.label||'Depth point'}</h2>`;
   h+=`<div class="kv">Depth <b>${(p.depth!==''&&p.depth!=null)?p.depth+' m':'—'}</b><br>${toDDM(p.lat,true)}  ${toDDM(p.lng,false)}</div>`;
-  if(z){const s=STYLES[z.zt]||{};h+=`<div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${z.name} (${z.zid})</div>`;
-    if(z.notake)h+=`<div class="notake">⛔ Inside a NO-TAKE green zone. Confirm before fishing.</div>`;if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
+  if(z){const s=STYLES[z.zt]||ZT_UNKNOWN;h+=`<div class="ztype"><span class="sw" style="background:${s.fill};border-color:${s.stroke}"></span>${z.name} (${z.zid})</div>`;
+    if(!STYLES[z.zt])h+='<div class="notake">'+ZT_UNKNOWN_TXT+'</div>';else if(z.notake)h+=`<div class="notake">⛔ Inside a NO-TAKE green zone. Confirm before fishing.</div>`;if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
   else h+=zoneStateLine(k);
   h+=`<div class="warn">Your own Navionics reading. Verify zone &amp; rules officially before fishing.</div><button class="del" data-id="${p.id}">Delete point</button></div>`;return h;}
 function renderDepths(){depthLayer.clearLayers();const list=document.getElementById('dp-list');list.innerHTML='';
   const LIMIT=120;let shown=0;
   points.forEach(p=>{const z=zoneAt(p.lat,p.lng);const nr=!z&&zoneLookup(p.lat,p.lng).state!=='outside';const hasD=(p.depth!==''&&p.depth!=null);
-    const mk=L.circleMarker([p.lat,p.lng],{renderer:depthRenderer,radius:5,weight:1.5,color:(z&&z.notake)?'#ff5d5d':(nr?'#ffb020':'#0b3a59'),fillColor:ctColor(p.depth),fillOpacity:.92}).addTo(depthLayer);
+    const mk=L.circleMarker([p.lat,p.lng],{renderer:depthRenderer,radius:5,weight:1.5,color:zoneNoTake(z)?'#ff5d5d':(nr?'#ffb020':'#0b3a59'),fillColor:ctColor(p.depth),fillOpacity:.92}).addTo(depthLayer);
     mk.bindTooltip(hasD?(p.depth+' m'):'•',{direction:'top',className:'ct-tip'});
     mk.bindPopup(depthPopup(p,z),{maxWidth:280,minWidth:230});
     if(shown<LIMIT){shown++;
@@ -1554,11 +1555,11 @@ function condLine(c){if(!c||!c.env)return '';const e=c.env,bits=[];
   if(e.moon&&e.moon.name)bits.push(e.moon.name.toLowerCase()+(e.moon.illum!=null?' '+e.moon.illum+'%':''));
   return bits.length?'<div class="catch-cond">'+bits.join(' \u00b7 ')+'</div>':'';}
 function starSpan(i,r,id){const pct=r>=i?100:(r>=i-0.5?50:0);return '<span class="st" data-act="rate" data-id="'+id+'" data-val="'+i+'"><span class="bk">\u2605</span><span class="fr" style="width:'+pct+'%">\u2605</span></span>';}
-function spotIcon(s,z){let col=z?(STYLES[z.zt]||{}).stroke:(zoneLookup(s.lat,s.lng).state==='outside'?'#9fb3bf':'#ffb020');const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
+function spotIcon(s,z){let col=z?(STYLES[z.zt]||ZT_UNKNOWN).stroke:(zoneLookup(s.lat,s.lng).state==='outside'?'#9fb3bf':'#ffb020');const ws=windStatus(s);const wc=ws?windColor(ws.lvl):null;if(wc)col=wc;const n=(s.catches||[]).length;
   return L.divIcon({className:'spotpin',iconSize:[0,0],html:'<span class="sp"><span class="sp-dot" style="background:'+col+'">'+(n?'<span class="cnt">'+n+'</span>':'')+'</span><span class="sp-name">'+esc(s.name||'Spot')+'</span></span>'});}
 function spotPopup(s,z){const k=zoneLookup(s.lat,s.lng),nb=k.nb||null;let h='<div class="pop"><h2>'+(s.name||'Spot')+'</h2>';
-  if(z){const st=STYLES[z.zt]||{};h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
-    if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
+  if(z){const st=STYLES[z.zt]||ZT_UNKNOWN;h+='<div class="ztype"><span class="sw" style="background:'+st.fill+';border-color:'+st.stroke+'"></span>'+z.name+' ('+z.zid+')</div>';
+    if(!STYLES[z.zt])h+='<div class="notake">'+ZT_UNKNOWN_TXT+'</div>';else if(z.notake)h+='<div class="notake">⛔ NO-TAKE green zone. Confirm before fishing.</div>';if(nb)h+='<div class="nearb">'+NEARB_TXT(nb.b)+'</div>';}
   else h+=zoneStateLine(k);h+='<div class="sp-rate-row"><span class="sp-stars">'+[1,2,3,4,5,6,7,8,9,10].map(i=>starSpan(i,+s.rating||0,s.id)).join('')+'</span><span class="sp-rate-val">'+(s.rating?(s.rating+' / 10'):'tap to rate')+'</span></div>';
   const kv=[];if(s.species)kv.push('Target: '+s.species);if(s.structure)kv.push('Structure: '+s.structure);
   if(s.tide)kv.push('Best tide: '+s.tide);if(s.depth!==''&&s.depth!=null)kv.push('Depth: '+s.depth+' m');
@@ -1639,7 +1640,7 @@ function renderSpots(){spotLayer.clearLayers();const list=document.getElementByI
     mk._spotId=s.id;mkById[s.id]=mk;mk.bindPopup(spotPopup(s,z),{maxWidth:290,minWidth:250});
     mk.on('dragend',function(){const ll=mk.getLatLng();s.lat=+ll.lat.toFixed(6);s.lng=+ll.lng.toFixed(6);saveSpots();
       const nz=zoneAt(s.lat,s.lng);renderSpots();spotLayer.eachLayer(l=>{if(l._spotId===s.id)l.openPopup();});
-      if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);});});
+      if(nz&&nz.notake)setTimeout(function(){alert('Heads up: this spot is now inside '+nz.name+' ('+nz.zid+') \u2014 a GREEN no-take zone. Confirm before fishing.');},60);else{const lk=zoneLookup(s.lat,s.lng);if(lk.state==='notresolved'||lk.state==='nearpark'||lk.state==='inpark'||lk.state==='unassessed'||(nz&&!STYLES[nz.zt]))setTimeout(function(){alert(DROP_UNRES_TXT);},60);}});});
   renderSpotSpeciesChips();
   let arr=spots.slice();
   if(spotSpecies.size)arr=arr.filter(spotSpeciesMatch);
@@ -3694,7 +3695,7 @@ const PORT_MAX_KM=200;function portInRange(ll){const p=nearestPort(ll);if(!p)ret
     return {match:any,bump:bump,label:parts.join(' \u00b7 ')};}
   function zoneTag(s){const z=(typeof zoneAt==='function')?zoneAt(s.lat,s.lng):null;const nb=(typeof nearBoundary==='function')?nearBoundary(s.lat,s.lng):null;const zk=(typeof zoneLookup==='function')?zoneLookup(s.lat,s.lng):{state:'unassessed'};
     if(!z)return nb?'<span style="color:#ffd27a">'+NOTRES_TXT+'</span>':zk.state!=='outside'?'<span style="color:#ffd27a">'+(zk.state==='inpark'?INPARK_TXT(zk.park):zk.state==='nearpark'?NEARPARK_TXT:UNASSESSED_TXT)+'</span>':'<span class="bb-dim">outside marine-park zoning — general fisheries rules + FHAs still apply, confirm via Qld Fishing 2.0</span>';
-    return '<b>'+z.zid+'</b>'+(z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>')+(nb?' <span style="color:#ffd27a">'+NEARB_TXT(nb)+'</span>':'');}
+    return '<b>'+z.zid+'</b>'+(!STYLES[z.zt]?' <span style="color:#ff8b7a">'+ZT_UNKNOWN_TXT+'</span>':z.notake?' <span style="color:#ff8b7a">no-take zone — verify on the official map</span>':' <span class="bb-dim">verify rules yourself</span>')+(nb?' <span style="color:#ffd27a">'+NEARB_TXT(nb)+'</span>':'');}
   function scoreSpotsFor(ymd){const list=(typeof spots!=='undefined'?spots:[]);if(!list.length)return [];
     const [aLat,aLng]=ANCHOR();const ev=compute(ymd,aLat,aLng);
     const _T=tideTable();const tide=_T?_T[ymd]:null;
